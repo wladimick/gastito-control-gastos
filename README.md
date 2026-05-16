@@ -59,111 +59,41 @@ cp .env.example .env.local
 | `TELEGRAM_BOT_TOKEN` | No (solo backend) | Webhook del bot |
 | `TELEGRAM_WEBHOOK_URL` | No (solo backend) | URL del endpoint |
 
-## Roadmap: conectar Supabase
+## Supabase
 
-El proyecto usa datos mock en `src/data.js`. Para pasar a producción real:
+El schema completo (12 tablas, RLS, triggers, índices) está en `supabase/schema.sql`.
+Los datos iniciales (categorías, bancos, métodos de pago) están en `supabase/seed.sql`.
 
-### 1. Crear el cliente Supabase
+Ver guía detallada en **[docs/supabase.md](docs/supabase.md)**.
+
+### Tablas
+
+| Tabla | Descripción |
+|---|---|
+| `profiles` | Perfil 1:1 con auth.users (auto-creado al registrarse) |
+| `categories` | Categorías globales + custom por usuario |
+| `payment_methods` | Tarjeta, efectivo, transferencia |
+| `banks` | Bancos disponibles |
+| `expenses` | Gastos; campo `source`: manual / telegram / recurring |
+| `budgets` | Presupuesto por categoría y mes |
+| `recurring_expenses` | Gastos recurrentes con cargo automático |
+| `installments` | Deudas en cuotas con seguimiento mensual |
+| `telegram_accounts` | Vincula telegram_user_id con user_id |
+| `telegram_messages` | Mensajes del bot (escritura solo desde backend) |
+| `audit_logs` | Historial de acciones (escritura solo desde backend) |
+| `app_settings` | Configuración por usuario |
+
+### Pasos rápidos
 
 ```bash
+# 1. En Supabase SQL Editor, ejecutar en orden:
+#    supabase/schema.sql → Run
+#    supabase/seed.sql   → Run
+
+# 2. Instalar cliente
 npm install @supabase/supabase-js
-```
 
-```js
-// src/lib/supabase.js
-import { createClient } from '@supabase/supabase-js'
-
-export const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-)
-```
-
-### 2. Tablas necesarias en Supabase
-
-```sql
--- expenses (gastos)
-create table expenses (
-  id text primary key,
-  amount integer not null,
-  description text,
-  category text,
-  bank text,
-  method text,
-  type text,
-  installments integer default 1,
-  status text default 'ok',
-  date timestamptz,
-  notes text,
-  user_id uuid references auth.users
-);
-
--- budgets (presupuestos por categoría)
-create table budgets (
-  user_id uuid references auth.users,
-  category text,
-  amount integer,
-  primary key (user_id, category)
-);
-
--- recurring (gastos recurrentes)
-create table recurring (
-  id text primary key,
-  name text,
-  amount integer,
-  category text,
-  bank text,
-  method text,
-  type text,
-  day_of_month integer,
-  active boolean default true,
-  last_charged_month text,
-  auto_register boolean default false,
-  user_id uuid references auth.users
-);
-```
-
-### 3. Reemplazar hooks de datos
-
-En `src/App.jsx`, reemplazar los `useState(EXPENSES)` con `useEffect` que lean de Supabase:
-
-```js
-useEffect(() => {
-  supabase.from('expenses').select('*').then(({ data }) => setExpenses(data))
-}, [])
-```
-
-## Roadmap: Telegram Bot (backend)
-
-El bot necesita un endpoint serverless que reciba los webhooks de Telegram y los inserte en Supabase.
-
-### Opción A: Vercel Edge Function
-
-Crea `api/telegram.js` en la raíz del proyecto:
-
-```js
-// api/telegram.js
-export const config = { runtime: 'edge' }
-
-export default async function handler(req) {
-  const update = await req.json()
-  const text = update.message?.text
-  // parsear texto → insertar en Supabase
-  // ...
-  return new Response('ok')
-}
-```
-
-Vercel lo despliega automáticamente como `/api/telegram`.
-
-### Opción B: Bot separado (Node.js + node-telegram-bot-api)
-
-Repositorio independiente que corre en Railway o Render, conectado a la misma base Supabase.
-
-### Registrar el webhook
-
-```bash
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://tu-dominio.vercel.app/api/telegram"
+# 3. Crear src/lib/supabase.js con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY
 ```
 
 ## Estructura del proyecto
