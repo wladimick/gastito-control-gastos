@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg:         #FAFAF7;
+  --bg-elev:    #FFFFFF;
+  --ink:        #1A1A18;
+  --ink-2:      #3D3D3A;
+  --ink-3:      #B8B8B0;
+  --muted:      #8A8A82;
+  --line:       #E9E7E0;
+  --hover:      #F2F0E9;
+  --accent:     oklch(0.62 0.13 165);
+  --accent-ink: oklch(0.36 0.08 165);
+  --accent-soft:oklch(0.94 0.04 165);
+  --amber-ink:  oklch(0.42 0.13 70);
+  --amber-soft: oklch(0.94 0.06 80);
+}
+
+html, body {
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.font-mono,
+code,
+pre,
+input[type="number"] {
+  font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+  font-feature-settings: "ss01" on, "cv11" on;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+select { background-image: none !important; }
+
+@keyframes spin { to { transform: rotate(360deg); } }

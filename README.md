@@ -1,25 +1,194 @@
-# CODING AGENTS: READ THIS FIRST
+# Gastito — Control de Gastos
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+Tracker de gastos personales integrado con un bot de Telegram. Construido con React 18 + Vite + Tailwind CSS 3.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+## Stack
 
-## What you should do — IMPORTANT
+| Capa | Tecnología |
+|---|---|
+| Frontend | React 18 + Vite 5 |
+| Estilos | Tailwind CSS 3 + CSS custom properties |
+| Fuentes | Manrope (UI) + JetBrains Mono (valores) |
+| Datos actuales | Mock en `src/data.js` (ver Roadmap) |
+| Deploy | Vercel (configurado con `vercel.json`) |
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+## Vistas implementadas
 
-**Read `project/Control de Gastos.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+- **Dashboard** — KPIs del mes, heatmap, cuotas próximas, recientes
+- **Gastos** — tabla filtrable con búsqueda, 5 filtros, edición en panel lateral
+- **Presupuestos** — héroe con indicador de ritmo, edición inline por categoría
+- **Recurrentes** — 3 pestañas: gastos recurrentes, ingresos, por cobrar
+- **Cuotas** — auto-pago el día 5, progreso de deudas, calendario 6 meses
+- **Reportes** — barras mensuales, donut SVG, medios de pago, por banco
+- **Comparación** — espejo mes actual vs anterior, barras duales por categoría
+- **Sin interpretar** — mensajes del bot pendientes de completar manualmente
+- **Telegram** — configuración del bot, prueba de conexión, comandos
+- **Auditoría** — timeline agrupado por día con filtros por actor/acción
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+## Inicio rápido
 
-## About the design files
+```bash
+npm install
+npm run dev        # http://localhost:5173
+npm run build      # genera dist/
+npm run preview    # preview del build
+```
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+## Deploy en Vercel
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+1. Sube el repo a GitHub
+2. En [vercel.com](https://vercel.com) → **Add New Project** → importa el repo
+3. Framework preset: **Vite** (se detecta automáticamente)
+4. Agrega las variables de entorno (ver siguiente sección)
+5. **Deploy** — listo
 
-## Bundle contents
+El archivo `vercel.json` ya incluye la regla de rewrite para SPA routing.
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `Control gastos` project files (HTML prototypes, assets, components)
+## Variables de entorno
+
+Copia `.env.example` a `.env.local` y completa los valores:
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Requerida ahora | Para qué |
+|---|---|---|
+| `VITE_SUPABASE_URL` | No (usa mock) | Base de datos real |
+| `VITE_SUPABASE_ANON_KEY` | No (usa mock) | Auth Supabase |
+| `TELEGRAM_BOT_TOKEN` | No (solo backend) | Webhook del bot |
+| `TELEGRAM_WEBHOOK_URL` | No (solo backend) | URL del endpoint |
+
+## Roadmap: conectar Supabase
+
+El proyecto usa datos mock en `src/data.js`. Para pasar a producción real:
+
+### 1. Crear el cliente Supabase
+
+```bash
+npm install @supabase/supabase-js
+```
+
+```js
+// src/lib/supabase.js
+import { createClient } from '@supabase/supabase-js'
+
+export const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+)
+```
+
+### 2. Tablas necesarias en Supabase
+
+```sql
+-- expenses (gastos)
+create table expenses (
+  id text primary key,
+  amount integer not null,
+  description text,
+  category text,
+  bank text,
+  method text,
+  type text,
+  installments integer default 1,
+  status text default 'ok',
+  date timestamptz,
+  notes text,
+  user_id uuid references auth.users
+);
+
+-- budgets (presupuestos por categoría)
+create table budgets (
+  user_id uuid references auth.users,
+  category text,
+  amount integer,
+  primary key (user_id, category)
+);
+
+-- recurring (gastos recurrentes)
+create table recurring (
+  id text primary key,
+  name text,
+  amount integer,
+  category text,
+  bank text,
+  method text,
+  type text,
+  day_of_month integer,
+  active boolean default true,
+  last_charged_month text,
+  auto_register boolean default false,
+  user_id uuid references auth.users
+);
+```
+
+### 3. Reemplazar hooks de datos
+
+En `src/App.jsx`, reemplazar los `useState(EXPENSES)` con `useEffect` que lean de Supabase:
+
+```js
+useEffect(() => {
+  supabase.from('expenses').select('*').then(({ data }) => setExpenses(data))
+}, [])
+```
+
+## Roadmap: Telegram Bot (backend)
+
+El bot necesita un endpoint serverless que reciba los webhooks de Telegram y los inserte en Supabase.
+
+### Opción A: Vercel Edge Function
+
+Crea `api/telegram.js` en la raíz del proyecto:
+
+```js
+// api/telegram.js
+export const config = { runtime: 'edge' }
+
+export default async function handler(req) {
+  const update = await req.json()
+  const text = update.message?.text
+  // parsear texto → insertar en Supabase
+  // ...
+  return new Response('ok')
+}
+```
+
+Vercel lo despliega automáticamente como `/api/telegram`.
+
+### Opción B: Bot separado (Node.js + node-telegram-bot-api)
+
+Repositorio independiente que corre en Railway o Render, conectado a la misma base Supabase.
+
+### Registrar el webhook
+
+```bash
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://tu-dominio.vercel.app/api/telegram"
+```
+
+## Estructura del proyecto
+
+```
+src/
+├── App.jsx                 # Estado global, routing, audit logger
+├── main.jsx                # Entry point React
+├── index.css               # CSS vars (tema) + Tailwind directives
+├── data.js                 # Mock data (reemplazar con Supabase)
+├── lib/
+│   └── helpers.jsx         # fmtCLP, Icon, relDate, MES, etc.
+└── components/
+    ├── ui.jsx              # Card, Badge, IconBtn, BarRow, Select...
+    ├── Layout.jsx          # Sidebar desktop + bottom nav mobile
+    ├── Dashboard.jsx
+    ├── ExpensesList.jsx
+    ├── ExpenseModal.jsx
+    ├── Budgets.jsx
+    ├── Recurring.jsx
+    ├── Installments.jsx
+    ├── Reports.jsx
+    ├── Comparison.jsx
+    ├── UnparsedMessages.jsx
+    ├── TelegramSettings.jsx
+    ├── Audit.jsx
+    └── BotChat.jsx
+```
