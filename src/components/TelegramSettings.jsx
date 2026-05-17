@@ -1,6 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, Badge } from './ui'
 import { Icon, relDate, timeOnly } from '../lib/helpers'
+import { generateLinkingCode, getLinkedAccount, unlinkAccount } from '../services/telegramService'
+import { isConfigured } from '../lib/supabase'
 
 function CfgField({ label, hint, children, colSpan }) {
   return (
@@ -22,6 +24,33 @@ function Cmd({ cmd, desc }) {
 }
 
 export default function TelegramSettings({ botStatus, setBotStatus, lastBotMessage }) {
+  // ── Vinculación de cuenta ────────────────────────────────────
+  const [linkedAccount,  setLinkedAccount]  = useState(null)
+  const [linkCode,       setLinkCode]       = useState(null)
+  const [loadingLink,    setLoadingLink]    = useState(false)
+  const [generatingCode, setGeneratingCode] = useState(false)
+
+  useEffect(() => {
+    if (!isConfigured) return
+    setLoadingLink(true)
+    getLinkedAccount().then(acc => { setLinkedAccount(acc); setLoadingLink(false) })
+  }, [])
+
+  const handleGenerateCode = async () => {
+    setGeneratingCode(true)
+    try { setLinkCode(await generateLinkingCode()) }
+    catch (e) { console.error(e) }
+    finally { setGeneratingCode(false) }
+  }
+
+  const handleUnlink = async (id) => {
+    if (!window.confirm('¿Desvincular esta cuenta de Telegram?')) return
+    await unlinkAccount(id)
+    setLinkedAccount(null)
+    setLinkCode(null)
+  }
+  // ────────────────────────────────────────────────────────────
+
   const [cfg, setCfg] = useState({
     token: "8123456789:AAFkj-_x9Y2hLqWzpQmnVtKxBpRsTuVwXyz",
     webhook: "https://api.gastito.app/telegram/webhook",
@@ -51,6 +80,72 @@ export default function TelegramSettings({ botStatus, setBotStatus, lastBotMessa
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-5">
       <div className="flex flex-col gap-5">
+
+        {/* ── Vinculación de cuenta ───────────────────────────── */}
+        {isConfigured && (
+          <Card padding="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold tracking-tight text-[15px]">Cuenta Telegram</div>
+                <div className="text-[12.5px] text-[var(--muted)] mt-0.5">Vincula para registrar gastos desde el bot</div>
+              </div>
+              {linkedAccount && <Badge tone="ok">Vinculada</Badge>}
+            </div>
+
+            {loadingLink ? (
+              <div className="mt-4 text-[12px] text-[var(--muted)]">Verificando vinculación…</div>
+            ) : linkedAccount ? (
+              <div className="mt-4 flex items-center justify-between rounded-lg bg-[var(--bg)] border border-[var(--line)] p-3.5">
+                <div>
+                  <div className="text-[13px] font-medium font-mono">
+                    {linkedAccount.telegram_username ? `@${linkedAccount.telegram_username}` : 'Cuenta vinculada'}
+                  </div>
+                  <div className="text-[11px] text-[var(--muted)] mt-0.5 font-mono">
+                    chat_id: {linkedAccount.chat_id}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleUnlink(linkedAccount.id)}
+                  className="text-[12px] text-[#A02828] hover:underline shrink-0">
+                  Desvincular
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4">
+                {linkCode ? (
+                  <div className="rounded-lg bg-[var(--bg)] border border-[var(--line)] p-4 text-center">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)] mb-2">
+                      Código de vinculación
+                    </div>
+                    <div className="font-mono text-[38px] tracking-[0.2em] font-bold text-[var(--ink)] leading-none">
+                      {linkCode}
+                    </div>
+                    <div className="mt-3 text-[12px] text-[var(--muted)]">Escribe en Telegram:</div>
+                    <div className="mt-1 font-mono text-[13px] bg-[var(--hover)] rounded-md px-3 py-1.5 inline-block">
+                      /vincular {linkCode}
+                    </div>
+                    <div className="mt-2 text-[11px] text-[var(--muted)]">Válido por 15 minutos</div>
+                    <button
+                      onClick={handleGenerateCode}
+                      className="mt-3 text-[11px] text-[var(--muted)] hover:text-[var(--ink)] underline">
+                      Generar nuevo código
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleGenerateCode}
+                    disabled={generatingCode}
+                    className="h-9 px-4 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium disabled:opacity-50">
+                    <Icon name="link" size={14}/>
+                    {generatingCode ? 'Generando…' : 'Generar código de vinculación'}
+                  </button>
+                )}
+              </div>
+            )}
+          </Card>
+        )}
+        {/* ─────────────────────────────────────────────────────── */}
+
         <Card padding="p-5 md:p-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
