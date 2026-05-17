@@ -86,6 +86,7 @@ export const Icon = ({ name, size = 18, className = "" }) => {
     case "layers":   return <svg {...props}><path d="M12 2l10 5-10 5L2 7z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></svg>;
     case "users":    return <svg {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
     case "person":   return <svg {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    case "savings":  return <svg {...props}><ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v4c0 1.66 3.58 3 8 3s8-1.34 8-3V7"/><path d="M4 11v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/></svg>;
     default:         return null;
   }
 };

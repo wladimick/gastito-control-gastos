@@ -13,6 +13,7 @@ import TelegramSettings from './components/TelegramSettings'
 import Audit from './components/Audit'
 import AdminPanel from './components/AdminPanel'
 import UserProfile from './components/UserProfile'
+import Savings from './components/Savings'
 import BotChat from './components/BotChat'
 import { Icon } from './lib/helpers'
 import {
@@ -33,15 +34,17 @@ import { fetchBudgets, upsertBudget } from './services/budgetsService'
 import { fetchUnparsedMessages, fetchLastBotMessage } from './services/telegramMessagesService'
 import { fetchAuditLog } from './services/auditService'
 import { fetchCurrentRole } from './services/adminService'
-import Login from './components/Login'
+import { fetchGoals, createGoal, updateGoal, removeGoal, addMovement } from './services/savingsService'
+import Login, { NewPasswordForm } from './components/Login'
 
 const IS_REAL = isConfigured
 
 export default function App() {
   // ── Auth ────────────────────────────────────────────────────
-  const [session, setSession]     = useState(null)
-  const [authReady, setAuthReady] = useState(!IS_REAL)
-  const [userRole,  setUserRole]  = useState('user')
+  const [session,    setSession]    = useState(null)
+  const [authReady,  setAuthReady]  = useState(!IS_REAL)
+  const [userRole,   setUserRole]   = useState('user')
+  const [isRecovery, setIsRecovery] = useState(false)
 
   useEffect(() => {
     if (!IS_REAL) return
@@ -49,7 +52,11 @@ export default function App() {
       setSession(session)
       setAuthReady(true)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s)
+      if (_e === 'PASSWORD_RECOVERY') setIsRecovery(true)
+      else setIsRecovery(false)
+    })
     return () => subscription.unsubscribe()
   }, [])
 
@@ -74,6 +81,7 @@ export default function App() {
     setUnparsed(IS_REAL ? [] : UNPARSED)
     setAuditLog(IS_REAL ? [] : AUDIT_LOG)
     setLastBotMessage(null)
+    setSavingsGoals([])
   }
   // ────────────────────────────────────────────────────────────
 
@@ -172,6 +180,16 @@ export default function App() {
     fetchLastBotMessage()
       .then(msg => { if (msg) setLastBotMessage(msg) })
       .catch(() => {})
+  }, [session])
+
+  // ── Savings ──────────────────────────────────────────────────
+  const [savingsGoals, setSavingsGoals] = useState([])
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchGoals()
+      .then(data => setSavingsGoals(data))
+      .catch(err  => console.error('fetchGoals:', err))
   }, [session])
 
   // ── Audit log ─────────────────────────────────────────────────
@@ -398,6 +416,27 @@ export default function App() {
     } catch (err) { console.error('onMarkPayablePaid:', err); alert(err.message) }
   }
 
+  // ── Savings CRUD ─────────────────────────────────────────────
+  const onCreateGoal = async (goal) => {
+    const created = await createGoal(goal, session.user.id)
+    setSavingsGoals(prev => [created, ...prev])
+  }
+
+  const onUpdateGoal = async (goal) => {
+    const updated = await updateGoal(goal)
+    setSavingsGoals(prev => prev.map(g => g.id === updated.id ? updated : g))
+  }
+
+  const onDeleteGoal = async (id) => {
+    await removeGoal(id)
+    setSavingsGoals(prev => prev.filter(g => g.id !== id))
+  }
+
+  const onAddMovement = async (goalId, amount, type, note) => {
+    const updated = await addMovement(goalId, session.user.id, amount, type, note)
+    setSavingsGoals(prev => prev.map(g => g.id === updated.id ? updated : g))
+  }
+
   const onSetRecurring = async (newList) => {
     // Called by Recurring component for toggle/charge operations
     for (const r of newList) {
@@ -533,7 +572,8 @@ export default function App() {
       </div>
     )
   }
-  if (IS_REAL && !session) return <Login/>
+  if (IS_REAL && isRecovery) return <NewPasswordForm onComplete={() => setIsRecovery(false)}/>
+  if (IS_REAL && !session)  return <Login/>
 
   return (
     <>
@@ -575,6 +615,16 @@ export default function App() {
         )}
         {view === 'budgets' && (
           <Budgets expenses={expenses} budgets={budgets} setBudgets={onSetBudgets}/>
+        )}
+        {view === 'savings' && IS_REAL && session && (
+          <Savings
+            goals={savingsGoals}
+            onCreateGoal={onCreateGoal}
+            onUpdateGoal={onUpdateGoal}
+            onDeleteGoal={onDeleteGoal}
+            onAddMovement={onAddMovement}
+            userId={session.user.id}
+          />
         )}
         {view === 'recurring' && (
           <Recurring
