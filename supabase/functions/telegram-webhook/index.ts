@@ -54,8 +54,10 @@ function stripAccents(s: string): string {
 // ─── Parser de gastos ────────────────────────────────────────
 const CAT_KEYWORDS: Record<string, string[]> = {
   'Bencina':       ['bencina','gasolina','combustible','copec','shell','petrobras','terpel'],
-  'Supermercado':  ['supermercado','lider','jumbo','walmart','tottus','unimarc','santa isabel','acuenta'],
-  'Comida':        ['comida','almuerzo','cena','desayuno','restauran','restaurant','cafe','pizza','sushi','rappi','pedidosya','mcdonalds'],
+  'Supermercado':  ['supermercado','lider','jumbo','walmart','tottus','unimarc','santa isabel','acuenta',
+                    'carne','carniceria','verdura','fruta','panaderia','pan','abarrotes'],
+  'Comida':        ['comida','almuerzo','cena','desayuno','restauran','restaurant','cafe','pizza','sushi',
+                    'rappi','pedidosya','mcdonalds','empanada','sandwich'],
   'Farmacia':      ['farmacia','remedios','medicamentos','pastillas','salcobrand','ahumada','cruz verde'],
   'Transporte':    ['metro','uber','taxi','cabify','bus','micro','transporte','bip','pasaje','aeropuerto'],
   'Suscripciones': ['netflix','spotify','amazon','disney','youtube','hbo','suscripcion'],
@@ -63,24 +65,67 @@ const CAT_KEYWORDS: Record<string, string[]> = {
 }
 
 const BANK_KEYWORDS: Record<string, string> = {
-  'banco chile': 'bchile',  'bchile':    'bchile',
-  'banco estado':'bestado', 'bestado':   'bestado',
-  'santander':   'santander',
-  'bci':         'bci',
-  'itau':        'itau',    'itaú':      'itau',
+  'banco chile':    'bchile',    'bchile':   'bchile',
+  'banco estado':   'bestado',   'bestado':  'bestado',
+  'santander':      'santander',
+  'bci':            'bci',
+  'itau':           'itau',      'itaú':     'itau',
+  'banco falabella':'falabella', 'falabella':'falabella',
+  'banco security': 'security',
+  'scotiabank':     'scotiabank',
+}
+
+// Parsea montos CLP. El punto es separador de miles, no decimal.
+// Pruebas:
+//   "Gaste 11130 en carne en supermercado el día de ayer con crédito banco Falabella" → 11130
+//   "Gaste 1.940 ayer en pan con banco Falabella"                                     → 1940
+//   "Gasté 12.500 en bencina hoy con crédito Banco Chile"                             → 12500
+//   "8990 supermercado debito"                                                         → 8990
+//   "$11.130"  → 11130  |  "11,130"  → 11130  |  "11 130"  → 11130  |  "111.300" → 111300
+function parseAmount(text: string): number | null {
+  const t = text.replace(/\$/g, '').replace(/ /g, ' ')
+
+  // 1. Punto como separador de miles: 11.130 / 1.940 / 111.300
+  const dotThousands = t.match(/\b(\d{1,3}(?:\.\d{3})+)\b/)
+  if (dotThousands) {
+    const n = parseInt(dotThousands[1].replace(/\./g, ''), 10)
+    if (n > 0) return n
+  }
+
+  // 2. Coma como separador de miles: 11,130
+  const commaThousands = t.match(/\b(\d{1,3}(?:,\d{3})+)\b/)
+  if (commaThousands) {
+    const n = parseInt(commaThousands[1].replace(/,/g, ''), 10)
+    if (n > 0) return n
+  }
+
+  // 3. Espacio como separador de miles: 11 130
+  const spaceThousands = t.match(/\b(\d{1,3}(?: \d{3})+)\b/)
+  if (spaceThousands) {
+    const n = parseInt(spaceThousands[1].replace(/ /g, ''), 10)
+    if (n > 0) return n
+  }
+
+  // 4. Entero sin separador de 4+ dígitos: 11130, 8990
+  const longInt = t.match(/\b(\d{4,})\b/)
+  if (longInt) {
+    const n = parseInt(longInt[1], 10)
+    if (n > 0) return n
+  }
+
+  // 5. Entero corto de 3 dígitos: 990, 500
+  const shortInt = t.match(/\b(\d{3})\b/)
+  if (shortInt) {
+    const n = parseInt(shortInt[1], 10)
+    if (n > 0) return n
+  }
+
+  return null
 }
 
 function parseExpense(text: string, categories: Category[]): ParsedExpense {
   const lower = stripAccents(text.toLowerCase())
-
-  // Monto — soporta 12.500 y 12500 (formato CLP)
-  const amountMatch = text.match(/\$?\s*([\d]{1,3}(?:[.]\d{3})*(?:[,]\d{1,2})?)/)
-  let amount: number | null = null
-  if (amountMatch) {
-    const raw    = amountMatch[1].replace(/\./g, '').replace(',', '.')
-    const parsed = parseFloat(raw)
-    if (!isNaN(parsed) && parsed > 0) amount = Math.round(parsed)
-  }
+  const amount = parseAmount(text)
 
   // Categoría
   let categoryId: string | null = null
