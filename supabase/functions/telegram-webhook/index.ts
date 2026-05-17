@@ -64,15 +64,76 @@ const CAT_KEYWORDS: Record<string, string[]> = {
   'Hogar':         ['hogar','arriendo','luz','agua','gas','internet','cable','mantencion'],
 }
 
+// Ordenado de más específico a más genérico para evitar falsos positivos por substring.
+// "mp" omitido — demasiado ambiguo (está en "compré", "ejemplo", etc.)
 const BANK_KEYWORDS: Record<string, string> = {
-  'banco chile':    'bchile',    'bchile':   'bchile',
-  'banco estado':   'bestado',   'bestado':  'bestado',
-  'santander':      'santander',
-  'bci':            'bci',
-  'itau':           'itau',      'itaú':     'itau',
-  'banco falabella':'falabella', 'falabella':'falabella',
-  'banco security': 'security',
-  'scotiabank':     'scotiabank',
+  // ── Falabella / FPay / CMR ───────────────────────────────────
+  'falabella pay':       'fpay',       // antes de 'falabella' a solas
+  'banco falabella':     'falabella',
+  'cmr':                 'falabella',  // tarjeta CMR = Falabella
+  'fpay':                'fpay',
+  'falabella':           'falabella',
+  // ── Banco Chile ──────────────────────────────────────────────
+  'banco de chile':      'bchile',
+  'banco chile':         'bchile',
+  'bchile':              'bchile',
+  'chile':               'bchile',
+  // ── Banco Estado ─────────────────────────────────────────────
+  'cuenta rut':          'bestado',
+  'cuentarut':           'bestado',
+  'banco estado':        'bestado',
+  'bestado':             'bestado',
+  'estado':              'bestado',
+  // ── Santander ────────────────────────────────────────────────
+  'santander':           'santander',
+  // ── BCI ──────────────────────────────────────────────────────
+  'banco bci':           'bci',
+  'bci':                 'bci',
+  // ── Itaú ─────────────────────────────────────────────────────
+  'itau':                'itau',
+  'itaú':                'itau',
+  // ── Scotiabank ───────────────────────────────────────────────
+  'scotiabank':          'scotiabank',
+  'scotia':              'scotiabank',
+  // ── Security ─────────────────────────────────────────────────
+  'banco security':      'security',
+  'security':            'security',
+  // ── Ripley ───────────────────────────────────────────────────
+  'banco ripley':        'ripley',
+  'ripley':              'ripley',
+  // ── Consorcio ────────────────────────────────────────────────
+  'consorcio':           'consorcio',
+  // ── BICE ─────────────────────────────────────────────────────
+  'banco bice':          'bice',
+  'bice':                'bice',
+  // ── Internacional ────────────────────────────────────────────
+  'banco internacional':  'internacional',
+  // ── Coopeuch ─────────────────────────────────────────────────
+  'coopeuch':            'coopeuch',
+  // ── Mach (billetera BCI) ──────────────────────────────────────
+  'match':               'mach',      // typo frecuente de "mach"
+  'mach':                'mach',
+  // ── Tenpo ────────────────────────────────────────────────────
+  'tenpo':               'tenpo',
+  // ── MercadoPago ──────────────────────────────────────────────
+  'mercado pago':        'mercadopago',
+  'mercadopago':         'mercadopago',
+  // ── Chek (Walmart) ───────────────────────────────────────────
+  'chek':                'chek',
+  'check':               'chek',
+  // ── Global66 ─────────────────────────────────────────────────
+  'global 66':           'global66',
+  'global66':            'global66',
+  // ── Tapp / Caja Los Andes ────────────────────────────────────
+  'caja los andes':      'tapp',
+  'los andes':           'tapp',
+  'tapp':                'tapp',
+  // ── Los Héroes ───────────────────────────────────────────────
+  'los heroes':          'losheroes',
+  'los héroes':          'losheroes',
+  'losheroes':           'losheroes',
+  // ── Khipu ────────────────────────────────────────────────────
+  'khipu':               'khipu',
 }
 
 // Parsea montos CLP. El punto es separador de miles, no decimal.
