@@ -641,6 +641,7 @@ export default function App() {
             openChat={() => setChatOpen(true)}
             accounts={accounts}
             creditCards={creditCards}
+            userSettings={userSettings}
           />
         )}
         {view === 'expenses' && (

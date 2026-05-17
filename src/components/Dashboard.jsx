@@ -4,77 +4,226 @@ import { Icon, fmtCLP, fmtCLPshort, relDate, timeOnly, MES } from '../lib/helper
 import { CATEGORIES } from '../data'
 import { useBanks } from '../services/banksService'
 
-export default function Dashboard({ expenses, setView, openChat, botStatus, lastBotMessage, installmentDebts = [], recurring = [], accounts = [], creditCards = [] }) {
+function nextOccurrence(day, from = new Date()) {
+  const d = new Date(from.getFullYear(), from.getMonth(), day)
+  if (d <= from) return new Date(from.getFullYear(), from.getMonth() + 1, day)
+  return d
+}
+
+function daysUntil(target, from = new Date()) {
+  const a = new Date(from.getFullYear(), from.getMonth(), from.getDate())
+  const b = new Date(target.getFullYear(), target.getMonth(), target.getDate())
+  return Math.round((b - a) / 86400000)
+}
+
+function payLabel(e) {
+  if (e.method === 'efectivo') return 'Efectivo'
+  if (e.type === 'credito') return 'Crédito'
+  if (e.method === 'transfer') return 'Transferencia'
+  return 'Débito'
+}
+
+function SectionHeader({ title, sub, action, onAction }) {
+  return (
+    <div className="px-5 py-4 border-b border-[var(--line)] flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <div className="font-semibold tracking-tight">{title}</div>
+        {sub && <div className="text-[12px] text-[var(--muted)] mt-0.5">{sub}</div>}
+      </div>
+      {action && (
+        <button onClick={onAction} className="text-[12px] text-[var(--ink-2)] hover:underline inline-flex items-center gap-1">
+          {action} <Icon name="chevron" size={12}/>
+        </button>
+      )}
+    </div>
+  )
+}
+
+export default function Dashboard({
+  expenses = [], setView, openChat, botStatus, lastBotMessage,
+  installmentDebts = [], recurring = [], accounts = [], creditCards = [],
+  userSettings = null,
+}) {
   const banks = useBanks()
   const today = new Date()
+  const AUTO_PAY_DAY = 5
 
+  // ── Monthly ──────────────────────────────────────────────────────────────
   const thisMonth = expenses.filter(e => {
     const d = new Date(e.date)
     return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
   })
-  const total = thisMonth.reduce((s, e) => s + e.amount, 0)
+  const total = thisMonth.reduce((s, e) => s + (e.amount || 0), 0)
   const avg   = thisMonth.length ? total / thisMonth.length : 0
 
-  // Previous month for delta
   const prevM = today.getMonth() === 0 ? 11 : today.getMonth() - 1
   const prevY = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear()
   const lastMonthTotal = expenses.filter(e => {
     const d = new Date(e.date)
     return d.getMonth() === prevM && d.getFullYear() === prevY
-  }).reduce((s, e) => s + e.amount, 0)
+  }).reduce((s, e) => s + (e.amount || 0), 0)
   const delta    = lastMonthTotal ? ((total - lastMonthTotal) / lastMonthTotal) * 100 : 0
   const deltaStr = lastMonthTotal ? (delta > 0 ? '+' : '') + delta.toFixed(0) + '%' : null
 
+  // ── Installments ─────────────────────────────────────────────────────────
+  const activeDebts        = installmentDebts.filter(d => d.status === 'active')
+  const cuotasThisMonth    = activeDebts.reduce((s, d) => s + (d.monthlyAmount || 0), 0)
+  const cuotasNextMonth    = activeDebts.filter(d => d.paid + 1 < d.installments).reduce((s, d) => s + (d.monthlyAmount || 0), 0)
+  const totalRemainingDebt = activeDebts.reduce((s, d) => s + (d.monthlyAmount || 0) * (d.installments - d.paid), 0)
+  const alreadyCharged     = today.getDate() >= AUTO_PAY_DAY
+  const nextChargeDate     = alreadyCharged
+    ? new Date(today.getFullYear(), today.getMonth() + 1, AUTO_PAY_DAY)
+    : new Date(today.getFullYear(), today.getMonth(), AUTO_PAY_DAY)
+  const daysToCharge = Math.round((nextChargeDate - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000)
+
+  // ── Cashflow ──────────────────────────────────────────────────────────────
+  const activeAccounts = accounts.filter(a => a.active)
+  const totalAvailable = activeAccounts.reduce((s, a) => s + (a.balance || 0), 0)
+  const primaryCard    = creditCards.find(c => c.isActive !== false)
+  const billingDay     = Number(primaryCard?.billingDay ?? 20)
+  const paymentDay     = Number(primaryCard?.paymentDueDay ?? 5)
+  const cycleStart     = today.getDate() >= billingDay
+    ? new Date(today.getFullYear(), today.getMonth(), billingDay)
+    : new Date(today.getFullYear(), today.getMonth() - 1, billingDay)
+  const cycleCredit    = expenses
+    .filter(e => e.type === 'credito' && new Date(e.date) >= cycleStart)
+    .reduce((s, e) => s + (e.amount || 0), 0)
+  const recurringTotal = (recurring ?? []).filter(r => r.active && r.kind !== 'income')
+    .reduce((s, r) => s + (r.amount || 0), 0)
+  const freeBalance    = totalAvailable - cycleCredit - recurringTotal - cuotasThisMonth
+
+  // ── Per-card spending ─────────────────────────────────────────────────────
+  const cardTotals = creditCards.filter(c => c.isActive !== false).map(card => {
+    const bd = Number(card.billingDay ?? 20)
+    const cs = today.getDate() >= bd
+      ? new Date(today.getFullYear(), today.getMonth(), bd)
+      : new Date(today.getFullYear(), today.getMonth() - 1, bd)
+    const spent = expenses
+      .filter(e => e.type === 'credito' && new Date(e.date) >= cs && (!card.bank || e.bank === card.bank))
+      .reduce((s, e) => s + (e.amount || 0), 0)
+    return { card, spent, billedThisMonth: today.getDate() >= bd }
+  })
+
+  // ── Salary day ───────────────────────────────────────────────────────────
+  const salaryDay     = userSettings?.salary_payment_day ? Number(userSettings.salary_payment_day) : null
+  const nextSalary    = salaryDay ? nextOccurrence(salaryDay) : null
+  const daysToSalary  = nextSalary ? daysUntil(nextSalary) : null
+  const salaryLabel   = nextSalary
+    ? `${nextSalary.getDate()} de ${MES[nextSalary.getMonth()]} ${nextSalary.getFullYear()}`
+    : null
+  const cardsAtSalary = creditCards.filter(c => c.isActive !== false && Number(c.paymentDueDay) === salaryDay)
+  const creditAtSalary = cardsAtSalary.reduce((s, card) => {
+    const t = cardTotals.find(ct => ct.card.id === card.id)
+    return s + (t?.spent ?? 0)
+  }, 0)
+  const totalAtSalary = recurringTotal + cuotasThisMonth + creditAtSalary
+
+  // ── Display helpers ───────────────────────────────────────────────────────
   const byCat = {}
-  thisMonth.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + e.amount })
+  thisMonth.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + (e.amount || 0) })
   const catsArr = Object.entries(byCat).map(([id, v]) => ({ id, v })).sort((a, b) => b.v - a.v)
   const maxCat  = catsArr[0]?.v || 1
 
   const byMethod = { debito: 0, credito: 0, efectivo: 0 }
   thisMonth.forEach(e => {
-    if (e.method === 'efectivo') byMethod.efectivo += e.amount
-    else if (e.type === 'debito') byMethod.debito += e.amount
-    else byMethod.credito += e.amount
+    if (e.method === 'efectivo') byMethod.efectivo += (e.amount || 0)
+    else if (e.type === 'debito') byMethod.debito += (e.amount || 0)
+    else byMethod.credito += (e.amount || 0)
   })
-  const topMethod = Object.entries(byMethod).sort((a, b) => b[1] - a[1])[0]
+  const topMethod   = Object.entries(byMethod).sort((a, b) => b[1] - a[1])[0]
   const methodLabel = thisMonth.length === 0 ? '—' : { debito: 'Débito', credito: 'Crédito', efectivo: 'Efectivo' }[topMethod[0]]
 
   const byBank = {}
-  thisMonth.forEach(e => { byBank[e.bank] = (byBank[e.bank] || 0) + e.amount })
+  thisMonth.forEach(e => { byBank[e.bank] = (byBank[e.bank] || 0) + (e.amount || 0) })
 
-  const AUTO_PAY_DAY = 5
-  const activeDebts = installmentDebts.filter(d => d.status === 'active')
-  const totalRemainingDebt  = activeDebts.reduce((s, d) => s + d.monthlyAmount * (d.installments - d.paid), 0)
-  const cuotasThisMonth     = activeDebts.reduce((s, d) => s + d.monthlyAmount, 0)
-  const cuotasNextMonth     = activeDebts.filter(d => d.paid + 1 < d.installments).reduce((s, d) => s + d.monthlyAmount, 0)
-  const alreadyChargedThisMonth = today.getDate() >= AUTO_PAY_DAY
-  const nextChargeDate = alreadyChargedThisMonth
-    ? new Date(today.getFullYear(), today.getMonth() + 1, AUTO_PAY_DAY)
-    : new Date(today.getFullYear(), today.getMonth(), AUTO_PAY_DAY)
-  const daysToCharge = Math.round((nextChargeDate - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000)
-
-  const recent = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 6)
-  const daysIn = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-  const dayNow = today.getDate()
-  const proj   = dayNow > 0 ? (total / dayNow) * daysIn : 0
+  const recent     = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5)
+  const daysIn     = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+  const dayNow     = today.getDate()
+  const proj       = dayNow > 0 ? (total / dayNow) * daysIn : 0
+  const monthLabel = `${MES[today.getMonth()]} ${today.getFullYear()}`
+  const topCat     = CATEGORIES.find(c => c.id === catsArr[0]?.id)
 
   const byDay = {}
-  thisMonth.forEach(e => {
-    const d = new Date(e.date).getDate()
-    byDay[d] = (byDay[d] || 0) + e.amount
-  })
+  thisMonth.forEach(e => { const d = new Date(e.date).getDate(); byDay[d] = (byDay[d] || 0) + (e.amount || 0) })
   const maxDay = Math.max(1, ...Object.values(byDay))
 
-  const monthLabel = `${MES[today.getMonth()]} ${today.getFullYear()}`
-  const topCat = CATEGORIES.find(c => c.id === catsArr[0]?.id)
+  // ── Balance color ─────────────────────────────────────────────────────────
+  const hasCashflow  = accounts.length > 0
+  const freeRatio    = totalAvailable > 0 ? freeBalance / totalAvailable : 0
+  const balanceColor = freeBalance < 0 ? 'text-[#A02828]' : freeRatio < 0.2 ? 'text-[var(--amber-ink)]' : 'text-[var(--accent-ink)]'
+  const balanceBg    = freeBalance < 0 ? 'bg-[#A02828]/8 border-[#A02828]/20' : freeRatio < 0.2 ? 'bg-[var(--amber-soft)] border-[var(--amber-soft)]' : 'bg-[var(--accent-soft)] border-[var(--accent-soft)]'
+
+  // Cashflow grid: border per cell (2-col mobile, 4-col desktop)
+  const cfBorders = [
+    'border-b border-r md:border-b-0 md:border-r',
+    'border-b md:border-b-0 md:border-r',
+    'border-r md:border-r',
+    '',
+  ]
+  const cfItems = [
+    { label: 'Disponible ahora',   value: fmtCLP(totalAvailable), sub: `${activeAccounts.length} cuenta${activeAccounts.length !== 1 ? 's' : ''} activa${activeAccounts.length !== 1 ? 's' : ''}`, color: 'text-[var(--accent-ink)]' },
+    { label: 'Crédito usado',      value: fmtCLP(cycleCredit),    sub: `ciclo actual · pago día ${paymentDay}`,                                                                                    color: '' },
+    { label: 'Compromisos fijos',  value: fmtCLP(recurringTotal + cuotasThisMonth), sub: `${fmtCLPshort(recurringTotal)} recur. + ${fmtCLPshort(cuotasThisMonth)} cuotas`,                       color: '' },
+    { label: 'Saldo libre est.',   value: fmtCLP(freeBalance),    sub: null,                                                                                                                       color: balanceColor },
+  ]
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
-      {/* Hero */}
+
+      {/* ── 1. Tu situación financiera ─────────────────────────────────────── */}
+      {hasCashflow && (
+        <Card padding="p-0" className="overflow-hidden">
+          <div className="px-5 py-4 border-b border-[var(--line)] flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div className="font-semibold tracking-tight text-[15px]">Tu situación financiera</div>
+              <div className="text-[12px] text-[var(--muted)] mt-0.5">Cuentas activas · actualizado hoy</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--bg-elev)] border border-[var(--line)] text-[11px] text-[var(--muted)]">
+                <span className={`w-1.5 h-1.5 rounded-full ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[var(--muted)]'}`}/>
+                Bot {botStatus === 'online' ? 'activo' : 'off'}
+                {lastBotMessage && <span className="ml-1">· {relDate(lastBotMessage.at)} {timeOnly(lastBotMessage.at)}</span>}
+              </div>
+              <button onClick={() => setView('accounts')} className="text-[12px] text-[var(--ink-2)] hover:underline inline-flex items-center gap-1">
+                Ver detalle <Icon name="chevron" size={12}/>
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4">
+            {cfItems.map((item, i) => (
+              <div key={i} className={`px-5 py-4 border-[var(--line)] ${cfBorders[i]}`}>
+                <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">{item.label}</div>
+                <div className={`mt-2 font-mono text-[20px] md:text-[24px] tracking-tight leading-none ${item.color}`}>{item.value}</div>
+                {item.sub && <div className="mt-1.5 text-[11px] text-[var(--muted)]">{item.sub}</div>}
+                {i === 3 && (
+                  <div className={`mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10.5px] font-medium ${balanceBg} ${balanceColor}`}>
+                    {freeBalance < 0
+                      ? <><Icon name="alert" size={11}/> Déficit</>
+                      : freeRatio < 0.2
+                      ? <><Icon name="alert" size={11}/> Saldo bajo</>
+                      : <><Icon name="check" size={11}/> Positivo</>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ── 2. Hero: gasto mensual + próximo pago ─────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4">
+        {/* Gasto mensual */}
         <Card padding="p-5 md:p-6" className="relative overflow-hidden">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
-            <Icon name="calendar" size={13}/> {monthLabel}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+              <Icon name="calendar" size={13}/> {monthLabel}
+            </div>
+            {!hasCashflow && (
+              <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+                <span className={`w-1.5 h-1.5 rounded-full ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[var(--muted)]'}`}/>
+                Bot {botStatus === 'online' ? 'activo' : 'off'}
+              </div>
+            )}
           </div>
           <div className="mt-3 flex items-end gap-3 flex-wrap">
             <div className="font-mono text-[40px] md:text-[52px] tracking-tight leading-none">{fmtCLP(total)}</div>
@@ -86,20 +235,17 @@ export default function Dashboard({ expenses, setView, openChat, botStatus, last
             )}
           </div>
           <div className="mt-2 text-[13px] text-[var(--muted)]">
-            Proyección fin de mes ≈ <span className="font-mono text-[var(--ink-2)]">{fmtCLP(proj)}</span> · {thisMonth.length} gastos registrados
+            Proyección fin de mes ≈ <span className="font-mono text-[var(--ink-2)]">{fmtCLP(proj)}</span> · {thisMonth.length} gastos
           </div>
-
           <div className="mt-5 grid grid-cols-[repeat(31,minmax(0,1fr))] gap-[3px]">
             {Array.from({ length: daysIn }).map((_, i) => {
-              const day       = i + 1
-              const v         = byDay[day] || 0
-              const intensity = v / maxDay
-              const isToday   = day === dayNow
+              const day = i + 1; const v = byDay[day] || 0
+              const intensity = v / maxDay; const isToday = day === dayNow
               return (
                 <div key={i}
-                     className={`h-7 rounded-[3px] ${isToday ? 'outline outline-1 outline-[var(--ink)]' : ''}`}
-                     style={{ background: v ? `oklch(0.62 0.13 165 / ${0.18 + intensity * 0.72})` : 'var(--line)' }}
-                     title={`Día ${day}: ${fmtCLP(v)}`}/>
+                  className={`h-7 rounded-[3px] ${isToday ? 'outline outline-1 outline-[var(--ink)]' : ''}`}
+                  style={{ background: v ? `oklch(0.62 0.13 165 / ${0.18 + intensity * 0.72})` : 'var(--line)' }}
+                  title={`Día ${day}: ${fmtCLP(v)}`}/>
               )
             })}
           </div>
@@ -108,201 +254,241 @@ export default function Dashboard({ expenses, setView, openChat, botStatus, last
           </div>
         </Card>
 
+        {/* Próximo día de pago */}
         <Card padding="p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)] flex items-center gap-2">
-                <Icon name="bot" size={13}/> Bot de Telegram
+          {salaryDay ? (
+            <>
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                <Icon name="calendar" size={13}/> Próximo día de pago
               </div>
-              <div className="mt-2 flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[var(--muted)]'}`}></span>
-                <span className="font-medium">{botStatus === 'online' ? 'Conectado' : 'Desconectado'}</span>
-                <span className="text-[12px] text-[var(--muted)]">· @gastito_bot</span>
+              <div className="mt-2">
+                <div className="font-semibold text-[22px] tracking-tight">{salaryLabel}</div>
+                <div className="mt-0.5 text-[13px] text-[var(--muted)]">
+                  Faltan {daysToSalary} día{daysToSalary !== 1 ? 's' : ''}
+                </div>
               </div>
-            </div>
-            <Badge tone={botStatus === 'online' ? 'ok' : 'warn'}>{botStatus === 'online' ? 'Activo' : 'Off'}</Badge>
-          </div>
-
-          {lastBotMessage ? (
-            <div className="mt-4 rounded-lg bg-[var(--bg)] border border-[var(--line)] p-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Último mensaje</div>
-              <div className="mt-1.5 text-[13px] leading-snug">"{lastBotMessage.text}"</div>
-              <div className="mt-2 text-[11px] text-[var(--muted)] font-mono">{relDate(lastBotMessage.at)} · {timeOnly(lastBotMessage.at)}</div>
-            </div>
+              <div className="mt-4 flex flex-col gap-2.5">
+                {cardsAtSalary.length > 0 && (
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-[var(--muted)] flex items-center gap-1.5">
+                      <Icon name="card" size={13}/> Tarjetas (día {salaryDay})
+                    </span>
+                    <span className="font-mono">{fmtCLP(creditAtSalary)}</span>
+                  </div>
+                )}
+                {cuotasThisMonth > 0 && (
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-[var(--muted)] flex items-center gap-1.5">
+                      <Icon name="layers" size={13}/> Cuotas del mes
+                    </span>
+                    <span className="font-mono">{fmtCLP(cuotasThisMonth)}</span>
+                  </div>
+                )}
+                {recurringTotal > 0 && (
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-[var(--muted)] flex items-center gap-1.5">
+                      <Icon name="repeat" size={13}/> Gastos recurrentes
+                    </span>
+                    <span className="font-mono">{fmtCLP(recurringTotal)}</span>
+                  </div>
+                )}
+                {(cardsAtSalary.length > 0 || cuotasThisMonth > 0 || recurringTotal > 0) && (
+                  <div className="pt-2 border-t border-[var(--line)] flex items-center justify-between text-[13px] font-semibold">
+                    <span>Total estimado</span>
+                    <span className="font-mono">{fmtCLP(totalAtSalary)}</span>
+                  </div>
+                )}
+              </div>
+              {hasCashflow && (
+                <div className={`mt-4 p-3 rounded-lg border ${balanceBg}`}>
+                  <div className={`text-[12px] font-medium ${balanceColor}`}>
+                    {freeBalance >= 0
+                      ? `Saldo libre: ${fmtCLP(freeBalance)}`
+                      : `Déficit estimado: ${fmtCLP(Math.abs(freeBalance))}`}
+                  </div>
+                  <div className="text-[11px] text-[var(--muted)] mt-0.5">después de compromisos</div>
+                </div>
+              )}
+              <button onClick={() => setView('accounts')}
+                className="mt-4 w-full h-8 inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--line)] text-[12.5px] text-[var(--ink-2)] hover:bg-[var(--hover)]">
+                <Icon name="wallet" size={13}/> Ver flujo completo
+              </button>
+            </>
           ) : (
-            <div className="mt-4 rounded-lg bg-[var(--bg)] border border-[var(--line)] p-3 text-center text-[12px] text-[var(--muted)]">
-              Sin mensajes recibidos aún
-            </div>
+            <>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)] flex items-center gap-2">
+                <Icon name="layers" size={13}/> Cuotas activas
+              </div>
+              <div className="mt-3">
+                <div className="font-mono text-[32px] tracking-tight leading-none">{fmtCLP(cuotasThisMonth)}</div>
+                <div className="mt-1.5 text-[13px] text-[var(--muted)]">este mes · {activeDebts.length} cuota{activeDebts.length !== 1 ? 's' : ''}</div>
+              </div>
+              <div className="mt-4 flex flex-col gap-2">
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-[var(--muted)]">Próximo mes</span>
+                  <span className="font-mono">{fmtCLP(cuotasNextMonth)}</span>
+                </div>
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-[var(--muted)]">Deuda restante</span>
+                  <span className="font-mono">{fmtCLP(totalRemainingDebt)}</span>
+                </div>
+              </div>
+              <div className="mt-5 text-[12px] text-[var(--muted)]">
+                Configura tu día de sueldo en{' '}
+                <button className="underline text-[var(--ink-2)]" onClick={() => setView('profile')}>Mi perfil</button>
+                {' '}para ver compromisos al día de pago.
+              </div>
+            </>
           )}
-
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button onClick={openChat}
-              className="h-9 inline-flex items-center justify-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium">
-              <Icon name="send" size={14}/> Probar
-            </button>
-            <button onClick={() => setView('telegram')}
-              className="h-9 inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] text-[13px] text-[var(--ink-2)] hover:bg-[var(--hover)]">
-              <Icon name="settings" size={14}/> Ajustes
-            </button>
-          </div>
         </Card>
       </div>
 
-      {/* KPIs */}
+      {/* ── 3. KPIs ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <StatCard label="Gastos del mes"  value={thisMonth.length}        sub={`promedio diario: ${fmtCLPshort(dayNow > 0 ? total / dayNow : 0)}`} icon="list"/>
-        <StatCard label="Gasto promedio"  value={fmtCLP(avg)}             sub="por transacción"                                                     icon="wallet"/>
-        <StatCard label="Medio más usado" value={methodLabel}             sub={thisMonth.length ? `${fmtCLP(topMethod[1])} este mes` : 'sin datos'} icon="card"/>
-        <StatCard label="Categoría top"   value={topCat?.label ?? '—'}   sub={topCat ? `${fmtCLP(catsArr[0]?.v ?? 0)} acumulado` : 'sin gastos'}  icon="tag"/>
+        <StatCard label="Gastos del mes"  value={thisMonth.length}      sub={`promedio diario: ${fmtCLPshort(dayNow > 0 ? total / dayNow : 0)}`} icon="list"/>
+        <StatCard label="Gasto promedio"  value={fmtCLP(avg)}           sub="por transacción"                                                     icon="wallet"/>
+        <StatCard label="Medio más usado" value={methodLabel}           sub={thisMonth.length ? `${fmtCLP(topMethod[1])} este mes` : 'sin datos'} icon="card"/>
+        <StatCard label="Categoría top"   value={topCat?.label ?? '—'} sub={topCat ? `${fmtCLP(catsArr[0]?.v ?? 0)} acumulado` : 'sin gastos'}  icon="tag"/>
       </div>
 
-      {/* Flujo de caja — solo si hay cuentas configuradas */}
-      {accounts.length > 0 && (() => {
-        const totalAvailable = accounts.filter(a => a.active).reduce((s, a) => s + (a.balance ?? 0), 0)
-        const primaryCard = creditCards.find(c => c.isActive !== false)
-        const billingDay  = Number(primaryCard?.billingDay ?? 20)
-        const paymentDay  = Number(primaryCard?.paymentDueDay ?? 5)
-        const cycleStart  = today.getDate() >= billingDay
-          ? new Date(today.getFullYear(), today.getMonth(), billingDay)
-          : new Date(today.getFullYear(), today.getMonth() - 1, billingDay)
-        const cycleCredit = thisMonth.filter(e => e.type === 'credito' && new Date(e.date) >= cycleStart)
-          .reduce((s, e) => s + e.amount, 0)
-        const recurringTotal = (recurring ?? []).filter(r => r.active && r.kind !== 'income')
-          .reduce((s, r) => s + r.amount, 0)
-        const freeBalance = totalAvailable - cycleCredit - recurringTotal - cuotasThisMonth
-        let nextPayDate = new Date(today.getFullYear(), today.getMonth(), paymentDay)
-        if (nextPayDate <= today) nextPayDate = new Date(today.getFullYear(), today.getMonth() + 1, paymentDay)
-        const daysToPayment = Math.ceil((nextPayDate - today) / 86400000)
-        const netColor = freeBalance >= 0 ? 'text-[var(--accent-ink)]' : 'text-[#A02828]'
-        return (
-          <Card padding="p-0">
-            <div className="px-5 py-3.5 border-b border-[var(--line)] flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2 text-[12px] font-semibold tracking-tight">
-                <Icon name="wallet" size={14}/> Flujo de caja
-              </div>
-              <button onClick={() => setView('accounts')} className="text-[12px] text-[var(--ink-2)] hover:underline inline-flex items-center gap-1">
-                Ver detalle <Icon name="chevron" size={12}/>
-              </button>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[var(--line)]">
-              {[
-                { label: 'Disponible',         value: fmtCLP(totalAvailable),  sub: `${accounts.filter(a=>a.active).length} cuentas`, color: 'text-[var(--accent-ink)]' },
-                { label: 'Crédito ciclo',       value: fmtCLP(cycleCredit),     sub: `pago en ${daysToPayment}d · día ${paymentDay}`, color: '' },
-                { label: 'Compromisos fijos',   value: fmtCLP(recurringTotal + cuotasThisMonth), sub: 'recurrentes + cuotas', color: '' },
-                { label: 'Saldo libre est.',    value: fmtCLP(freeBalance),     sub: freeBalance >= 0 ? 'después de compromisos' : '⚠ déficit', color: netColor },
-              ].map((item, i) => (
-                <div key={i} className="px-5 py-3.5">
-                  <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">{item.label}</div>
-                  <div className={`mt-1.5 font-mono text-[18px] tracking-tight leading-none ${item.color}`}>{item.value}</div>
-                  <div className="mt-1 text-[11px] text-[var(--muted)]">{item.sub}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )
-      })()}
-
-      {/* Cuotas activas — solo si hay datos */}
-      {activeDebts.length > 0 && (
+      {/* ── 4. Tarjetas de crédito ─────────────────────────────────────────── */}
+      {cardTotals.length > 0 && (
         <Card padding="p-0">
-          <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--line)] flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-md bg-[var(--ink)] text-[var(--bg)] grid place-items-center">
-                <Icon name="layers" size={16}/>
-              </div>
-              <div>
-                <div className="font-semibold tracking-tight">Cuotas activas</div>
-                <div className="text-[12px] text-[var(--muted)] flex items-center gap-1.5 mt-0.5">
-                  <Icon name="repeat" size={11}/>
-                  Auto-pago día <span className="font-mono">{AUTO_PAY_DAY}</span>
-                  <span>·</span>
-                  <span>próximo en {daysToCharge} días</span>
-                </div>
-              </div>
-            </div>
-            <button onClick={() => setView('installments')}
-              className="text-[12px] text-[var(--ink-2)] hover:underline inline-flex items-center gap-1">
-              Ver detalle <Icon name="chevron" size={12}/>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[var(--line)]">
-            <div className="px-5 py-4">
-              <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">Este mes</div>
-              <div className="mt-2 font-mono text-[22px] tracking-tight leading-none">{fmtCLP(cuotasThisMonth)}</div>
-              <div className="mt-1.5 text-[11.5px] text-[var(--muted)]">{activeDebts.length} cuotas · día {AUTO_PAY_DAY}</div>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">Próximo mes</div>
-              <div className="mt-2 font-mono text-[22px] tracking-tight leading-none">{fmtCLP(cuotasNextMonth)}</div>
-              <div className="mt-1.5 text-[11.5px] text-[var(--muted)]">estimado</div>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">Deuda restante</div>
-              <div className="mt-2 font-mono text-[22px] tracking-tight leading-none">{fmtCLP(totalRemainingDebt)}</div>
-              <div className="mt-1.5 text-[11.5px] text-[var(--muted)]">total por pagar</div>
-            </div>
-          </div>
-
-          <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-            {activeDebts.slice(0, 4).map(d => {
-              const cat = CATEGORIES.find(c => c.id === d.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0]
+          <SectionHeader
+            title="Tarjetas de crédito"
+            sub={`${cardTotals.length} activa${cardTotals.length !== 1 ? 's' : ''} · ciclo actual`}
+            action="Ver cuentas"
+            onAction={() => setView('accounts')}
+          />
+          <ul className="divide-y divide-[var(--line)]">
+            {cardTotals.map(({ card, spent, billedThisMonth }) => {
+              const lim       = card.creditLimit ? Number(card.creditLimit) : null
+              const util      = lim && lim > 0 ? (spent / lim) * 100 : null
+              const utilColor = util === null ? 'var(--accent)' : util > 80 ? '#A02828' : util > 60 ? 'var(--amber-ink)' : 'var(--accent)'
               return (
-                <li key={d.id} className="px-5 py-3 flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-md grid place-items-center text-[13px] shrink-0" style={{ background: (cat.color ?? '#888') + '20' }}>{cat.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-medium truncate">{d.description}</span>
-                      <span className="text-[10.5px] font-mono px-1.5 py-[2px] rounded bg-[var(--hover)] text-[var(--ink-2)]">{d.paid}/{d.installments}</span>
+                <li key={card.id} className="px-5 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-md bg-[var(--bg-elev)] border border-[var(--line)] grid place-items-center text-[var(--muted)] shrink-0">
+                      <Icon name="card" size={14}/>
                     </div>
-                    <div className="mt-1 flex items-center gap-[3px]">
-                      {Array.from({ length: d.installments }).map((_, i) => (
-                        <div key={i} className="flex-1 h-1 rounded-sm" style={{ background: i < d.paid ? 'var(--ink)' : 'var(--line)' }}/>
-                      ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-[13.5px]">{card.name}</span>
+                        {card.lastFour && <span className="text-[var(--muted)] font-mono text-[11px]">···{card.lastFour}</span>}
+                        <Badge tone={billedThisMonth ? 'warn' : 'muted'}>
+                          {billedThisMonth ? 'Facturado' : 'Sin facturar'}
+                        </Badge>
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-[var(--muted)]">
+                        Factura día <span className="font-mono">{card.billingDay ?? '—'}</span>
+                        {' '}· Paga día <span className="font-mono">{card.paymentDueDay ?? '—'}</span>
+                        {lim && <span> · límite {fmtCLPshort(lim)}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-mono text-[15px] tabular-nums">{fmtCLP(spent)}</div>
+                      {util !== null && <div className="text-[11px] text-[var(--muted)]">{util.toFixed(0)}% usado</div>}
                     </div>
                   </div>
-                  <div className="font-mono text-[13px] tabular-nums shrink-0">{fmtCLP(d.monthlyAmount)}</div>
+                  {util !== null && (
+                    <div className="mt-2 h-1.5 rounded-full bg-[var(--line)] overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: Math.min(100, util) + '%', background: utilColor }}/>
+                    </div>
+                  )}
                 </li>
               )
             })}
-            {activeDebts.length > 4 && (
-              <li className="px-5 py-2.5 text-[12px] text-[var(--muted)] text-center">+ {activeDebts.length - 4} más</li>
-            )}
           </ul>
         </Card>
       )}
 
-      {/* Últimos gastos + por categoría + medios */}
+      {/* ── 5. Cuotas activas (3 max) ─────────────────────────────────────── */}
+      {activeDebts.length > 0 && (
+        <Card padding="p-0">
+          <SectionHeader
+            title="Cuotas activas"
+            sub={`${fmtCLP(cuotasThisMonth)} este mes · próximo cobro en ${daysToCharge} día${daysToCharge !== 1 ? 's' : ''}`}
+            action="Ver todas"
+            onAction={() => setView('installments')}
+          />
+          <div className="grid grid-cols-3 divide-x divide-[var(--line)] border-b border-[var(--line)]">
+            {[
+              { label: 'Este mes',       value: fmtCLP(cuotasThisMonth) },
+              { label: 'Próximo mes',    value: fmtCLP(cuotasNextMonth) },
+              { label: 'Deuda restante', value: fmtCLP(totalRemainingDebt) },
+            ].map((item, i) => (
+              <div key={i} className="px-4 py-3 text-center">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{item.label}</div>
+                <div className="mt-1 font-mono text-[16px] tracking-tight">{item.value}</div>
+              </div>
+            ))}
+          </div>
+          <ul className="divide-y divide-[var(--line)]">
+            {activeDebts.slice(0, 3).map(d => {
+              const cat = CATEGORIES.find(c => c.id === d.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0]
+              const rem = d.installments - d.paid
+              return (
+                <li key={d.id} className="px-5 py-3 flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-md grid place-items-center text-[12px] shrink-0" style={{ background: (cat.color ?? '#888') + '20' }}>{cat.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-medium truncate">{d.description}</span>
+                      <span className="text-[10.5px] font-mono px-1.5 py-[2px] rounded bg-[var(--hover)] text-[var(--ink-2)]">{d.paid}/{d.installments}</span>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-[3px]">
+                      {Array.from({ length: Math.min(d.installments, 24) }).map((_, i) => (
+                        <div key={i} className="flex-1 h-1 rounded-sm" style={{ background: i < d.paid ? 'var(--ink)' : 'var(--line)' }}/>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-mono text-[13px] tabular-nums">{fmtCLP(d.monthlyAmount)}</div>
+                    <div className="text-[10.5px] text-[var(--muted)]">{rem} restante{rem !== 1 ? 's' : ''}</div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+          {activeDebts.length > 3 && (
+            <div className="px-5 py-2.5 border-t border-[var(--line)] text-center">
+              <button onClick={() => setView('installments')} className="text-[12px] text-[var(--ink-2)] hover:underline inline-flex items-center gap-1">
+                Ver {activeDebts.length - 3} cuota{activeDebts.length - 3 !== 1 ? 's' : ''} más <Icon name="chevron" size={12}/>
+              </button>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ── 6. Últimos gastos + Categorías + Medios ───────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_1fr_1fr] gap-4">
         <Card padding="p-0">
-          <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--line)]">
-            <div>
-              <div className="font-semibold tracking-tight">Últimos gastos</div>
-              <div className="text-[12px] text-[var(--muted)] mt-0.5">Registrados desde Telegram y manuales</div>
-            </div>
-            <button onClick={() => setView('expenses')} className="text-[12px] text-[var(--ink-2)] hover:underline inline-flex items-center gap-1">
-              Ver todos <Icon name="chevron" size={12}/>
-            </button>
-          </div>
+          <SectionHeader
+            title="Últimos gastos"
+            sub="Registrados desde Telegram y manual"
+            action="Ver todos"
+            onAction={() => setView('expenses')}
+          />
           {recent.length > 0 ? (
             <ul className="divide-y divide-[var(--line)]">
               {recent.map(e => {
-                const cat  = CATEGORIES.find(c => c.id === e.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0]
+                const cat      = CATEGORIES.find(c => c.id === e.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0]
+                const bankName = banks.find(b => b.id === e.bank)?.label
+                const pt       = payLabel(e)
                 return (
                   <li key={e.id} className="px-5 py-3 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-md grid place-items-center text-[14px]" style={{ background: (cat.color ?? '#888') + '20' }}>
+                    <div className="w-8 h-8 rounded-md grid place-items-center text-[14px] shrink-0" style={{ background: (cat.color ?? '#888') + '20' }}>
                       {cat.icon}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[13.5px] font-medium truncate">{e.description}</span>
                         {e.status === 'revisar' && <Badge tone="warn">revisar</Badge>}
+                        {(e.installments || 0) > 1 && <Badge tone="muted">{e.installments} cuotas</Badge>}
                       </div>
-                      <div className="text-[11.5px] text-[var(--muted)] mt-0.5 flex items-center gap-1.5">
+                      <div className="text-[11.5px] text-[var(--muted)] mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <span>{relDate(e.date)} · {timeOnly(e.date)}</span>
-                        <span>·</span>
-                        <span>{banks.find(b => b.id === e.bank)?.label}</span>
-                        {e.installments > 1 && <><span>·</span><span>{e.installments} cuotas</span></>}
+                        {bankName && <><span>·</span><span>{bankName}</span></>}
+                        <span>·</span><span>{pt}</span>
                       </div>
                     </div>
                     <div className="font-mono text-[14px] tabular-nums shrink-0">{fmtCLP(e.amount)}</div>
@@ -312,7 +498,7 @@ export default function Dashboard({ expenses, setView, openChat, botStatus, last
             </ul>
           ) : (
             <div className="px-5 py-8 text-center text-[13px] text-[var(--muted)]">
-              Sin gastos registrados aún.{' '}
+              Sin gastos registrados.{' '}
               <button onClick={() => setView('expenses')} className="underline text-[var(--ink-2)]">Registrar uno</button>
             </div>
           )}
@@ -350,9 +536,9 @@ export default function Dashboard({ expenses, setView, openChat, botStatus, last
             <>
               <div className="mt-4 flex flex-col gap-3.5">
                 {[
-                  { key: 'credito', label: 'Crédito', icon: 'card' },
-                  { key: 'debito',  label: 'Débito',  icon: 'card' },
-                  { key: 'efectivo',label: 'Efectivo',icon: 'cash' },
+                  { key: 'credito', label: 'Crédito',  icon: 'card' },
+                  { key: 'debito',  label: 'Débito',   icon: 'card' },
+                  { key: 'efectivo',label: 'Efectivo', icon: 'cash' },
                 ].map(m => (
                   <BarRow key={m.key}
                     label={<span className="inline-flex items-center gap-2"><Icon name={m.icon} size={13}/> {m.label}</span>}
@@ -371,7 +557,8 @@ export default function Dashboard({ expenses, setView, openChat, botStatus, last
                     return (
                       <div key={id} className="flex items-center justify-between text-[13px]">
                         <span className="inline-flex items-center gap-2 text-[var(--ink-2)]">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--ink-2)]"></span>{b?.label ?? id}
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--ink-2)]"/>
+                          {b?.label ?? id}
                         </span>
                         <span className="font-mono tabular-nums">{fmtCLP(v)}</span>
                       </div>
