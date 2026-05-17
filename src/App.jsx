@@ -11,6 +11,8 @@ import Comparison from './components/Comparison'
 import UnparsedMessages from './components/UnparsedMessages'
 import TelegramSettings from './components/TelegramSettings'
 import Audit from './components/Audit'
+import AdminPanel from './components/AdminPanel'
+import UserProfile from './components/UserProfile'
 import BotChat from './components/BotChat'
 import { Icon } from './lib/helpers'
 import {
@@ -25,6 +27,7 @@ import { fetchInstallments, createInstallment, updateInstallment, patchInstallme
 import { fetchBudgets, upsertBudget } from './services/budgetsService'
 import { fetchUnparsedMessages, fetchLastBotMessage } from './services/telegramMessagesService'
 import { fetchAuditLog } from './services/auditService'
+import { fetchCurrentRole } from './services/adminService'
 import Login from './components/Login'
 
 const IS_REAL = isConfigured
@@ -33,6 +36,7 @@ export default function App() {
   // ── Auth ────────────────────────────────────────────────────
   const [session, setSession]     = useState(null)
   const [authReady, setAuthReady] = useState(!IS_REAL)
+  const [userRole,  setUserRole]  = useState('user')
 
   useEffect(() => {
     if (!IS_REAL) return
@@ -44,8 +48,15 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Load role after session established
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchCurrentRole().then(role => setUserRole(role)).catch(() => setUserRole('user'))
+  }, [session])
+
   const handleSignOut = async () => {
     await signOut()
+    setUserRole('user')
     setExpenses(IS_REAL ? [] : EXPENSES)
     setExpensesSource(IS_REAL ? 'loading' : 'demo')
     setRecurringList(IS_REAL ? [] : RECURRING)
@@ -385,7 +396,9 @@ export default function App() {
     <>
       <Layout view={view} setView={navigate} botStatus={botStatus} onOpenChat={() => setChatOpen(true)}
               onSignOut={IS_REAL ? handleSignOut : undefined}
-              userEmail={session?.user?.email}>
+              userEmail={session?.user?.email}
+              isSuperAdmin={userRole === 'super_admin'}
+              unparsedCount={unparsed.length}>
         {view === 'dashboard' && (
           <Dashboard
             expenses={expenses}
@@ -458,6 +471,12 @@ export default function App() {
           />
         )}
         {view === 'audit' && <Audit entries={auditLog}/>}
+        {view === 'profile' && IS_REAL && session && (
+          <UserProfile userId={session.user.id} userEmail={session.user.email}/>
+        )}
+        {view === 'admin' && userRole === 'super_admin' && IS_REAL && session && (
+          <AdminPanel adminUserId={session.user.id}/>
+        )}
       </Layout>
 
       {editing && (

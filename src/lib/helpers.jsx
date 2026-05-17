@@ -1,5 +1,4 @@
 import React from 'react'
-import { TODAY } from '../data'
 
 export const fmtCLP = (n) => "$" + Math.round(n).toLocaleString("es-CL");
 export const fmtCLPshort = (n) => {
@@ -12,7 +11,7 @@ export const MES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct",
 export const DIAS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 
 export const relDate = (iso) => {
-  const today = TODAY;
+  const today = new Date();
   const d = new Date(iso);
   const diff = Math.round((new Date(today).setHours(0,0,0,0) - new Date(d).setHours(0,0,0,0)) / 86400000);
   if (diff === 0) return "Hoy";
@@ -85,6 +84,8 @@ export const Icon = ({ name, size = 18, className = "" }) => {
     case "more":     return <svg {...props}><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/></svg>;
     case "power":    return <svg {...props}><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/><path d="M12 2v10"/></svg>;
     case "layers":   return <svg {...props}><path d="M12 2l10 5-10 5L2 7z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></svg>;
+    case "users":    return <svg {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    case "person":   return <svg {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
     default:         return null;
   }
 };

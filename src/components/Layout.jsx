@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Icon } from '../lib/helpers'
 
-const NAV_GROUPS = [
+const BASE_NAV_GROUPS = [
   {
     label: null,
     items: [
@@ -31,19 +31,34 @@ const NAV_GROUPS = [
       { id: "telegram",     label: "Configuración",    icon: "bot",     short: "Config" },
     ],
   },
-  {
-    label: "Sistema",
-    items: [
-      { id: "audit",        label: "Auditoría",        icon: "history", short: "Audit." },
-    ],
-  },
 ];
 
-const ALL_NAV = NAV_GROUPS.flatMap(g => g.items);
+function buildNavGroups(isSuperAdmin, unparsedCount) {
+  const groups = BASE_NAV_GROUPS.map(g => ({
+    ...g,
+    items: g.items.map(item =>
+      item.id === 'unparsed' ? { ...item, badge: unparsedCount || 0 } : item
+    ),
+  }))
+
+  const sistemaItems = [
+    { id: "profile", label: "Mi perfil",       icon: "person",  short: "Perfil" },
+    { id: "audit",   label: "Auditoría",        icon: "history", short: "Audit." },
+  ]
+  if (isSuperAdmin) {
+    sistemaItems.push({ id: "admin", label: "Administración", icon: "users", short: "Admin" })
+  }
+  groups.push({ label: "Sistema", items: sistemaItems })
+  return groups
+}
+
 const MOBILE_PRIMARY = ["dashboard", "expenses", "budgets", "reports"];
 
-export default function Layout({ view, setView, botStatus, children, onOpenChat, onSignOut, userEmail }) {
+export default function Layout({ view, setView, botStatus, children, onOpenChat, onSignOut, userEmail, isSuperAdmin, unparsedCount }) {
   const [openMobile, setOpenMobile] = useState(false);
+
+  const NAV_GROUPS = buildNavGroups(isSuperAdmin, unparsedCount)
+  const ALL_NAV = NAV_GROUPS.flatMap(g => g.items)
 
   const currentItem = ALL_NAV.find(n => n.id === view);
   const currentLabel = currentItem?.label || "Control";

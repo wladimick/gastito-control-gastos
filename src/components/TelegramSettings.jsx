@@ -107,6 +107,15 @@ export default function TelegramSettings({ botStatus, setBotStatus, lastBotMessa
           </Card>
         )}
 
+        {/* ── Aviso bot compartido ────────────────────────────── */}
+        <div className="rounded-lg border border-[var(--line)] p-4 flex items-start gap-2.5 text-[12.5px] text-[var(--muted)]">
+          <Icon name="info" size={14} className="mt-0.5 shrink-0"/>
+          <span>
+            Este bot es compartido. Cada usuario debe vincular su propia cuenta de Telegram.
+            Tus gastos quedan asociados solo a tu usuario.
+          </span>
+        </div>
+
         {/* ── Estado del bot ──────────────────────────────────── */}
         <Card padding="p-5 md:p-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
