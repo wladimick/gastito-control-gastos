@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
 import ExpensesList from './components/ExpensesList'
@@ -17,10 +17,12 @@ import {
   EXPENSES, UNPARSED, BUDGETS, RECURRING, INSTALLMENT_DEBTS,
   AUDIT_LOG, INCOME, RECEIVABLES, BOT_CHAT,
 } from './data'
+import { fetchExpenses } from './services/expensesService'
 
 export default function App() {
   const [view, setView]                   = useState("dashboard");
   const [expenses, setExpenses]           = useState(EXPENSES);
+  const [expensesSource, setExpensesSource] = useState("local"); // "local" | "supabase" | "loading"
   const [unparsed, setUnparsed]           = useState(UNPARSED);
   const [budgets, setBudgets]             = useState(BUDGETS);
   const [recurring, setRecurring]         = useState(RECURRING);
@@ -31,6 +33,29 @@ export default function App() {
   const [chatOpen, setChatOpen]           = useState(false);
 
   const lastBotMessage = BOT_CHAT[BOT_CHAT.length - 2];
+
+  // Carga gastos desde Supabase al montar. Si falla o no hay sesión → data.js
+  useEffect(() => {
+    let cancelled = false
+    setExpensesSource("loading")
+    fetchExpenses()
+      .then(data => {
+        if (cancelled) return
+        if (data && data.length > 0) {
+          setExpenses(data)
+          setExpensesSource("supabase")
+        } else {
+          setExpensesSource("local") // sin sesión o sin datos → mock
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          console.warn("[Supabase] expenses fallback a data.js:", err.message)
+          setExpensesSource("local")
+        }
+      })
+    return () => { cancelled = true }
+  }, []);
 
   const audit = (action, target, summary, actor = "user") => {
     setAuditLog(prev => [{
@@ -144,12 +169,19 @@ export default function App() {
           />
         )}
         {view === "expenses" && (
-          <ExpensesList
-            expenses={expenses}
-            onEdit={setEditing}
-            onDelete={onDeleteExpense}
-            onToggleStatus={onToggleStatus}
-          />
+          <>
+            {expensesSource === "loading" && (
+              <div className="h-0.5 w-full bg-[var(--line)] overflow-hidden mb-[-2px]">
+                <div className="h-full bg-[var(--accent)] animate-pulse w-1/2"/>
+              </div>
+            )}
+            <ExpensesList
+              expenses={expenses}
+              onEdit={setEditing}
+              onDelete={onDeleteExpense}
+              onToggleStatus={onToggleStatus}
+            />
+          </>
         )}
         {view === "budgets" && (
           <Budgets expenses={expenses} budgets={budgets} setBudgets={onSetBudgets}/>
