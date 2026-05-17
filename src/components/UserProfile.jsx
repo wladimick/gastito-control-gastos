@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Badge } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
-import { BANKS } from '../data'
+import { useBanks } from '../services/banksService'
 import {
   fetchMyProfile, saveMyProfile,
   fetchMySettings, saveMySettings,
@@ -42,7 +42,7 @@ function Field({ label, hint, children }) {
 
 const BLANK_CARD = { name: '', bank: '', lastFour: '', billingDay: '', paymentDueDay: '', creditLimit: '' }
 
-function CardForm({ card, onSave, onCancel, saving }) {
+function CardForm({ card, onSave, onCancel, saving, banks }) {
   const [draft, setDraft] = useState(card || BLANK_CARD)
   const set = (k, v) => setDraft(p => ({ ...p, [k]: v }))
   return (
@@ -57,7 +57,7 @@ function CardForm({ card, onSave, onCancel, saving }) {
           <select value={draft.bank} onChange={e => set('bank', e.target.value)}
             className="w-full h-9 px-3 bg-[var(--bg-elev)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]">
             <option value="">Sin banco</option>
-            {BANKS.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+            {banks.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
           </select>
         </Field>
         <Field label="Últimos 4 dígitos" hint="Opcional">
@@ -147,6 +147,7 @@ function CatForm({ cat, onSave, onCancel, saving }) {
 }
 
 export default function UserProfile({ userId, userEmail }) {
+  const banks = useBanks()
   const [profile,       setProfile]       = useState(null)
   const [settings,      setSettings]      = useState(null)
   const [cards,         setCards]         = useState([])
@@ -412,13 +413,13 @@ export default function UserProfile({ userId, userEmail }) {
                 </div>
               </div>
               {cardForm?.id === c.id && (
-                <CardForm card={cardForm} onSave={handleSaveCard} onCancel={() => setCardForm(null)} saving={savingCard}/>
+                <CardForm card={cardForm} onSave={handleSaveCard} onCancel={() => setCardForm(null)} saving={savingCard} banks={banks}/>
               )}
             </div>
           ))}
 
           {cardForm && !cardForm.id && (
-            <CardForm card={null} onSave={handleSaveCard} onCancel={() => setCardForm(null)} saving={savingCard}/>
+            <CardForm card={null} onSave={handleSaveCard} onCancel={() => setCardForm(null)} saving={savingCard} banks={banks}/>
           )}
         </div>
       </Card>

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Card, Badge, Select } from './ui'
 import { Icon, fmtCLP, fmtCLPshort, MES } from '../lib/helpers'
-import { CATEGORIES, BANKS } from '../data'
+import { CATEGORIES } from '../data'
+import { useBanks } from '../services/banksService'
 
 const AUTO_PAY_DAY = 5
 
@@ -68,7 +69,7 @@ const BLANK = {
   autoPay: false, status: 'active',
 }
 
-function InstallmentForm({ initial, onSave, onCancel }) {
+function InstallmentForm({ initial, onSave, onCancel, banks }) {
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.description.trim() && f.total > 0 && f.installments >= 1
@@ -114,7 +115,7 @@ function InstallmentForm({ initial, onSave, onCancel }) {
           <Select value={f.category} onChange={v => set('category', v)} options={CATEGORIES.map(c => ({ value: c.id, label: c.label }))}/>
         </Field>
         <Field label="Banco">
-          <Select value={f.bank} onChange={v => set('bank', v)} options={BANKS.map(b => ({ value: b.id, label: b.label }))}/>
+          <Select value={f.bank} onChange={v => set('bank', v)} options={banks.map(b => ({ value: b.id, label: b.label }))}/>
         </Field>
         <Field label="Mes de inicio">
           <input type="month" value={f.startMonth} onChange={e => set('startMonth', e.target.value)}
@@ -133,6 +134,7 @@ function InstallmentForm({ initial, onSave, onCancel }) {
 }
 
 export default function Installments({ debts, setDebts, recurring = [], onCreateInstallment, onUpdateInstallment, onDeleteInstallment }) {
+  const banks = useBanks()
   const today = new Date()
   const curY = today.getFullYear(), curM = today.getMonth()
   const curKey = ymKey(curY, curM)
@@ -258,6 +260,7 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
           initial={formState}
           onSave={handleSave}
           onCancel={() => setFormState(null)}
+          banks={banks}
         />
       )}
 
@@ -280,7 +283,7 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
         <ul className="divide-y divide-[var(--line)]">
           {debts.map(d => {
             const cat       = CATEGORIES.find(c => c.id === d.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0]
-            const bank      = BANKS.find(b => b.id === d.bank)
+            const bank      = banks.find(b => b.id ===d.bank)
             const remaining = d.monthlyAmount * (d.installments - d.paid)
             const isExpanded = expandedDebt === d.id
             const schedule   = expandSchedule(d)
@@ -437,7 +440,7 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
                       ...mo.recCharges.map(c => ({ ...c, kind: 'rec' })),
                     ].sort((a, b) => a.day - b.day).map((it, idx) => {
                       const cat  = CATEGORIES.find(c => c.id === it.category) ?? CATEGORIES[0]
-                      const bank = BANKS.find(b => b.id === it.bank)
+                      const bank = banks.find(b => b.id ===it.bank)
                       return (
                         <li key={idx} className="py-2.5 flex items-center gap-3">
                           <div className="w-9 h-9 rounded-md grid place-items-center text-[var(--muted)] font-mono text-[11px] shrink-0 bg-[var(--bg-elev)] border border-[var(--line)]">

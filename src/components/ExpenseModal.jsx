@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Badge, Select } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
-import { CATEGORIES, BANKS, PAYMENT_METHODS } from '../data'
+import { CATEGORIES, PAYMENT_METHODS } from '../data'
+import { useBanks } from '../services/banksService'
 
 function Field({ label, children }) {
   return (
@@ -13,6 +14,7 @@ function Field({ label, children }) {
 }
 
 export default function ExpenseModal({ expense, onClose, onSave }) {
+  const banks = useBanks()
   const [form, setForm] = useState(expense);
   useEffect(() => { setForm(expense); }, [expense]);
   if (!expense) return null;
@@ -80,7 +82,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
             </Field>
             <Field label="Banco / Tarjeta">
               <Select value={form.bank} onChange={v => setF("bank", v)}
-                options={BANKS.map(b => ({ value: b.id, label: b.label }))}/>
+                options={banks.map(b => ({ value: b.id, label: b.label }))}/>
             </Field>
           </div>
 

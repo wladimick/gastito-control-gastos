@@ -22,6 +22,7 @@ interface ParsedExpense {
   cardType:      'debito' | 'credito' | null
   bankId:        string | null
   expenseDate:   string
+  installments:  number | null
 }
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -221,9 +222,17 @@ function parseExpense(text: string, categories: Category[]): ParsedExpense {
     const d = new Date(); d.setDate(d.getDate() - 2); expenseDate = d.toISOString()
   }
 
+  // Cuotas: "en 3 cuotas", "3 cuotas", "en 12 cuotas"
+  let installments: number | null = null
+  const cuotasMatch = lower.match(/(?:en\s+)?(\d+)\s*cuotas?/)
+  if (cuotasMatch) {
+    const n = parseInt(cuotasMatch[1], 10)
+    if (n >= 2 && n <= 60) installments = n
+  }
+
   const description = text.length > 100 ? text.slice(0, 97) + '…' : text
 
-  return { amount, description, categoryId, categoryLabel, cardType, bankId, expenseDate }
+  return { amount, description, categoryId, categoryLabel, cardType, bankId, expenseDate, installments }
 }
 
 // ─── Handler principal ───────────────────────────────────────
@@ -436,7 +445,7 @@ Deno.serve(async (req: Request) => {
         bank_id:            parsed.bankId,
         payment_method_id:  'tarjeta',
         card_type:          parsed.cardType,
-        installments_count: 1,
+        installments_count: parsed.installments ?? 1,
         status:             'ok',
         expense_date:       parsed.expenseDate,
         notes:              '',
@@ -453,6 +462,27 @@ Deno.serve(async (req: Request) => {
       return new Response('ok')
     }
 
+    // Si es en cuotas, crear registro en installments
+    if (parsed.installments && parsed.installments >= 2) {
+      const monthlyAmount = Math.round(parsed.amount! / parsed.installments)
+      const startMonth    = new Date().toISOString().slice(0, 7)
+      await supabase.from('installments').insert({
+        user_id:            userId,
+        name:               parsed.description,
+        total_amount:       parsed.amount,
+        installment_amount: monthlyAmount,
+        total_installments: parsed.installments,
+        paid_installments:  0,
+        bank_id:            parsed.bankId,
+        due_day:            5,
+        start_date:         startMonth,
+        auto_pay:           false,
+        last_paid_month:    null,
+        category_id:        parsed.categoryId,
+        status:             'active',
+      })
+    }
+
     // Marcar mensaje como parseado
     await supabase.from('telegram_messages')
       .update({ parsed: true, expense_id: expense.id })
@@ -460,10 +490,11 @@ Deno.serve(async (req: Request) => {
 
     await sendMessage(chatId,
       `✅ Registrado\n` +
-      `${fmtCLP(parsed.amount)} · ${parsed.categoryLabel}\n` +
+      `${fmtCLP(parsed.amount!)} · ${parsed.categoryLabel}\n` +
       `📅 ${fmtDate(parsed.expenseDate)}` +
       (parsed.bankId ? `\n🏦 ${parsed.bankId}` : '') +
-      (parsed.cardType ? ` · ${parsed.cardType}` : '')
+      (parsed.cardType ? ` · ${parsed.cardType}` : '') +
+      (parsed.installments ? `\n💳 ${parsed.installments} cuotas de ${fmtCLP(Math.round(parsed.amount! / parsed.installments))}` : '')
     )
     return new Response('ok')
 

@@ -25,12 +25,28 @@ export const CATEGORIES = [
 ];
 
 export const BANKS = [
-  { id: "bchile",    label: "Banco Chile" },
-  { id: "bestado",   label: "Banco Estado" },
-  { id: "santander", label: "Santander" },
-  { id: "bci",       label: "BCI" },
-  { id: "itau",      label: "Itaú" },
-  { id: "efectivo",  label: "Efectivo" },
+  { id: "bchile",      label: "Banco Chile" },
+  { id: "bestado",     label: "Banco Estado" },
+  { id: "santander",   label: "Santander" },
+  { id: "bci",         label: "BCI" },
+  { id: "itau",        label: "Itaú" },
+  { id: "falabella",   label: "Banco Falabella" },
+  { id: "ripley",      label: "Banco Ripley" },
+  { id: "scotiabank",  label: "Scotiabank" },
+  { id: "security",    label: "Banco Security" },
+  { id: "consorcio",   label: "Banco Consorcio" },
+  { id: "bice",        label: "BICE" },
+  { id: "coopeuch",    label: "Coopeuch" },
+  { id: "mach",        label: "Mach" },
+  { id: "tenpo",       label: "Tenpo" },
+  { id: "mercadopago", label: "MercadoPago" },
+  { id: "chek",        label: "Chek" },
+  { id: "fpay",        label: "FPay" },
+  { id: "global66",    label: "Global66" },
+  { id: "tapp",        label: "Tapp" },
+  { id: "losheroes",   label: "Los Héroes" },
+  { id: "khipu",       label: "Khipu" },
+  { id: "efectivo",    label: "Efectivo" },
 ];
 
 export const PAYMENT_METHODS = [

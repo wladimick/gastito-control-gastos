@@ -14,6 +14,7 @@ import Audit from './components/Audit'
 import AdminPanel from './components/AdminPanel'
 import UserProfile from './components/UserProfile'
 import Savings from './components/Savings'
+import Accounts from './components/Accounts'
 import BotChat from './components/BotChat'
 import { Icon } from './lib/helpers'
 import {
@@ -35,6 +36,8 @@ import { fetchUnparsedMessages, fetchLastBotMessage } from './services/telegramM
 import { fetchAuditLog } from './services/auditService'
 import { fetchCurrentRole } from './services/adminService'
 import { fetchGoals, createGoal, updateGoal, removeGoal, addMovement } from './services/savingsService'
+import { fetchAccounts, createAccount, updateAccount, removeAccount } from './services/accountsService'
+import { fetchMyCards, createCard, updateCard, removeCard } from './services/creditCardsService'
 import Login, { NewPasswordForm } from './components/Login'
 
 const IS_REAL = isConfigured
@@ -82,6 +85,8 @@ export default function App() {
     setAuditLog(IS_REAL ? [] : AUDIT_LOG)
     setLastBotMessage(null)
     setSavingsGoals([])
+    setAccounts([])
+    setCreditCards([])
   }
   // ────────────────────────────────────────────────────────────
 
@@ -181,6 +186,46 @@ export default function App() {
       .then(msg => { if (msg) setLastBotMessage(msg) })
       .catch(() => {})
   }, [session])
+
+  // ── Accounts & Credit Cards ──────────────────────────────────
+  const [accounts,    setAccounts]    = useState([])
+  const [creditCards, setCreditCards] = useState([])
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchAccounts()
+      .then(data => setAccounts(data))
+      .catch(err  => console.error('fetchAccounts:', err))
+    fetchMyCards()
+      .then(data => setCreditCards(data))
+      .catch(err  => console.error('fetchMyCards:', err))
+  }, [session])
+
+  const onCreateAccount = async (a) => {
+    const created = await createAccount(a, session.user.id)
+    setAccounts(prev => [...prev, created])
+  }
+  const onUpdateAccount = async (a) => {
+    const updated = await updateAccount(a)
+    setAccounts(prev => prev.map(x => x.id === updated.id ? updated : x))
+  }
+  const onDeleteAccount = async (id) => {
+    await removeAccount(id)
+    setAccounts(prev => prev.filter(x => x.id !== id))
+  }
+
+  const onCreateCard = async (c) => {
+    const created = await createCard(c, session.user.id)
+    setCreditCards(prev => [...prev, created])
+  }
+  const onUpdateCard = async (c) => {
+    const updated = await updateCard(c)
+    setCreditCards(prev => prev.map(x => x.id === updated.id ? updated : x))
+  }
+  const onDeleteCard = async (id) => {
+    await removeCard(id)
+    setCreditCards(prev => prev.filter(x => x.id !== id))
+  }
 
   // ── Savings ──────────────────────────────────────────────────
   const [savingsGoals, setSavingsGoals] = useState([])
@@ -594,6 +639,8 @@ export default function App() {
             botStatus={botStatus}
             lastBotMessage={lastBotMessage}
             openChat={() => setChatOpen(true)}
+            accounts={accounts}
+            creditCards={creditCards}
           />
         )}
         {view === 'expenses' && (
@@ -612,6 +659,21 @@ export default function App() {
               dataSource={expensesSource}
             />
           </>
+        )}
+        {view === 'accounts' && IS_REAL && session && (
+          <Accounts
+            accounts={accounts}
+            creditCards={creditCards}
+            expenses={expenses}
+            recurringList={recurringList}
+            installmentDebts={installmentDebts}
+            onCreateAccount={onCreateAccount}
+            onUpdateAccount={onUpdateAccount}
+            onDeleteAccount={onDeleteAccount}
+            onCreateCard={onCreateCard}
+            onUpdateCard={onUpdateCard}
+            onDeleteCard={onDeleteCard}
+          />
         )}
         {view === 'budgets' && (
           <Budgets expenses={expenses} budgets={budgets} setBudgets={onSetBudgets}/>

@@ -12,6 +12,7 @@ const BASE_NAV_GROUPS = [
   {
     label: "Planificación",
     items: [
+      { id: "accounts",     label: "Cuentas y flujo",  icon: "wallet",  short: "Cuentas" },
       { id: "budgets",      label: "Presupuestos",     icon: "target",  short: "Presup." },
       { id: "savings",      label: "Ahorros",          icon: "savings", short: "Ahorros" },
       { id: "recurring",    label: "Recurrentes",      icon: "repeat",  short: "Recurr." },

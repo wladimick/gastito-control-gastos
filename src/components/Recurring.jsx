@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Card, Badge, IconBtn, Select } from './ui'
 import { Icon, fmtCLP, MES } from '../lib/helpers'
-import { CATEGORIES, BANKS } from '../data'
+import { CATEGORIES } from '../data'
+import { useBanks } from '../services/banksService'
 
 function TabBtn({ active, onClick, label, badge, warn }) {
   return (
@@ -42,7 +43,7 @@ const BLANK_INCOME = {
   active: true, autoRegister: true, lastChargedMonth: null, kind: 'income',
 }
 
-function RecurringForm({ initial, onSave, onCancel }) {
+function RecurringForm({ initial, onSave, onCancel, banks }) {
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const isIncome = f.kind === 'income'
@@ -74,7 +75,7 @@ function RecurringForm({ initial, onSave, onCancel }) {
         </Field>
         {!isIncome && (
           <Field label="Banco">
-            <Select value={f.bank} onChange={v => set('bank', v)} options={BANKS.map(b => ({ value: b.id, label: b.label }))}/>
+            <Select value={f.bank} onChange={v => set('bank', v)} options={banks.map(b => ({ value: b.id, label: b.label }))}/>
           </Field>
         )}
         {isIncome ? (
@@ -262,6 +263,7 @@ export default function Recurring({
   // Settings
   salaryPaymentDay,
 }) {
+  const banks      = useBanks()
   const today     = new Date()
   const monthLabel = `${MES[today.getMonth()]} ${today.getFullYear()}`
   const monthStr   = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
@@ -401,7 +403,7 @@ export default function Recurring({
       {/* Form */}
       {formState !== null && (
         tab === 'expenses' || tab === 'income'
-          ? <RecurringForm initial={formState} onSave={tab === 'income' ? handleSaveIncome : handleSaveExpense} onCancel={() => setFormState(null)}/>
+          ? <RecurringForm initial={formState} onSave={tab === 'income' ? handleSaveIncome : handleSaveExpense} onCancel={() => setFormState(null)} banks={banks}/>
           : <RelationForm  initial={formState} onSave={tab === 'receivables' ? handleSaveReceivable : handleSavePayable} onCancel={() => setFormState(null)}/>
       )}
 
@@ -452,7 +454,7 @@ export default function Recurring({
                       </div>
                       <div className="mt-1 text-[11.5px] text-[var(--muted)]">
                         <Icon name="calendar" size={11}/> Día {r.dayOfMonth}
-                        {r.bank && ` · ${BANKS.find(b => b.id === r.bank)?.label ?? r.bank}`}
+                        {r.bank && ` · ${banks.find(b => b.id === r.bank)?.label ?? r.bank}`}
                       </div>
                     </div>
                     <div className="font-mono text-[15px] tabular-nums shrink-0">{fmtCLP(r.amount)}</div>

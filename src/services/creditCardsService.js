@@ -1,17 +1,15 @@
 import { supabase } from '../lib/supabase'
-import { BANKS } from '../data'
 
 function mapCard(row) {
   return {
-    id:             row.id,
-    name:           row.name,
-    bank:           row.bank_id,
-    bankLabel:      BANKS.find(b => b.id === row.bank_id)?.label ?? (row.bank_id || '—'),
-    lastFour:       row.last_four,
-    billingDay:     row.billing_day,
-    paymentDueDay:  row.payment_due_day,
-    creditLimit:    row.credit_limit,
-    isActive:       row.is_active,
+    id:            row.id,
+    name:          row.name,
+    bank:          row.bank_id,
+    lastFour:      row.last_four,
+    billingDay:    row.billing_day,
+    paymentDueDay: row.payment_due_day,
+    creditLimit:   row.credit_limit,
+    isActive:      row.is_active,
   }
 }
 

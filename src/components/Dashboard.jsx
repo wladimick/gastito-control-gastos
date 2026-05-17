@@ -1,9 +1,11 @@
 import React from 'react'
 import { Card, StatCard, Badge, BarRow } from './ui'
 import { Icon, fmtCLP, fmtCLPshort, relDate, timeOnly, MES } from '../lib/helpers'
-import { CATEGORIES, BANKS } from '../data'
+import { CATEGORIES } from '../data'
+import { useBanks } from '../services/banksService'
 
-export default function Dashboard({ expenses, setView, openChat, botStatus, lastBotMessage, installmentDebts = [] }) {
+export default function Dashboard({ expenses, setView, openChat, botStatus, lastBotMessage, installmentDebts = [], recurring = [], accounts = [], creditCards = [] }) {
+  const banks = useBanks()
   const today = new Date()
 
   const thisMonth = expenses.filter(e => {
@@ -154,6 +156,52 @@ export default function Dashboard({ expenses, setView, openChat, botStatus, last
         <StatCard label="Categoría top"   value={topCat?.label ?? '—'}   sub={topCat ? `${fmtCLP(catsArr[0]?.v ?? 0)} acumulado` : 'sin gastos'}  icon="tag"/>
       </div>
 
+      {/* Flujo de caja — solo si hay cuentas configuradas */}
+      {accounts.length > 0 && (() => {
+        const totalAvailable = accounts.filter(a => a.active).reduce((s, a) => s + (a.balance ?? 0), 0)
+        const primaryCard = creditCards.find(c => c.isActive !== false)
+        const billingDay  = Number(primaryCard?.billingDay ?? 20)
+        const paymentDay  = Number(primaryCard?.paymentDueDay ?? 5)
+        const cycleStart  = today.getDate() >= billingDay
+          ? new Date(today.getFullYear(), today.getMonth(), billingDay)
+          : new Date(today.getFullYear(), today.getMonth() - 1, billingDay)
+        const cycleCredit = thisMonth.filter(e => e.type === 'credito' && new Date(e.date) >= cycleStart)
+          .reduce((s, e) => s + e.amount, 0)
+        const recurringTotal = (recurring ?? []).filter(r => r.active && r.kind !== 'income')
+          .reduce((s, r) => s + r.amount, 0)
+        const freeBalance = totalAvailable - cycleCredit - recurringTotal - cuotasThisMonth
+        let nextPayDate = new Date(today.getFullYear(), today.getMonth(), paymentDay)
+        if (nextPayDate <= today) nextPayDate = new Date(today.getFullYear(), today.getMonth() + 1, paymentDay)
+        const daysToPayment = Math.ceil((nextPayDate - today) / 86400000)
+        const netColor = freeBalance >= 0 ? 'text-[var(--accent-ink)]' : 'text-[#A02828]'
+        return (
+          <Card padding="p-0">
+            <div className="px-5 py-3.5 border-b border-[var(--line)] flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-[12px] font-semibold tracking-tight">
+                <Icon name="wallet" size={14}/> Flujo de caja
+              </div>
+              <button onClick={() => setView('accounts')} className="text-[12px] text-[var(--ink-2)] hover:underline inline-flex items-center gap-1">
+                Ver detalle <Icon name="chevron" size={12}/>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[var(--line)]">
+              {[
+                { label: 'Disponible',         value: fmtCLP(totalAvailable),  sub: `${accounts.filter(a=>a.active).length} cuentas`, color: 'text-[var(--accent-ink)]' },
+                { label: 'Crédito ciclo',       value: fmtCLP(cycleCredit),     sub: `pago en ${daysToPayment}d · día ${paymentDay}`, color: '' },
+                { label: 'Compromisos fijos',   value: fmtCLP(recurringTotal + cuotasThisMonth), sub: 'recurrentes + cuotas', color: '' },
+                { label: 'Saldo libre est.',    value: fmtCLP(freeBalance),     sub: freeBalance >= 0 ? 'después de compromisos' : '⚠ déficit', color: netColor },
+              ].map((item, i) => (
+                <div key={i} className="px-5 py-3.5">
+                  <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">{item.label}</div>
+                  <div className={`mt-1.5 font-mono text-[18px] tracking-tight leading-none ${item.color}`}>{item.value}</div>
+                  <div className="mt-1 text-[11px] text-[var(--muted)]">{item.sub}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )
+      })()}
+
       {/* Cuotas activas — solo si hay datos */}
       {activeDebts.length > 0 && (
         <Card padding="p-0">
@@ -253,7 +301,7 @@ export default function Dashboard({ expenses, setView, openChat, botStatus, last
                       <div className="text-[11.5px] text-[var(--muted)] mt-0.5 flex items-center gap-1.5">
                         <span>{relDate(e.date)} · {timeOnly(e.date)}</span>
                         <span>·</span>
-                        <span>{BANKS.find(b => b.id === e.bank)?.label}</span>
+                        <span>{banks.find(b => b.id === e.bank)?.label}</span>
                         {e.installments > 1 && <><span>·</span><span>{e.installments} cuotas</span></>}
                       </div>
                     </div>
@@ -319,7 +367,7 @@ export default function Dashboard({ expenses, setView, openChat, botStatus, last
                 <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">Por banco</div>
                 <div className="mt-3 flex flex-col gap-2.5">
                   {Object.entries(byBank).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([id, v]) => {
-                    const b = BANKS.find(x => x.id === id)
+                    const b = banks.find(x => x.id === id)
                     return (
                       <div key={id} className="flex items-center justify-between text-[13px]">
                         <span className="inline-flex items-center gap-2 text-[var(--ink-2)]">
