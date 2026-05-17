@@ -11,7 +11,7 @@ const ACCOUNT_TYPES = [
 ]
 const TYPE_MAP = Object.fromEntries(ACCOUNT_TYPES.map(t => [t.id, t]))
 
-const BLANK_ACCOUNT = { name: '', type: 'debito', bankId: '', balance: 0, active: true }
+const BLANK_ACCOUNT = { name: '', type: 'debito', bankId: '', balance: '', active: true }
 const BLANK_CARD    = { name: '', bank: '', lastFour: '', billingDay: '', paymentDueDay: '', creditLimit: '' }
 
 function Field({ label, hint, children }) {
@@ -53,8 +53,8 @@ function AccountForm({ initial, onSave, onCancel, banks }) {
             options={[{ value: '', label: 'Sin banco' }, ...banks.map(b => ({ value: b.id, label: b.label }))]}/>
         </Field>
         <Field label="Saldo actual" hint="Actualiza manualmente cuando cambies de banco">
-          <input type="number" value={f.balance} onChange={e => set('balance', Number(e.target.value))}
-            className={inp + ' font-mono col-span-2'}/>
+          <input type="text" inputMode="numeric" value={f.balance} onChange={e => set('balance', e.target.value)}
+            placeholder="0" className={inp + ' font-mono col-span-2'}/>
         </Field>
         <div className="flex items-end pb-1">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -363,8 +363,9 @@ export default function Accounts({
   const handleSave = async (form) => {
     try {
       if (formType === 'account') {
-        if (form.id) { if (onUpdateAccount) await onUpdateAccount(form) }
-        else         { if (onCreateAccount) await onCreateAccount(form) }
+        const toSave = { ...form, balance: Number(form.balance) || 0 }
+        if (form.id) { if (onUpdateAccount) await onUpdateAccount(toSave) }
+        else         { if (onCreateAccount) await onCreateAccount(toSave) }
       } else {
         if (form.id) { if (onUpdateCard) await onUpdateCard(form) }
         else         { if (onCreateCard) await onCreateCard(form) }

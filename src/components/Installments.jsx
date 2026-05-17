@@ -63,8 +63,8 @@ function Field({ label, children }) {
 }
 
 const BLANK = {
-  description: '', total: 0, installments: 12, paid: 0,
-  monthlyAmount: 0, category: 'otros', bank: 'bchile',
+  description: '', total: '', installments: 12, paid: 0,
+  monthlyAmount: '', category: 'otros', bank: 'bchile',
   dayOfMonth: 5, startMonth: new Date().toISOString().slice(0, 7),
   autoPay: false, status: 'active',
 }
@@ -72,12 +72,12 @@ const BLANK = {
 function InstallmentForm({ initial, onSave, onCancel, banks }) {
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
-  const valid = f.description.trim() && f.total > 0 && f.installments >= 1
+  const valid = f.description.trim() && Number(f.total) > 0 && f.installments >= 1
 
   // Auto-compute monthly amount
   useEffect(() => {
-    if (f.total > 0 && f.installments > 0) {
-      set('monthlyAmount', Math.round(f.total / f.installments))
+    if (Number(f.total) > 0 && f.installments > 0) {
+      set('monthlyAmount', Math.round(Number(f.total) / f.installments))
     }
   }, [f.total, f.installments])
 
@@ -92,16 +92,16 @@ function InstallmentForm({ initial, onSave, onCancel, banks }) {
             className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Monto total">
-          <input type="number" min="1" value={f.total} onChange={e => set('total', Number(e.target.value))}
-            className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+          <input type="text" inputMode="numeric" value={f.total} onChange={e => set('total', e.target.value)}
+            placeholder="0" className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Nº cuotas">
           <input type="number" min="1" max="60" value={f.installments} onChange={e => set('installments', Number(e.target.value))}
             className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
-        <Field label={`Monto/cuota ≈ $${(f.total / Math.max(1, f.installments)).toLocaleString('es-CL', { maximumFractionDigits: 0 })}`}>
-          <input type="number" min="1" value={f.monthlyAmount} onChange={e => set('monthlyAmount', Number(e.target.value))}
-            className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+        <Field label={`Monto/cuota ≈ $${(Number(f.total) / Math.max(1, f.installments)).toLocaleString('es-CL', { maximumFractionDigits: 0 })}`}>
+          <input type="text" inputMode="numeric" value={f.monthlyAmount} onChange={e => set('monthlyAmount', e.target.value)}
+            placeholder="0" className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Cuotas pagadas">
           <input type="number" min="0" max={f.installments} value={f.paid} onChange={e => set('paid', Number(e.target.value))}
@@ -205,13 +205,14 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
   const isSupabase = Boolean(onCreateInstallment)
 
   const handleSave = async (form) => {
+    const toSave = { ...form, total: Number(form.total) || 0, monthlyAmount: Number(form.monthlyAmount) || 0 }
     if (formState?.id) {
-      const updated = { ...form, id: formState.id }
+      const updated = { ...toSave, id: formState.id }
       if (onUpdateInstallment) await onUpdateInstallment(updated)
       else setDebts(debts.map(d => d.id === updated.id ? updated : d))
     } else {
-      if (onCreateInstallment) await onCreateInstallment(form)
-      else setDebts([...debts, { ...form, id: 'ic' + Date.now() }])
+      if (onCreateInstallment) await onCreateInstallment(toSave)
+      else setDebts([...debts, { ...toSave, id: 'ic' + Date.now() }])
     }
     setFormState(null)
   }

@@ -49,9 +49,11 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
             <div className="mt-1.5 flex items-center gap-2">
               <span className="font-mono text-[28px] text-[var(--muted)]">$</span>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={form.amount}
-                onChange={e => setF("amount", Number(e.target.value))}
+                onChange={e => setF("amount", e.target.value)}
+                placeholder="0"
                 className="flex-1 bg-transparent text-[28px] font-mono tabular-nums tracking-tight focus:outline-none border-b border-transparent focus:border-[var(--ink)] py-1"
               />
             </div>
@@ -123,7 +125,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
         <div className="sticky bottom-0 bg-[var(--bg-elev)] border-t border-[var(--line)] px-5 py-3 flex items-center justify-between">
           <button onClick={onClose} className="text-[13px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>
           <button
-            onClick={() => onSave({ ...form, status: "ok" })}
+            onClick={() => onSave({ ...form, amount: Number(form.amount) || 0, status: "ok" })}
             className="h-10 px-5 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium">
             <Icon name="check" size={14}/> {isNew ? "Registrar gasto" : "Guardar cambios"}
           </button>

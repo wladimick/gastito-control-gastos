@@ -33,13 +33,13 @@ const inp = "w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-
 // ── Expense/Income form ───────────────────────────────────────
 
 const BLANK_EXPENSE = {
-  name: '', amount: 0, category: 'hogar', bank: 'bchile',
-  method: 'tarjeta', type: 'debito', dayOfMonth: 1,
+  name: '', amount: '', category: 'hogar', bank: 'bchile',
+  method: 'tarjeta', type: 'debito', dayOfMonth: '',
   active: true, autoRegister: false, lastChargedMonth: null, kind: 'expense',
 }
 const BLANK_INCOME = {
-  name: '', amount: 0, category: 'sueldo', bank: '',
-  method: 'transfer', type: 'debito', dayOfMonth: 1,
+  name: '', amount: '', category: 'sueldo', bank: '',
+  method: 'transfer', type: 'debito', dayOfMonth: '',
   active: true, autoRegister: true, lastChargedMonth: null, kind: 'income',
 }
 
@@ -47,7 +47,7 @@ function RecurringForm({ initial, onSave, onCancel, banks }) {
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const isIncome = f.kind === 'income'
-  const valid = f.name.trim() && f.amount > 0
+  const valid = f.name.trim() && Number(f.amount) > 0
 
   return (
     <Card padding="p-5" className="border-[var(--ink)]/20">
@@ -63,12 +63,12 @@ function RecurringForm({ initial, onSave, onCancel, banks }) {
             className={inp}/>
         </Field>
         <Field label="Monto">
-          <input type="number" min="1" value={f.amount} onChange={e => set('amount', Number(e.target.value))}
-            className={inp + ' font-mono'}/>
+          <input type="text" inputMode="numeric" value={f.amount} onChange={e => set('amount', e.target.value)}
+            placeholder="0" className={inp + ' font-mono'}/>
         </Field>
         <Field label="Día del mes">
-          <input type="number" min="1" max="31" value={f.dayOfMonth} onChange={e => set('dayOfMonth', Number(e.target.value))}
-            className={inp + ' font-mono'}/>
+          <input type="text" inputMode="numeric" value={f.dayOfMonth} onChange={e => set('dayOfMonth', e.target.value)}
+            placeholder="1" className={inp + ' font-mono'}/>
         </Field>
         <Field label="Categoría">
           <Select value={f.category} onChange={v => set('category', v)} options={CATEGORIES.map(c => ({ value: c.id, label: c.label }))}/>
@@ -126,7 +126,7 @@ function RecurringForm({ initial, onSave, onCancel, banks }) {
 
 function BLANK_RELATION(kind) {
   return {
-    name: '', personName: '', description: '', amount: 0,
+    name: '', personName: '', description: '', amount: '',
     dueDate: '', category: kind === 'payable' ? 'por_pagar' : 'por_cobrar',
     notes: '', status: 'pending', active: true, autoRegister: false, kind,
   }
@@ -136,7 +136,7 @@ function RelationForm({ initial, onSave, onCancel }) {
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const isPayable = f.kind === 'payable'
-  const valid = (f.personName || f.name).trim() && f.amount > 0
+  const valid = (f.personName || f.name).trim() && Number(f.amount) > 0
 
   return (
     <Card padding="p-5" className="border-[var(--ink)]/20">
@@ -152,8 +152,8 @@ function RelationForm({ initial, onSave, onCancel }) {
             className={inp}/>
         </Field>
         <Field label="Monto">
-          <input type="number" min="1" value={f.amount} onChange={e => set('amount', Number(e.target.value))}
-            className={inp + ' font-mono'}/>
+          <input type="text" inputMode="numeric" value={f.amount} onChange={e => set('amount', e.target.value)}
+            placeholder="0" className={inp + ' font-mono'}/>
         </Field>
         <Field label="Fecha esperada">
           <input type="date" value={f.dueDate} onChange={e => set('dueDate', e.target.value)}
@@ -303,42 +303,46 @@ export default function Recurring({
   }
 
   const handleSaveExpense = async (form) => {
+    const toSave = { ...form, amount: Number(form.amount) || 0, dayOfMonth: Number(form.dayOfMonth) || 1 }
     if (formState?.id) {
-      const updated = { ...form, id: formState.id }
+      const updated = { ...toSave, id: formState.id }
       if (onUpdateRecurring) await onUpdateRecurring(updated)
       else setRecurring(recurring.map(r => r.id === updated.id ? updated : r))
     } else {
-      if (onCreateRecurring) await onCreateRecurring({ ...form, kind: 'expense' })
-      else setRecurring([...recurring, { ...form, id: 'rc' + Date.now(), kind: 'expense' }])
+      if (onCreateRecurring) await onCreateRecurring({ ...toSave, kind: 'expense' })
+      else setRecurring([...recurring, { ...toSave, id: 'rc' + Date.now(), kind: 'expense' }])
     }
     setFormState(null)
   }
 
   const handleSaveIncome = async (form) => {
+    const toSave = { ...form, amount: Number(form.amount) || 0, dayOfMonth: Number(form.dayOfMonth) || 1 }
     if (formState?.id) {
-      const updated = { ...form, id: formState.id }
+      const updated = { ...toSave, id: formState.id }
       if (onUpdateIncome) await onUpdateIncome(updated)
       // local: income is managed externally
     } else {
-      if (onCreateIncome) await onCreateIncome({ ...form, kind: 'income' })
+      if (onCreateIncome) await onCreateIncome({ ...toSave, kind: 'income' })
     }
     setFormState(null)
   }
 
   const handleSaveReceivable = async (form) => {
+    const toSave = { ...form, amount: Number(form.amount) || 0 }
     if (formState?.id) {
-      if (onUpdateReceivable) await onUpdateReceivable({ ...form, id: formState.id })
+      if (onUpdateReceivable) await onUpdateReceivable({ ...toSave, id: formState.id })
     } else {
-      if (onCreateReceivable) await onCreateReceivable({ ...form, kind: 'receivable' })
+      if (onCreateReceivable) await onCreateReceivable({ ...toSave, kind: 'receivable' })
     }
     setFormState(null)
   }
 
   const handleSavePayable = async (form) => {
+    const toSave = { ...form, amount: Number(form.amount) || 0 }
     if (formState?.id) {
-      if (onUpdatePayable) await onUpdatePayable({ ...form, id: formState.id })
+      if (onUpdatePayable) await onUpdatePayable({ ...toSave, id: formState.id })
     } else {
-      if (onCreatePayable) await onCreatePayable({ ...form, kind: 'payable' })
+      if (onCreatePayable) await onCreatePayable({ ...toSave, kind: 'payable' })
     }
     setFormState(null)
   }

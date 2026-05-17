@@ -260,7 +260,7 @@ export default function App() {
   // ── Expense CRUD ─────────────────────────────────────────────
   const handleNewExpense = () => {
     setEditing({
-      id: null, amount: 0, description: '', category: 'otros',
+      id: null, amount: '', description: '', category: 'otros',
       bank: 'bchile', method: 'tarjeta', type: 'debito',
       installments: 1, status: 'ok', date: new Date().toISOString(), notes: '',
     })
