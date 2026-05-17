@@ -20,249 +20,389 @@ import {
 import { supabase, isConfigured } from './lib/supabase'
 import { signOut } from './services/authService'
 import { fetchExpenses, createExpense, updateExpense, removeExpense, patchExpense } from './services/expensesService'
+import { fetchRecurring, createRecurring, updateRecurring, patchRecurring, removeRecurring } from './services/recurringService'
+import { fetchInstallments, createInstallment, updateInstallment, patchInstallment, removeInstallment } from './services/installmentsService'
+import { fetchBudgets, upsertBudget } from './services/budgetsService'
+import { fetchUnparsedMessages, fetchLastBotMessage } from './services/telegramMessagesService'
+import { fetchAuditLog } from './services/auditService'
 import Login from './components/Login'
+
+const IS_REAL = isConfigured
 
 export default function App() {
   // ── Auth ────────────────────────────────────────────────────
-  const [session, setSession]   = useState(null);
-  const [authReady, setAuthReady] = useState(!isConfigured); // listo inmediatamente si no hay Supabase
+  const [session, setSession]     = useState(null)
+  const [authReady, setAuthReady] = useState(!IS_REAL)
 
   useEffect(() => {
-    if (!isConfigured) return;
+    if (!IS_REAL) return
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthReady(true);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setSession(session);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+      setSession(session)
+      setAuthReady(true)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    return () => subscription.unsubscribe()
+  }, [])
 
   const handleSignOut = async () => {
-    await signOut();
-    setExpenses(isConfigured ? [] : EXPENSES);
-    setExpensesSource(isConfigured ? "loading" : "demo");
-  };
+    await signOut()
+    setExpenses(IS_REAL ? [] : EXPENSES)
+    setExpensesSource(IS_REAL ? 'loading' : 'demo')
+    setRecurringList(IS_REAL ? [] : RECURRING)
+    setInstallmentDebts(IS_REAL ? [] : INSTALLMENT_DEBTS)
+    setBudgets(IS_REAL ? {} : BUDGETS)
+    setUnparsed(IS_REAL ? [] : UNPARSED)
+    setAuditLog(IS_REAL ? [] : AUDIT_LOG)
+    setLastBotMessage(null)
+  }
   // ────────────────────────────────────────────────────────────
 
-  const [view, setView]                   = useState("dashboard");
-  const [expenses, setExpenses]           = useState(isConfigured ? [] : EXPENSES);
-  const [expensesSource, setExpensesSource] = useState(isConfigured ? "loading" : "demo"); // "demo" | "loading" | "supabase" | "error"
-  const [unparsed, setUnparsed]           = useState(UNPARSED);
-  const [budgets, setBudgets]             = useState(BUDGETS);
-  const [recurring, setRecurring]         = useState(RECURRING);
-  const [installmentDebts, setInstallmentDebts] = useState(INSTALLMENT_DEBTS);
-  const [auditLog, setAuditLog]           = useState(AUDIT_LOG);
-  const [editing, setEditing]             = useState(null);
-  const [botStatus, setBotStatus]         = useState("online");
-  const [chatOpen, setChatOpen]           = useState(false);
+  const [view, setView]       = useState('dashboard')
+  const [editing, setEditing] = useState(null)
+  const [botStatus, setBotStatus] = useState('online')
+  const [chatOpen, setChatOpen]   = useState(false)
 
-  const lastBotMessage = BOT_CHAT[BOT_CHAT.length - 2];
+  // ── Expenses ────────────────────────────────────────────────
+  const [expenses, setExpenses]           = useState(IS_REAL ? [] : EXPENSES)
+  const [expensesSource, setExpensesSource] = useState(IS_REAL ? 'loading' : 'demo')
 
-  // Carga gastos desde Supabase solo cuando hay sesión activa.
   useEffect(() => {
-    if (!isConfigured || !session) return
+    if (!IS_REAL || !session) return
     let cancelled = false
-    setExpensesSource("loading")
+    setExpensesSource('loading')
     fetchExpenses()
-      .then(data => {
-        if (cancelled) return
-        // data es [] o array con gastos — nunca null cuando isConfigured es true
-        setExpenses(data)
-        setExpensesSource("supabase")
-      })
-      .catch(err => {
-        if (cancelled) return
-        console.error("[Supabase] fetchExpenses error:", err.message)
-        setExpensesSource("error")
-      })
+      .then(data => { if (!cancelled) { setExpenses(data); setExpensesSource('supabase') } })
+      .catch(err  => { if (!cancelled) { console.error('fetchExpenses:', err); setExpensesSource('error') } })
     return () => { cancelled = true }
-  }, [session]);
+  }, [session])
 
-  const audit = (action, target, summary, actor = "user") => {
+  // ── Recurring ───────────────────────────────────────────────
+  const [recurringList, setRecurringList] = useState(IS_REAL ? [] : RECURRING)
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchRecurring()
+      .then(data => { if (data) setRecurringList(data) })
+      .catch(err  => console.error('fetchRecurring:', err))
+  }, [session])
+
+  // ── Installments ────────────────────────────────────────────
+  const [installmentDebts, setInstallmentDebts] = useState(IS_REAL ? [] : INSTALLMENT_DEBTS)
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchInstallments()
+      .then(data => { if (data) setInstallmentDebts(data) })
+      .catch(err  => console.error('fetchInstallments:', err))
+  }, [session])
+
+  // ── Budgets ─────────────────────────────────────────────────
+  const [budgets, setBudgets] = useState(IS_REAL ? {} : BUDGETS)
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchBudgets()
+      .then(data => { if (data) setBudgets(data) })
+      .catch(err  => console.error('fetchBudgets:', err))
+  }, [session])
+
+  // ── Unparsed messages ────────────────────────────────────────
+  const [unparsed, setUnparsed] = useState(IS_REAL ? [] : UNPARSED)
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchUnparsedMessages()
+      .then(data => { if (data) setUnparsed(data) })
+      .catch(err  => console.error('fetchUnparsedMessages:', err))
+  }, [session])
+
+  // ── Last bot message ─────────────────────────────────────────
+  const [lastBotMessage, setLastBotMessage] = useState(IS_REAL ? null : BOT_CHAT[BOT_CHAT.length - 2])
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchLastBotMessage()
+      .then(msg => { if (msg) setLastBotMessage(msg) })
+      .catch(() => {})
+  }, [session])
+
+  // ── Audit log ─────────────────────────────────────────────────
+  const [auditLog, setAuditLog] = useState(IS_REAL ? [] : AUDIT_LOG)
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchAuditLog()
+      .then(data => { if (data) setAuditLog(data) })
+      .catch(err  => console.error('fetchAuditLog:', err))
+  }, [session])
+
+  // Local audit (session-only; Supabase audit_logs are written by backend triggers)
+  const audit = (action, target, summary, actor = 'user') => {
     setAuditLog(prev => [{
-      id: "a" + Date.now(),
-      at: new Date().toISOString(),
+      id: 'a' + Date.now(), at: new Date().toISOString(),
       actor, action, target, summary,
-    }, ...prev]);
-  };
+    }, ...prev])
+  }
 
-  const navigate = (v) => { setView(v); window.scrollTo(0, 0); };
+  const navigate = (v) => { setView(v); window.scrollTo(0, 0) }
 
+  // ── Expense CRUD ─────────────────────────────────────────────
   const handleNewExpense = () => {
     setEditing({
-      id: null,
-      amount: 0,
-      description: '',
-      category: 'otros',
-      bank: 'bchile',
-      method: 'tarjeta',
-      type: 'debito',
-      installments: 1,
-      status: 'ok',
-      date: new Date().toISOString(),
-      notes: '',
-    });
-  };
+      id: null, amount: 0, description: '', category: 'otros',
+      bank: 'bchile', method: 'tarjeta', type: 'debito',
+      installments: 1, status: 'ok', date: new Date().toISOString(), notes: '',
+    })
+  }
 
   const onSaveExpense = async (e) => {
     try {
-      if (isConfigured && session) {
+      if (IS_REAL && session) {
         if (e.id === null) {
-          const created = await createExpense(e, session.user.id);
-          setExpenses(prev => [created, ...prev]);
-          audit("expense.created", created.id, `Registrado: ${created.description} — $${created.amount.toLocaleString("es-CL")}`);
+          const created = await createExpense(e, session.user.id)
+          setExpenses(prev => [created, ...prev])
+          audit('expense.created', created.id, `Registrado: ${created.description} — $${created.amount.toLocaleString('es-CL')}`)
         } else {
-          const updated = await updateExpense(e);
-          setExpenses(prev => prev.map(x => x.id === updated.id ? updated : x));
-          audit("expense.edited", updated.id, `Editado: ${updated.description} — $${updated.amount.toLocaleString("es-CL")}`);
+          const updated = await updateExpense(e)
+          setExpenses(prev => prev.map(x => x.id === updated.id ? updated : x))
+          audit('expense.edited', updated.id, `Editado: ${updated.description} — $${updated.amount.toLocaleString('es-CL')}`)
         }
       } else {
-        // Modo demo — solo actualiza estado local
         if (e.id === null) {
-          const demo = { ...e, id: "e" + Date.now() };
-          setExpenses(prev => [demo, ...prev]);
+          const demo = { ...e, id: 'e' + Date.now() }
+          setExpenses(prev => [demo, ...prev])
         } else {
-          setExpenses(prev => prev.map(x => x.id === e.id ? e : x));
+          setExpenses(prev => prev.map(x => x.id === e.id ? e : x))
         }
       }
-      setEditing(null);
+      setEditing(null)
     } catch (err) {
-      console.error("onSaveExpense error:", err);
-      alert("Error al guardar el gasto: " + err.message);
+      console.error('onSaveExpense:', err)
+      alert('Error al guardar el gasto: ' + err.message)
     }
-  };
+  }
 
   const onDeleteExpense = async (id) => {
-    const e = expenses.find(x => x.id === id);
-    if (!window.confirm("¿Eliminar este gasto?")) return;
+    const e = expenses.find(x => x.id === id)
+    if (!window.confirm('¿Eliminar este gasto?')) return
     try {
-      if (isConfigured && session) {
-        await removeExpense(id);
-      }
-      setExpenses(prev => prev.filter(x => x.id !== id));
-      if (e) audit("expense.deleted", id, `Eliminado: ${e.description} — $${e.amount.toLocaleString("es-CL")}`);
+      if (IS_REAL && session) await removeExpense(id)
+      setExpenses(prev => prev.filter(x => x.id !== id))
+      if (e) audit('expense.deleted', id, `Eliminado: ${e.description} — $${e.amount.toLocaleString('es-CL')}`)
     } catch (err) {
-      console.error("onDeleteExpense error:", err);
-      alert("Error al eliminar: " + err.message);
+      console.error('onDeleteExpense:', err)
+      alert('Error al eliminar: ' + err.message)
     }
-  };
+  }
 
   const onToggleStatus = async (id) => {
-    const e = expenses.find(x => x.id === id);
-    if (!e) return;
-    const newStatus = e.status === "ok" ? "revisar" : "ok";
+    const e = expenses.find(x => x.id === id)
+    if (!e) return
+    const newStatus = e.status === 'ok' ? 'revisar' : 'ok'
     try {
-      if (isConfigured && session) {
-        await patchExpense(id, { status: newStatus });
-      }
-      setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: newStatus } : x));
+      if (IS_REAL && session) await patchExpense(id, { status: newStatus })
+      setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: newStatus } : x))
       audit(
-        newStatus === "revisar" ? "expense.flagged" : "expense.edited",
-        id,
-        newStatus === "revisar" ? `Marcado para revisar: ${e.description}` : `Marcado como revisado: ${e.description}`
-      );
-    } catch (err) {
-      console.error("onToggleStatus error:", err);
-    }
-  };
+        newStatus === 'revisar' ? 'expense.flagged' : 'expense.edited', id,
+        newStatus === 'revisar' ? `Marcado para revisar: ${e.description}` : `Marcado como revisado: ${e.description}`
+      )
+    } catch (err) { console.error('onToggleStatus:', err) }
+  }
 
-  const onResolveUnparsed = (msgId, draft) => {
-    const newExpense = {
-      id: "e" + Date.now(),
-      amount: Number(draft.amount) || 0,
-      description: draft.description || "Mensaje completado",
-      category: draft.category || "otros",
-      bank: draft.bank || "bchile",
-      method: draft.method || "tarjeta",
-      type: draft.type || "debito",
-      installments: Number(draft.installments) || 1,
-      status: "ok",
-      date: draft.date || new Date().toISOString(),
-      notes: draft.notes || "",
-    };
-    setExpenses(prev => [newExpense, ...prev]);
-    setUnparsed(prev => prev.filter(u => u.id !== msgId));
-    audit("expense.created", newExpense.id, `Gasto registrado manualmente: ${newExpense.description} — $${newExpense.amount.toLocaleString("es-CL")}`);
-  };
+  // ── Recurring CRUD ───────────────────────────────────────────
+  const onCreateRecurring = async (r) => {
+    try {
+      if (IS_REAL && session) {
+        const created = await createRecurring(r, session.user.id)
+        setRecurringList(prev => [...prev, created])
+        audit('recurring.created', created.id, `Recurrente creado: ${created.name} — $${created.amount.toLocaleString('es-CL')}`)
+      } else {
+        setRecurringList(prev => [...prev, { ...r, id: 'rc' + Date.now() }])
+      }
+    } catch (err) { console.error('onCreateRecurring:', err); alert(err.message) }
+  }
+
+  const onUpdateRecurring = async (r) => {
+    try {
+      if (IS_REAL && session) {
+        const updated = await updateRecurring(r)
+        setRecurringList(prev => prev.map(x => x.id === updated.id ? updated : x))
+      } else {
+        setRecurringList(prev => prev.map(x => x.id === r.id ? r : x))
+      }
+    } catch (err) { console.error('onUpdateRecurring:', err); alert(err.message) }
+  }
+
+  const onDeleteRecurring = async (id) => {
+    if (!window.confirm('¿Eliminar este gasto recurrente?')) return
+    try {
+      if (IS_REAL && session) await removeRecurring(id)
+      setRecurringList(prev => prev.filter(x => x.id !== id))
+    } catch (err) { console.error('onDeleteRecurring:', err); alert(err.message) }
+  }
+
+  const onSetRecurring = async (newList) => {
+    // Called by Recurring component for toggle/charge operations
+    for (const r of newList) {
+      const old = recurringList.find(o => o.id === r.id)
+      if (!old) continue
+      if (old.active !== r.active) {
+        audit('expense.edited', r.id, `${r.name}: ${r.active ? 'activado' : 'pausado'}`)
+        if (IS_REAL && session) {
+          patchRecurring(r.id, { active: r.active }).catch(err => console.error('patchRecurring:', err))
+        }
+      }
+      if (old.lastChargedMonth !== r.lastChargedMonth && r.lastChargedMonth) {
+        audit('recurring.charged', r.id, `Cargo recurrente: ${r.name} — $${r.amount.toLocaleString('es-CL')}`, 'user')
+        if (IS_REAL && session) {
+          patchRecurring(r.id, { last_charged_month: r.lastChargedMonth }).catch(err => console.error('patchRecurring:', err))
+          // Also create an expense
+          createExpense({
+            amount: r.amount, description: r.name, category: r.category,
+            bank: r.bank, method: r.method, type: r.type,
+            installments: 1, status: 'ok', date: new Date().toISOString(), notes: 'Generado desde recurrente',
+          }, session.user.id)
+            .then(created => setExpenses(prev => [created, ...prev]))
+            .catch(err => console.error('createExpense from recurring:', err))
+        } else {
+          const newExp = {
+            id: 'e' + Date.now() + r.id, amount: r.amount, description: r.name,
+            category: r.category, bank: r.bank, method: r.method, type: r.type,
+            installments: 1, status: 'ok', date: new Date().toISOString(), notes: 'Generado desde recurrente',
+          }
+          setExpenses(prev => [newExp, ...prev])
+        }
+      }
+    }
+    setRecurringList(newList)
+  }
+
+  // ── Installments CRUD ────────────────────────────────────────
+  const onCreateInstallment = async (d) => {
+    try {
+      if (IS_REAL && session) {
+        const created = await createInstallment(d, session.user.id)
+        setInstallmentDebts(prev => [...prev, created])
+      } else {
+        setInstallmentDebts(prev => [...prev, { ...d, id: 'ic' + Date.now(), status: 'active' }])
+      }
+    } catch (err) { console.error('onCreateInstallment:', err); alert(err.message) }
+  }
+
+  const onUpdateInstallment = async (d) => {
+    try {
+      if (IS_REAL && session) {
+        const updated = await updateInstallment(d)
+        setInstallmentDebts(prev => prev.map(x => x.id === updated.id ? updated : x))
+      } else {
+        setInstallmentDebts(prev => prev.map(x => x.id === d.id ? d : x))
+      }
+    } catch (err) { console.error('onUpdateInstallment:', err); alert(err.message) }
+  }
+
+  const onDeleteInstallment = async (id) => {
+    if (!window.confirm('¿Eliminar esta cuota?')) return
+    try {
+      if (IS_REAL && session) await removeInstallment(id)
+      setInstallmentDebts(prev => prev.filter(x => x.id !== id))
+    } catch (err) { console.error('onDeleteInstallment:', err); alert(err.message) }
+  }
+
+  const onSetDebts = async (newDebts) => {
+    for (const d of newDebts) {
+      const old = installmentDebts.find(o => o.id === d.id)
+      if (!old || old.paid === d.paid) continue
+      if (IS_REAL && session) {
+        patchInstallment(d.id, { paid_installments: d.paid }).catch(err => console.error('patchInstallment:', err))
+      }
+    }
+    setInstallmentDebts(newDebts)
+  }
+
+  // ── Budgets CRUD ─────────────────────────────────────────────
+  const onSetBudgets = async (newBudgets) => {
+    for (const k of Object.keys(newBudgets)) {
+      if (newBudgets[k] !== budgets[k]) {
+        audit('budget.updated', k, `Presupuesto: $${(budgets[k] || 0).toLocaleString('es-CL')} → $${newBudgets[k].toLocaleString('es-CL')}`)
+        if (IS_REAL && session) {
+          upsertBudget(k, newBudgets[k], session.user.id).catch(err => console.error('upsertBudget:', err))
+        }
+      }
+    }
+    setBudgets(newBudgets)
+  }
+
+  // ── Unparsed messages ────────────────────────────────────────
+  const onResolveUnparsed = async (msgId, draft) => {
+    try {
+      const base = {
+        amount: Number(draft.amount) || 0,
+        description: draft.description || 'Mensaje completado',
+        category: draft.category || 'otros',
+        bank: draft.bank || 'bchile',
+        method: draft.method || 'tarjeta',
+        type: draft.type || 'debito',
+        installments: Number(draft.installments) || 1,
+        status: 'ok',
+        date: draft.date || new Date().toISOString(),
+        notes: draft.notes || '',
+      }
+      if (IS_REAL && session) {
+        const created = await createExpense(base, session.user.id)
+        setExpenses(prev => [created, ...prev])
+        audit('expense.created', created.id, `Gasto registrado manualmente: ${created.description} — $${created.amount.toLocaleString('es-CL')}`)
+      } else {
+        const newExp = { ...base, id: 'e' + Date.now() }
+        setExpenses(prev => [newExp, ...prev])
+        audit('expense.created', newExp.id, `Gasto registrado manualmente: ${newExp.description}`)
+      }
+      setUnparsed(prev => prev.filter(u => u.id !== msgId))
+    } catch (err) {
+      console.error('onResolveUnparsed:', err)
+      alert('Error al registrar el gasto: ' + err.message)
+    }
+  }
 
   const onDiscardUnparsed = (id) => {
-    setUnparsed(prev => prev.filter(u => u.id !== id));
-    audit("unparsed", id, "Mensaje descartado");
-  };
+    setUnparsed(prev => prev.filter(u => u.id !== id))
+    audit('unparsed', id, 'Mensaje descartado')
+  }
 
-  const onSetBudgets = (newBudgets) => {
-    Object.keys(newBudgets).forEach(k => {
-      if (newBudgets[k] !== budgets[k]) {
-        audit("budget.updated", k, `Presupuesto: $${(budgets[k] || 0).toLocaleString("es-CL")} → $${newBudgets[k].toLocaleString("es-CL")}`);
-      }
-    });
-    setBudgets(newBudgets);
-  };
-
-  const onSetRecurring = (newRec) => {
-    newRec.forEach(r => {
-      const old = recurring.find(o => o.id === r.id);
-      if (!old) return;
-      if (old.lastChargedMonth !== r.lastChargedMonth && r.lastChargedMonth) {
-        audit("recurring.charged", r.id, `Cargo recurrente: ${r.name} — $${r.amount.toLocaleString("es-CL")}`, "user");
-        const newExpense = {
-          id: "e" + Date.now() + r.id,
-          amount: r.amount,
-          description: r.name,
-          category: r.category,
-          bank: r.bank,
-          method: r.method,
-          type: r.type,
-          installments: 1,
-          status: "ok",
-          date: new Date().toISOString(),
-          notes: "Generado desde recurrente",
-        };
-        setExpenses(prev => [newExpense, ...prev]);
-      }
-      if (old.active !== r.active) {
-        audit("expense.edited", r.id, `${r.name}: ${r.active ? "activado" : "pausado"}`);
-      }
-    });
-    setRecurring(newRec);
-  };
-
-  // Pantalla de carga mientras Supabase verifica la sesión
+  // ── Loading / Login screens ──────────────────────────────────
   if (!authReady) {
     return (
       <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
         <div className="w-8 h-8 rounded-full border-2 border-[var(--line)] border-t-[var(--ink)] animate-spin"/>
       </div>
-    );
+    )
   }
+  if (IS_REAL && !session) return <Login/>
 
-  // Pantalla de login si Supabase está configurado pero no hay sesión
-  if (isConfigured && !session) return <Login/>;
+  const income      = IS_REAL ? [] : INCOME
+  const receivables = IS_REAL ? [] : RECEIVABLES
 
   return (
     <>
       <Layout view={view} setView={navigate} botStatus={botStatus} onOpenChat={() => setChatOpen(true)}
-              onSignOut={isConfigured ? handleSignOut : undefined}
+              onSignOut={IS_REAL ? handleSignOut : undefined}
               userEmail={session?.user?.email}>
-        {view === "dashboard" && (
+        {view === 'dashboard' && (
           <Dashboard
             expenses={expenses}
             setView={navigate}
             budgets={budgets}
-            recurring={recurring}
-            income={INCOME}
-            receivables={RECEIVABLES}
+            recurring={recurringList}
+            income={income}
+            receivables={receivables}
             installmentDebts={installmentDebts}
             botStatus={botStatus}
             lastBotMessage={lastBotMessage}
             openChat={() => setChatOpen(true)}
           />
         )}
-        {view === "expenses" && (
+        {view === 'expenses' && (
           <>
-            {expensesSource === "loading" && (
+            {expensesSource === 'loading' && (
               <div className="h-0.5 w-full bg-[var(--line)] overflow-hidden mb-[-2px]">
                 <div className="h-full bg-[var(--accent)] animate-pulse w-1/2"/>
               </div>
@@ -277,37 +417,47 @@ export default function App() {
             />
           </>
         )}
-        {view === "budgets" && (
+        {view === 'budgets' && (
           <Budgets expenses={expenses} budgets={budgets} setBudgets={onSetBudgets}/>
         )}
-        {view === "recurring" && (
+        {view === 'recurring' && (
           <Recurring
-            recurring={recurring}
+            recurring={recurringList}
             setRecurring={onSetRecurring}
-            income={INCOME}
-            receivables={RECEIVABLES}
+            income={income}
+            receivables={receivables}
+            onCreateRecurring={IS_REAL && session ? onCreateRecurring : null}
+            onUpdateRecurring={IS_REAL && session ? onUpdateRecurring : null}
+            onDeleteRecurring={IS_REAL && session ? onDeleteRecurring : null}
           />
         )}
-        {view === "installments" && (
-          <Installments debts={installmentDebts} setDebts={setInstallmentDebts}/>
+        {view === 'installments' && (
+          <Installments
+            debts={installmentDebts}
+            setDebts={onSetDebts}
+            recurring={recurringList}
+            onCreateInstallment={IS_REAL && session ? onCreateInstallment : null}
+            onUpdateInstallment={IS_REAL && session ? onUpdateInstallment : null}
+            onDeleteInstallment={IS_REAL && session ? onDeleteInstallment : null}
+          />
         )}
-        {view === "reports" && <Reports expenses={expenses}/>}
-        {view === "comparison" && <Comparison expenses={expenses}/>}
-        {view === "unparsed" && (
+        {view === 'reports' && <Reports expenses={expenses}/>}
+        {view === 'comparison' && <Comparison expenses={expenses}/>}
+        {view === 'unparsed' && (
           <UnparsedMessages
             unparsed={unparsed}
             onResolve={onResolveUnparsed}
             onDiscard={onDiscardUnparsed}
           />
         )}
-        {view === "telegram" && (
+        {view === 'telegram' && (
           <TelegramSettings
             botStatus={botStatus}
             setBotStatus={setBotStatus}
             lastBotMessage={lastBotMessage}
           />
         )}
-        {view === "audit" && <Audit entries={auditLog}/>}
+        {view === 'audit' && <Audit entries={auditLog}/>}
       </Layout>
 
       {editing && (
@@ -325,5 +475,5 @@ export default function App() {
         </button>
       )}
     </>
-  );
+  )
 }

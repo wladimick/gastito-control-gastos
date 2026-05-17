@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Card, Badge } from './ui'
 import { Icon, relDate, timeOnly } from '../lib/helpers'
-import { TODAY } from '../data'
 
 function Stat({ label, value, icon }) {
   return (
@@ -61,7 +60,7 @@ export default function Audit({ entries }) {
   const [fActor, setFActor] = useState("all");
   const [fAction, setFAction] = useState("all");
 
-  const today = TODAY;
+  const today = new Date()
   const todayCount = entries.filter(e => new Date(e.at).toDateString() === today.toDateString()).length;
   const botCount   = entries.filter(e => e.actor === "bot").length;
   const userCount  = entries.filter(e => e.actor === "user").length;

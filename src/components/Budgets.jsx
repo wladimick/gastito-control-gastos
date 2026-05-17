@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Card, Badge } from './ui'
-import { Icon, fmtCLP } from '../lib/helpers'
-import { CATEGORIES, TODAY } from '../data'
+import { Icon, fmtCLP, MES } from '../lib/helpers'
+import { CATEGORIES } from '../data'
 
 function MiniStat({ label, value, tone }) {
   const colors = { over: "text-[#A02828]", warn: "text-[var(--amber-ink)]" }[tone] || "text-[var(--ink)]";
@@ -14,7 +14,7 @@ function MiniStat({ label, value, tone }) {
 }
 
 export default function Budgets({ expenses, budgets, setBudgets }) {
-  const today = TODAY;
+  const today = new Date();
 
   const spentByCat = {};
   expenses.forEach(e => {
@@ -64,7 +64,7 @@ export default function Budgets({ expenses, budgets, setBudgets }) {
       <Card padding="p-5 md:p-6">
         <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-6">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Presupuesto · Mayo 2026</div>
+            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Presupuesto · {MES[today.getMonth()]} {today.getFullYear()}</div>
             <div className="mt-3 flex items-baseline gap-2 flex-wrap">
               <div className="font-mono text-[34px] md:text-[42px] tracking-tight leading-none">{fmtCLP(totalSpent)}</div>
               <div className="text-[15px] text-[var(--muted)] font-mono">/ {fmtCLP(totalBudget)}</div>
