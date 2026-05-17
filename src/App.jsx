@@ -17,9 +17,35 @@ import {
   EXPENSES, UNPARSED, BUDGETS, RECURRING, INSTALLMENT_DEBTS,
   AUDIT_LOG, INCOME, RECEIVABLES, BOT_CHAT,
 } from './data'
+import { supabase, isConfigured } from './lib/supabase'
+import { signOut } from './services/authService'
 import { fetchExpenses } from './services/expensesService'
+import Login from './components/Login'
 
 export default function App() {
+  // ── Auth ────────────────────────────────────────────────────
+  const [session, setSession]   = useState(null);
+  const [authReady, setAuthReady] = useState(!isConfigured); // listo inmediatamente si no hay Supabase
+
+  useEffect(() => {
+    if (!isConfigured) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await signOut();
+    setExpenses(EXPENSES);
+    setExpensesSource("local");
+  };
+  // ────────────────────────────────────────────────────────────
+
   const [view, setView]                   = useState("dashboard");
   const [expenses, setExpenses]           = useState(EXPENSES);
   const [expensesSource, setExpensesSource] = useState("local"); // "local" | "supabase" | "loading"
@@ -34,7 +60,7 @@ export default function App() {
 
   const lastBotMessage = BOT_CHAT[BOT_CHAT.length - 2];
 
-  // Carga gastos desde Supabase al montar. Si falla o no hay sesión → data.js
+  // Carga gastos desde Supabase. Se re-ejecuta cuando cambia la sesión.
   useEffect(() => {
     let cancelled = false
     setExpensesSource("loading")
@@ -45,7 +71,8 @@ export default function App() {
           setExpenses(data)
           setExpensesSource("supabase")
         } else {
-          setExpensesSource("local") // sin sesión o sin datos → mock
+          setExpenses(EXPENSES)
+          setExpensesSource("local")
         }
       })
       .catch(err => {
@@ -55,7 +82,7 @@ export default function App() {
         }
       })
     return () => { cancelled = true }
-  }, []);
+  }, [session]); // re-fetch al iniciar/cerrar sesión
 
   const audit = (action, target, summary, actor = "user") => {
     setAuditLog(prev => [{
@@ -151,9 +178,23 @@ export default function App() {
     setRecurring(newRec);
   };
 
+  // Pantalla de carga mientras Supabase verifica la sesión
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-[var(--line)] border-t-[var(--ink)] animate-spin"/>
+      </div>
+    );
+  }
+
+  // Pantalla de login si Supabase está configurado pero no hay sesión
+  if (isConfigured && !session) return <Login/>;
+
   return (
     <>
-      <Layout view={view} setView={navigate} botStatus={botStatus} onOpenChat={() => setChatOpen(true)}>
+      <Layout view={view} setView={navigate} botStatus={botStatus} onOpenChat={() => setChatOpen(true)}
+              onSignOut={isConfigured ? handleSignOut : undefined}
+              userEmail={session?.user?.email}>
         {view === "dashboard" && (
           <Dashboard
             expenses={expenses}

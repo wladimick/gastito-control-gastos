@@ -42,7 +42,7 @@ const NAV_GROUPS = [
 const ALL_NAV = NAV_GROUPS.flatMap(g => g.items);
 const MOBILE_PRIMARY = ["dashboard", "expenses", "budgets", "reports"];
 
-export default function Layout({ view, setView, botStatus, children, onOpenChat }) {
+export default function Layout({ view, setView, botStatus, children, onOpenChat, onSignOut, userEmail }) {
   const [openMobile, setOpenMobile] = useState(false);
 
   const currentItem = ALL_NAV.find(n => n.id === view);
@@ -92,6 +92,19 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat 
             </div>
           ))}
         </nav>
+
+        {onSignOut && (
+          <div className="px-3 pt-0 pb-2 border-t border-[var(--line)] mt-1">
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-[11px] text-[var(--muted)] truncate max-w-[140px]">{userEmail}</span>
+              <button
+                onClick={onSignOut}
+                className="text-[11px] text-[var(--muted)] hover:text-[var(--ink)] flex items-center gap-1 transition shrink-0">
+                <Icon name="x" size={11}/> Salir
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="px-3 pb-4">
           <button
