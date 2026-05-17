@@ -9,7 +9,7 @@ async function catMap() {
     .then(({ data }) => {
       const fwd = {}, rev = {}
       for (const r of (data ?? [])) {
-        const local = CATEGORIES.find(c => c.label === r.label)
+        const local = CATEGORIES.find(c => c.label?.toLowerCase() === r.label?.toLowerCase())
         if (local) { fwd[local.id] = r.id; rev[r.id] = local.id }
       }
       return { fwd, rev }
@@ -19,61 +19,89 @@ async function catMap() {
 }
 
 const FIELDS = `id, name, amount, bank_id, payment_method_id, card_type,
-  day_of_month, active, auto_register, last_charged_month, categories(label)`
+  day_of_month, active, auto_register, last_charged_month, categories(label),
+  kind, person_name, description, due_date, status, paid_at, notes`
 
 function mapRow(row) {
   const cat = CATEGORIES.find(c => c.label?.toLowerCase() === row.categories?.label?.toLowerCase())
   return {
     id:               row.id,
+    kind:             row.kind ?? 'expense',
     name:             row.name,
     amount:           row.amount,
     category:         cat?.id ?? 'otros',
-    bank:             row.bank_id ?? 'bchile',
+    bank:             row.bank_id ?? null,
     method:           row.payment_method_id ?? 'tarjeta',
     type:             row.card_type ?? 'debito',
-    dayOfMonth:       row.day_of_month,
+    dayOfMonth:       row.day_of_month ?? null,
     active:           row.active,
     autoRegister:     row.auto_register,
     lastChargedMonth: row.last_charged_month ?? null,
+    personName:       row.person_name ?? null,
+    description:      row.description ?? null,
+    dueDate:          row.due_date ?? null,
+    status:           row.status ?? null,
+    paidAt:           row.paid_at ?? null,
+    notes:            row.notes ?? null,
   }
 }
 
-async function toRow(r) {
+async function toRow(r, kind) {
   const { fwd } = await catMap()
-  return {
-    name:               r.name,
+  const base = {
+    kind:               kind,
+    name:               r.name || r.personName || 'Sin nombre',
     amount:             r.amount,
     category_id:        fwd[r.category] ?? null,
-    bank_id:            r.bank ?? null,
-    payment_method_id:  r.method ?? 'tarjeta',
-    card_type:          r.type ?? 'debito',
-    day_of_month:       r.dayOfMonth ?? 1,
     active:             r.active ?? true,
     auto_register:      r.autoRegister ?? false,
     last_charged_month: r.lastChargedMonth ?? null,
+    // expense / income fields
+    bank_id:            r.bank || null,
+    payment_method_id:  r.method || null,
+    card_type:          r.type || null,
+    day_of_month:       r.dayOfMonth ? Number(r.dayOfMonth) : null,
+    // receivable / payable fields
+    person_name:        r.personName || null,
+    description:        r.description || null,
+    due_date:           r.dueDate || null,
+    status:             r.status || (kind === 'receivable' || kind === 'payable' ? 'pending' : null),
+    paid_at:            r.paidAt || null,
+    notes:              r.notes || null,
   }
+  return base
 }
 
-export async function fetchRecurring() {
+// ── Fetch by kind ─────────────────────────────────────────────
+
+async function fetchByKind(kind) {
   if (!isConfigured) return null
+  const order = (kind === 'expense' || kind === 'income') ? 'day_of_month' : 'due_date'
   const { data, error } = await supabase
-    .from('recurring_expenses').select(FIELDS).order('day_of_month')
+    .from('recurring_expenses').select(FIELDS).eq('kind', kind).order(order)
   if (error) throw error
   return data.map(mapRow)
 }
 
-export async function createRecurring(r, userId) {
-  const row = { ...(await toRow(r)), user_id: userId }
+export const fetchRecurring   = () => fetchByKind('expense')
+export const fetchIncome      = () => fetchByKind('income')
+export const fetchReceivables = () => fetchByKind('receivable')
+export const fetchPayables    = () => fetchByKind('payable')
+
+// ── Create / Update / Patch / Remove ─────────────────────────
+
+export async function createItem(item, userId, kind) {
+  const row = { ...(await toRow(item, kind)), user_id: userId }
   const { data, error } = await supabase
     .from('recurring_expenses').insert(row).select(FIELDS).single()
   if (error) throw error
   return mapRow(data)
 }
 
-export async function updateRecurring(r) {
-  const row = await toRow(r)
+export async function updateItem(item) {
+  const row = await toRow(item, item.kind ?? 'expense')
   const { data, error } = await supabase
-    .from('recurring_expenses').update(row).eq('id', r.id).select(FIELDS).single()
+    .from('recurring_expenses').update(row).eq('id', item.id).select(FIELDS).single()
   if (error) throw error
   return mapRow(data)
 }
@@ -87,3 +115,10 @@ export async function removeRecurring(id) {
   const { error } = await supabase.from('recurring_expenses').delete().eq('id', id)
   if (error) throw error
 }
+
+// ── Backward-compatible aliases ───────────────────────────────
+
+export async function createRecurring(r, userId) { return createItem(r, userId, 'expense') }
+export async function updateRecurring(r)          { return updateItem(r) }
+export const patchItem  = patchRecurring
+export const removeItem = removeRecurring

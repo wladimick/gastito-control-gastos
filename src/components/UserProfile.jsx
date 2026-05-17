@@ -7,6 +7,17 @@ import {
   fetchMySettings, saveMySettings,
 } from '../services/userSettingsService'
 import { fetchMyCards, createCard, updateCard, removeCard } from '../services/creditCardsService'
+import {
+  fetchAllCategories, createUserCategory, updateUserCategory, removeUserCategory,
+} from '../services/categoriesService'
+
+const COLOR_SWATCHES = [
+  '#E07A5F','#81B29A','#F2CC8F','#9B89B3','#6D9DC5','#C77DFF',
+  '#B07156','#27AE60','#2196F3','#FF9800','#E91E63','#F44336',
+  '#00BCD4','#607D8B','#3F51B5','#FF5722','#8BC34A','#888880',
+]
+
+const BLANK_CAT = { label: '', icon: '•', color: '#888880' }
 
 const CURRENCIES = [
   { id: 'CLP', label: 'CLP — Peso chileno' },
@@ -84,6 +95,57 @@ function CardForm({ card, onSave, onCancel, saving }) {
   )
 }
 
+function CatForm({ cat, onSave, onCancel, saving }) {
+  const [draft, setDraft] = useState(cat ? { label: cat.label, icon: cat.icon, color: cat.color } : { ...BLANK_CAT })
+  const set = (k, v) => setDraft(p => ({ ...p, [k]: v }))
+  return (
+    <div className="mt-2 rounded-lg border border-[var(--ink)]/20 p-4 bg-[var(--bg)] flex flex-col gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Nombre">
+          <input value={draft.label} onChange={e => set('label', e.target.value)}
+            placeholder="Ej: Deportes"
+            className="w-full h-9 px-3 bg-[var(--bg-elev)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
+        </Field>
+        <Field label="Ícono (emoji)">
+          <input value={draft.icon} onChange={e => set('icon', e.target.value)}
+            placeholder="🏷️" maxLength={4}
+            className="w-full h-9 px-3 bg-[var(--bg-elev)] border border-[var(--line)] rounded-md text-[13px] text-center focus:outline-none focus:border-[var(--ink)]"/>
+        </Field>
+      </div>
+      <Field label="Color">
+        <div className="flex flex-wrap gap-2 mt-1">
+          {COLOR_SWATCHES.map(sw => (
+            <button key={sw} type="button"
+              onClick={() => set('color', sw)}
+              className={`w-6 h-6 rounded-full border-2 transition ${draft.color === sw ? 'border-[var(--ink)] scale-110' : 'border-transparent'}`}
+              style={{ backgroundColor: sw }}/>
+          ))}
+          <input type="color" value={draft.color} onChange={e => set('color', e.target.value)}
+            className="w-6 h-6 rounded-full border border-[var(--line)] cursor-pointer bg-transparent p-0"
+            title="Color personalizado"/>
+        </div>
+      </Field>
+      <div className="flex items-center gap-2 pt-1">
+        <button onClick={() => onSave(draft)} disabled={!draft.label.trim() || saving}
+          className="h-8 px-4 bg-[var(--ink)] text-[var(--bg)] rounded-md text-[12px] font-medium disabled:opacity-50">
+          {saving ? 'Guardando…' : cat?.id ? 'Guardar cambios' : 'Crear categoría'}
+        </button>
+        <button onClick={onCancel}
+          className="h-8 px-3 border border-[var(--line)] rounded-md text-[12px] text-[var(--ink-2)] hover:bg-[var(--hover)]">
+          Cancelar
+        </button>
+        {draft.label && (
+          <div className="ml-auto flex items-center gap-1.5 text-[12px]"
+            style={{ color: draft.color }}>
+            <span>{draft.icon || '•'}</span>
+            <span>{draft.label}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function UserProfile({ userId, userEmail }) {
   const [profile,       setProfile]       = useState(null)
   const [settings,      setSettings]      = useState(null)
@@ -103,13 +165,18 @@ export default function UserProfile({ userId, userEmail }) {
   const [cardForm, setCardForm] = useState(null) // null | blank | existing card
   const [savingCard, setSavingCard] = useState(false)
 
+  const [categories, setCategories] = useState([])
+  const [catForm,    setCatForm]    = useState(null) // null | BLANK_CAT | existing cat
+  const [savingCat,  setSavingCat]  = useState(false)
+
   useEffect(() => {
     if (!userId) return
-    Promise.all([fetchMyProfile(), fetchMySettings(), fetchMyCards()])
-      .then(([p, s, c]) => {
+    Promise.all([fetchMyProfile(), fetchMySettings(), fetchMyCards(), fetchAllCategories()])
+      .then(([p, s, c, cats]) => {
         setProfile(p)
         setSettings(s)
         setCards(c ?? [])
+        setCategories(cats ?? [])
         setProfileDraft({ display_name: p?.display_name ?? '' })
         setSettingsDraft({
           currency:           s?.currency           ?? 'CLP',
@@ -170,6 +237,30 @@ export default function UserProfile({ userId, userEmail }) {
     try {
       await removeCard(id)
       setCards(prev => prev.filter(c => c.id !== id))
+    } catch (err) { alert('Error: ' + err.message) }
+  }
+
+  const handleSaveCategory = async (draft) => {
+    if (!draft.label.trim()) return
+    setSavingCat(true)
+    try {
+      if (catForm?.id) {
+        await updateUserCategory({ ...catForm, ...draft })
+        setCategories(prev => prev.map(c => c.id === catForm.id ? { ...c, ...draft } : c))
+      } else {
+        const created = await createUserCategory(draft, userId)
+        setCategories(prev => [...prev, created])
+      }
+      setCatForm(null)
+    } catch (err) { alert('Error: ' + err.message) }
+    finally { setSavingCat(false) }
+  }
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm('¿Eliminar esta categoría?')) return
+    try {
+      await removeUserCategory(id)
+      setCategories(prev => prev.filter(c => c.id !== id))
     } catch (err) { alert('Error: ' + err.message) }
   }
 
@@ -328,6 +419,79 @@ export default function UserProfile({ userId, userEmail }) {
 
           {cardForm && !cardForm.id && (
             <CardForm card={null} onSave={handleSaveCard} onCancel={() => setCardForm(null)} saving={savingCard}/>
+          )}
+        </div>
+      </Card>
+
+      {/* ── Categorías ──────────────────────────────────────── */}
+      <Card padding="p-0">
+        <div className="px-5 py-4 border-b border-[var(--line)] flex items-center justify-between">
+          <div>
+            <div className="font-semibold tracking-tight">Categorías</div>
+            <div className="text-[11px] text-[var(--muted)] mt-0.5">Las globales son de solo lectura. Crea las tuyas propias.</div>
+          </div>
+          {catForm === null && (
+            <button onClick={() => setCatForm(BLANK_CAT)}
+              className="h-8 px-3 inline-flex items-center gap-1.5 bg-[var(--ink)] text-[var(--bg)] rounded-md text-[12px] font-medium">
+              <Icon name="plus" size={13}/> Nueva
+            </button>
+          )}
+        </div>
+
+        <div className="px-5 py-4 flex flex-col gap-4">
+          {/* Global categories (read-only) */}
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] mb-2">Globales</div>
+            <div className="flex flex-wrap gap-2">
+              {categories.filter(c => c.isGlobal).map(c => (
+                <div key={c.id}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--line)] text-[12px]"
+                  style={{ borderColor: c.color + '44', backgroundColor: c.color + '18' }}>
+                  <span>{c.icon}</span>
+                  <span style={{ color: c.color }}>{c.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* User categories */}
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] mb-2">Mis categorías</div>
+            {categories.filter(c => !c.isGlobal).length === 0 && catForm === null && (
+              <div className="py-4 text-center text-[12px] text-[var(--muted)] border border-dashed border-[var(--line)] rounded-lg">
+                Sin categorías propias aún
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              {categories.filter(c => !c.isGlobal).map(c => (
+                <div key={c.id}>
+                  <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--line)]">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-lg leading-none">{c.icon}</span>
+                      <span className="text-[13px] font-medium">{c.label}</span>
+                      <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: c.color }}/>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setCatForm(catForm?.id === c.id ? null : c)}
+                        className="w-7 h-7 grid place-items-center rounded-md hover:bg-[var(--hover)] text-[var(--ink-2)]">
+                        <Icon name="pencil" size={13}/>
+                      </button>
+                      <button onClick={() => handleDeleteCategory(c.id)}
+                        className="w-7 h-7 grid place-items-center rounded-md hover:bg-[var(--hover)] text-[#A02828]">
+                        <Icon name="trash" size={13}/>
+                      </button>
+                    </div>
+                  </div>
+                  {catForm?.id === c.id && (
+                    <CatForm cat={catForm} onSave={handleSaveCategory} onCancel={() => setCatForm(null)} saving={savingCat}/>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {catForm && !catForm.id && (
+            <CatForm cat={null} onSave={handleSaveCategory} onCancel={() => setCatForm(null)} saving={savingCat}/>
           )}
         </div>
       </Card>

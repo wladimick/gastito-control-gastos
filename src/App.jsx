@@ -17,12 +17,17 @@ import BotChat from './components/BotChat'
 import { Icon } from './lib/helpers'
 import {
   EXPENSES, UNPARSED, BUDGETS, RECURRING, INSTALLMENT_DEBTS,
-  AUDIT_LOG, INCOME, RECEIVABLES, BOT_CHAT,
+  AUDIT_LOG, BOT_CHAT,
 } from './data'
 import { supabase, isConfigured } from './lib/supabase'
 import { signOut } from './services/authService'
 import { fetchExpenses, createExpense, updateExpense, removeExpense, patchExpense } from './services/expensesService'
-import { fetchRecurring, createRecurring, updateRecurring, patchRecurring, removeRecurring } from './services/recurringService'
+import {
+  fetchRecurring, fetchIncome, fetchReceivables, fetchPayables,
+  createRecurring, updateRecurring, patchRecurring, removeRecurring,
+  createItem, updateItem,
+} from './services/recurringService'
+import { fetchMySettings } from './services/userSettingsService'
 import { fetchInstallments, createInstallment, updateInstallment, patchInstallment, removeInstallment } from './services/installmentsService'
 import { fetchBudgets, upsertBudget } from './services/budgetsService'
 import { fetchUnparsedMessages, fetchLastBotMessage } from './services/telegramMessagesService'
@@ -60,6 +65,10 @@ export default function App() {
     setExpenses(IS_REAL ? [] : EXPENSES)
     setExpensesSource(IS_REAL ? 'loading' : 'demo')
     setRecurringList(IS_REAL ? [] : RECURRING)
+    setIncomeList([])
+    setReceivablesList([])
+    setPayablesList([])
+    setUserSettings(null)
     setInstallmentDebts(IS_REAL ? [] : INSTALLMENT_DEBTS)
     setBudgets(IS_REAL ? {} : BUDGETS)
     setUnparsed(IS_REAL ? [] : UNPARSED)
@@ -95,6 +104,34 @@ export default function App() {
     fetchRecurring()
       .then(data => { if (data) setRecurringList(data) })
       .catch(err  => console.error('fetchRecurring:', err))
+  }, [session])
+
+  // ── Income / Receivables / Payables ─────────────────────────
+  const [incomeList,      setIncomeList]      = useState([])
+  const [receivablesList, setReceivablesList] = useState([])
+  const [payablesList,    setPayablesList]    = useState([])
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchIncome()
+      .then(data => { if (data) setIncomeList(data) })
+      .catch(err  => console.error('fetchIncome:', err))
+    fetchReceivables()
+      .then(data => { if (data) setReceivablesList(data) })
+      .catch(err  => console.error('fetchReceivables:', err))
+    fetchPayables()
+      .then(data => { if (data) setPayablesList(data) })
+      .catch(err  => console.error('fetchPayables:', err))
+  }, [session])
+
+  // ── User settings (for salary day, etc.) ─────────────────────
+  const [userSettings, setUserSettings] = useState(null)
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchMySettings()
+      .then(s => { if (s) setUserSettings(s) })
+      .catch(() => {})
   }, [session])
 
   // ── Installments ────────────────────────────────────────────
@@ -252,6 +289,115 @@ export default function App() {
     } catch (err) { console.error('onDeleteRecurring:', err); alert(err.message) }
   }
 
+  // ── Income CRUD ──────────────────────────────────────────────
+  const onCreateIncome = async (r) => {
+    try {
+      if (IS_REAL && session) {
+        const created = await createItem(r, session.user.id, 'income')
+        setIncomeList(prev => [...prev, created])
+      } else {
+        setIncomeList(prev => [...prev, { ...r, id: 'inc' + Date.now() }])
+      }
+    } catch (err) { console.error('onCreateIncome:', err); alert(err.message) }
+  }
+
+  const onUpdateIncome = async (r) => {
+    try {
+      if (IS_REAL && session) {
+        const updated = await updateItem(r)
+        setIncomeList(prev => prev.map(x => x.id === updated.id ? updated : x))
+      } else {
+        setIncomeList(prev => prev.map(x => x.id === r.id ? r : x))
+      }
+    } catch (err) { console.error('onUpdateIncome:', err); alert(err.message) }
+  }
+
+  const onDeleteIncome = async (id) => {
+    if (!window.confirm('¿Eliminar este ingreso recurrente?')) return
+    try {
+      if (IS_REAL && session) await removeRecurring(id)
+      setIncomeList(prev => prev.filter(x => x.id !== id))
+    } catch (err) { console.error('onDeleteIncome:', err); alert(err.message) }
+  }
+
+  // ── Receivables CRUD ─────────────────────────────────────────
+  const onCreateReceivable = async (r) => {
+    try {
+      if (IS_REAL && session) {
+        const created = await createItem(r, session.user.id, 'receivable')
+        setReceivablesList(prev => [...prev, created])
+      } else {
+        setReceivablesList(prev => [...prev, { ...r, id: 'rec' + Date.now(), status: 'pending' }])
+      }
+    } catch (err) { console.error('onCreateReceivable:', err); alert(err.message) }
+  }
+
+  const onUpdateReceivable = async (r) => {
+    try {
+      if (IS_REAL && session) {
+        const updated = await updateItem(r)
+        setReceivablesList(prev => prev.map(x => x.id === updated.id ? updated : x))
+      } else {
+        setReceivablesList(prev => prev.map(x => x.id === r.id ? r : x))
+      }
+    } catch (err) { console.error('onUpdateReceivable:', err); alert(err.message) }
+  }
+
+  const onDeleteReceivable = async (id) => {
+    if (!window.confirm('¿Eliminar este por cobrar?')) return
+    try {
+      if (IS_REAL && session) await removeRecurring(id)
+      setReceivablesList(prev => prev.filter(x => x.id !== id))
+    } catch (err) { console.error('onDeleteReceivable:', err); alert(err.message) }
+  }
+
+  const onMarkReceivablePaid = async (id) => {
+    const paidAt = new Date().toISOString()
+    try {
+      if (IS_REAL && session) await patchRecurring(id, { status: 'paid', paid_at: paidAt })
+      setReceivablesList(prev => prev.map(x => x.id === id ? { ...x, status: 'paid', paidAt } : x))
+    } catch (err) { console.error('onMarkReceivablePaid:', err); alert(err.message) }
+  }
+
+  // ── Payables CRUD ─────────────────────────────────────────────
+  const onCreatePayable = async (r) => {
+    try {
+      if (IS_REAL && session) {
+        const created = await createItem(r, session.user.id, 'payable')
+        setPayablesList(prev => [...prev, created])
+      } else {
+        setPayablesList(prev => [...prev, { ...r, id: 'pay' + Date.now(), status: 'pending' }])
+      }
+    } catch (err) { console.error('onCreatePayable:', err); alert(err.message) }
+  }
+
+  const onUpdatePayable = async (r) => {
+    try {
+      if (IS_REAL && session) {
+        const updated = await updateItem(r)
+        setPayablesList(prev => prev.map(x => x.id === updated.id ? updated : x))
+      } else {
+        setPayablesList(prev => prev.map(x => x.id === r.id ? r : x))
+      }
+    } catch (err) { console.error('onUpdatePayable:', err); alert(err.message) }
+  }
+
+  const onDeletePayable = async (id) => {
+    if (!window.confirm('¿Eliminar este por pagar?')) return
+    try {
+      if (IS_REAL && session) await removeRecurring(id)
+      setPayablesList(prev => prev.filter(x => x.id !== id))
+    } catch (err) { console.error('onDeletePayable:', err); alert(err.message) }
+  }
+
+  const onMarkPayablePaid = async (id) => {
+    const paidAt = new Date().toISOString()
+    try {
+      if (IS_REAL && session) await patchRecurring(id, { status: 'paid', paid_at: paidAt })
+      setPayablesList(prev => prev.map(x => x.id === id ? { ...x, status: 'paid', paidAt } : x))
+    } catch (err) { console.error('onMarkPayablePaid:', err); alert(err.message) }
+  }
+
   const onSetRecurring = async (newList) => {
     // Called by Recurring component for toggle/charge operations
     for (const r of newList) {
@@ -389,9 +535,6 @@ export default function App() {
   }
   if (IS_REAL && !session) return <Login/>
 
-  const income      = IS_REAL ? [] : INCOME
-  const receivables = IS_REAL ? [] : RECEIVABLES
-
   return (
     <>
       <Layout view={view} setView={navigate} botStatus={botStatus} onOpenChat={() => setChatOpen(true)}
@@ -405,8 +548,8 @@ export default function App() {
             setView={navigate}
             budgets={budgets}
             recurring={recurringList}
-            income={income}
-            receivables={receivables}
+            income={incomeList}
+            receivables={receivablesList}
             installmentDebts={installmentDebts}
             botStatus={botStatus}
             lastBotMessage={lastBotMessage}
@@ -437,11 +580,24 @@ export default function App() {
           <Recurring
             recurring={recurringList}
             setRecurring={onSetRecurring}
-            income={income}
-            receivables={receivables}
-            onCreateRecurring={IS_REAL && session ? onCreateRecurring : null}
-            onUpdateRecurring={IS_REAL && session ? onUpdateRecurring : null}
-            onDeleteRecurring={IS_REAL && session ? onDeleteRecurring : null}
+            onCreateRecurring={onCreateRecurring}
+            onUpdateRecurring={onUpdateRecurring}
+            onDeleteRecurring={onDeleteRecurring}
+            incomeList={incomeList}
+            onCreateIncome={onCreateIncome}
+            onUpdateIncome={onUpdateIncome}
+            onDeleteIncome={onDeleteIncome}
+            receivablesList={receivablesList}
+            onCreateReceivable={onCreateReceivable}
+            onUpdateReceivable={onUpdateReceivable}
+            onDeleteReceivable={onDeleteReceivable}
+            onMarkReceivablePaid={onMarkReceivablePaid}
+            payablesList={payablesList}
+            onCreatePayable={onCreatePayable}
+            onUpdatePayable={onUpdatePayable}
+            onDeletePayable={onDeletePayable}
+            onMarkPayablePaid={onMarkPayablePaid}
+            salaryPaymentDay={userSettings?.salary_payment_day ?? null}
           />
         )}
         {view === 'installments' && (

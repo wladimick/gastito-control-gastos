@@ -68,13 +68,13 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
   return (
     <div className="min-h-screen flex bg-[var(--bg)] text-[var(--ink)]">
       {/* Sidebar desktop */}
-      <aside className="hidden lg:flex flex-col w-64 border-r border-[var(--line)] sticky top-0 h-screen shrink-0 bg-[var(--bg-elev)]">
-        <div className="px-5 pt-6 pb-5 border-b border-[var(--line)]">
+      <aside className="hidden lg:flex flex-col w-64 border-r border-[#222220] sticky top-0 h-screen shrink-0 bg-[#0F0F0E]">
+        <div className="px-5 pt-6 pb-5 border-b border-[#222220]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-[var(--ink)] text-[var(--bg)] grid place-items-center font-semibold tracking-tight">G</div>
+            <div className="w-9 h-9 rounded-lg bg-white text-[#0F0F0E] grid place-items-center font-semibold tracking-tight">G</div>
             <div>
-              <div className="font-semibold tracking-tight leading-none">Gastito</div>
-              <div className="text-[11px] text-[var(--muted)] mt-1 leading-none">Control vía Telegram</div>
+              <div className="font-semibold tracking-tight leading-none text-white">Gastito</div>
+              <div className="text-[11px] text-[#525250] mt-1 leading-none">Control vía Telegram</div>
             </div>
           </div>
         </div>
@@ -83,22 +83,22 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
           {NAV_GROUPS.map((g, gi) => (
             <div key={gi} className="flex flex-col gap-0.5">
               {g.label && (
-                <div className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">{g.label}</div>
+                <div className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-[0.14em] text-[#484846]">{g.label}</div>
               )}
               {g.items.map(n => (
                 <button
                   key={n.id}
                   onClick={() => setView(n.id)}
                   className={`group flex items-center justify-between px-3 py-2 rounded-md text-[13px] transition
-                    ${view === n.id ? "bg-[var(--ink)] text-[var(--bg)]" : "text-[var(--ink-2)] hover:bg-[var(--hover)]"}`}
+                    ${view === n.id ? "bg-white text-[#0F0F0E]" : "text-[#A0A09A] hover:bg-white/8 hover:text-white"}`}
                 >
                   <span className="flex items-center gap-2.5">
                     <Icon name={n.icon} size={16}/>
                     <span>{n.label}</span>
                   </span>
-                  {n.badge && (
+                  {n.badge > 0 && (
                     <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded
-                      ${view === n.id ? "bg-[var(--bg)]/15 text-[var(--bg)]" : "bg-[var(--amber-soft)] text-[var(--amber-ink)]"}`}>
+                      ${view === n.id ? "bg-black/10 text-[#0F0F0E]" : "bg-[#2A2A28] text-[#A0A09A]"}`}>
                       {n.badge}
                     </span>
                   )}
@@ -109,12 +109,12 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
         </nav>
 
         {onSignOut && (
-          <div className="px-3 pt-0 pb-2 border-t border-[var(--line)] mt-1">
+          <div className="px-3 pt-0 pb-2 border-t border-[#222220] mt-1">
             <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-[11px] text-[var(--muted)] truncate max-w-[140px]">{userEmail}</span>
+              <span className="text-[11px] text-[#525250] truncate max-w-[140px]">{userEmail}</span>
               <button
                 onClick={onSignOut}
-                className="text-[11px] text-[var(--muted)] hover:text-[var(--ink)] flex items-center gap-1 transition shrink-0">
+                className="text-[11px] text-[#525250] hover:text-white flex items-center gap-1 transition shrink-0">
                 <Icon name="x" size={11}/> Salir
               </button>
             </div>
@@ -124,21 +124,22 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
         <div className="px-3 pb-4">
           <button
             onClick={onOpenChat}
-            className="w-full flex items-center gap-3 rounded-lg border border-[var(--line)] p-3 text-left hover:bg-[var(--hover)] transition"
+            className="w-full flex items-center gap-3 rounded-lg border border-[#222220] p-3 text-left hover:bg-white/5 transition"
           >
-            <div className={`w-8 h-8 rounded-md grid place-items-center text-white ${botStatus === "online" ? "bg-[var(--accent)]" : "bg-[var(--muted)]"}`}>
+            <div className={`w-8 h-8 rounded-md grid place-items-center text-white ${botStatus === "online" ? "bg-[var(--accent)]" : "bg-[#2A2A28]"}`}>
               <Icon name="bot" size={16}/>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-medium leading-none">Bot @gastito</div>
-              <div className="text-[11px] text-[var(--muted)] mt-1 leading-none flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${botStatus === "online" ? "bg-[var(--accent)]" : "bg-[var(--muted)]"}`}></span>
+              <div className="text-[12px] font-medium leading-none text-white">Bot @gastito</div>
+              <div className="text-[11px] text-[#525250] mt-1 leading-none flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${botStatus === "online" ? "bg-[var(--accent)]" : "bg-[#484846]"}`}></span>
                 {botStatus === "online" ? "Conectado" : "Desconectado"}
               </div>
             </div>
           </button>
         </div>
       </aside>
+
 
       {/* Main column */}
       <div className="flex-1 min-w-0 flex flex-col">
@@ -209,36 +210,36 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
         </nav>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — dark */}
       {openMobile && (
         <div className="lg:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setOpenMobile(false)}></div>
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[var(--bg-elev)] border-r border-[var(--line)] p-4 overflow-y-auto">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setOpenMobile(false)}></div>
+          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[#0F0F0E] border-r border-[#222220] p-4 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-[var(--ink)] text-[var(--bg)] grid place-items-center font-semibold">G</div>
-                <span className="font-semibold tracking-tight">Gastito</span>
+                <div className="w-8 h-8 rounded-lg bg-white text-[#0F0F0E] grid place-items-center font-semibold">G</div>
+                <span className="font-semibold tracking-tight text-white">Gastito</span>
               </div>
-              <button onClick={() => setOpenMobile(false)} className="w-8 h-8 grid place-items-center rounded-md border border-[var(--line)]">
+              <button onClick={() => setOpenMobile(false)} className="w-8 h-8 grid place-items-center rounded-md border border-[#222220] text-[#A0A09A]">
                 <Icon name="x" size={16}/>
               </button>
             </div>
             <nav className="flex flex-col gap-3">
               {NAV_GROUPS.map((g, gi) => (
                 <div key={gi} className="flex flex-col gap-0.5">
-                  {g.label && <div className="px-3 pt-1 pb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">{g.label}</div>}
+                  {g.label && <div className="px-3 pt-1 pb-1 text-[10px] uppercase tracking-[0.14em] text-[#484846]">{g.label}</div>}
                   {g.items.map(n => (
                     <button
                       key={n.id}
                       onClick={() => { setView(n.id); setOpenMobile(false); }}
                       className={`flex items-center justify-between px-3 py-2.5 rounded-md text-sm
-                        ${view === n.id ? "bg-[var(--ink)] text-[var(--bg)]" : "text-[var(--ink-2)] hover:bg-[var(--hover)]"}`}
+                        ${view === n.id ? "bg-white text-[#0F0F0E]" : "text-[#A0A09A] hover:bg-white/8 hover:text-white"}`}
                     >
                       <span className="flex items-center gap-3">
                         <Icon name={n.icon} size={17}/>
                         <span>{n.label}</span>
                       </span>
-                      {n.badge && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--amber-soft)] text-[var(--amber-ink)]">{n.badge}</span>}
+                      {n.badge > 0 && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#2A2A28] text-[#A0A09A]">{n.badge}</span>}
                     </button>
                   ))}
                 </div>
