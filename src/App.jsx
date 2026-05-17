@@ -19,7 +19,7 @@ import {
 } from './data'
 import { supabase, isConfigured } from './lib/supabase'
 import { signOut } from './services/authService'
-import { fetchExpenses } from './services/expensesService'
+import { fetchExpenses, createExpense, updateExpense, removeExpense, patchExpense } from './services/expensesService'
 import Login from './components/Login'
 
 export default function App() {
@@ -41,14 +41,14 @@ export default function App() {
 
   const handleSignOut = async () => {
     await signOut();
-    setExpenses(EXPENSES);
-    setExpensesSource("local");
+    setExpenses(isConfigured ? [] : EXPENSES);
+    setExpensesSource(isConfigured ? "loading" : "demo");
   };
   // ────────────────────────────────────────────────────────────
 
   const [view, setView]                   = useState("dashboard");
-  const [expenses, setExpenses]           = useState(EXPENSES);
-  const [expensesSource, setExpensesSource] = useState("local"); // "local" | "supabase" | "loading"
+  const [expenses, setExpenses]           = useState(isConfigured ? [] : EXPENSES);
+  const [expensesSource, setExpensesSource] = useState(isConfigured ? "loading" : "demo"); // "demo" | "loading" | "supabase" | "error"
   const [unparsed, setUnparsed]           = useState(UNPARSED);
   const [budgets, setBudgets]             = useState(BUDGETS);
   const [recurring, setRecurring]         = useState(RECURRING);
@@ -60,29 +60,25 @@ export default function App() {
 
   const lastBotMessage = BOT_CHAT[BOT_CHAT.length - 2];
 
-  // Carga gastos desde Supabase. Se re-ejecuta cuando cambia la sesión.
+  // Carga gastos desde Supabase solo cuando hay sesión activa.
   useEffect(() => {
+    if (!isConfigured || !session) return
     let cancelled = false
     setExpensesSource("loading")
     fetchExpenses()
       .then(data => {
         if (cancelled) return
-        if (data && data.length > 0) {
-          setExpenses(data)
-          setExpensesSource("supabase")
-        } else {
-          setExpenses(EXPENSES)
-          setExpensesSource("local")
-        }
+        // data es [] o array con gastos — nunca null cuando isConfigured es true
+        setExpenses(data)
+        setExpensesSource("supabase")
       })
       .catch(err => {
-        if (!cancelled) {
-          console.warn("[Supabase] expenses fallback a data.js:", err.message)
-          setExpensesSource("local")
-        }
+        if (cancelled) return
+        console.error("[Supabase] fetchExpenses error:", err.message)
+        setExpensesSource("error")
       })
     return () => { cancelled = true }
-  }, [session]); // re-fetch al iniciar/cerrar sesión
+  }, [session]);
 
   const audit = (action, target, summary, actor = "user") => {
     setAuditLog(prev => [{
@@ -94,27 +90,82 @@ export default function App() {
 
   const navigate = (v) => { setView(v); window.scrollTo(0, 0); };
 
-  const onSaveExpense = (e) => {
-    setExpenses(prev => prev.map(x => x.id === e.id ? e : x));
-    audit("expense.edited", e.id, `Editado: ${e.description} — $${e.amount.toLocaleString("es-CL")}`);
-    setEditing(null);
+  const handleNewExpense = () => {
+    setEditing({
+      id: null,
+      amount: 0,
+      description: '',
+      category: 'otros',
+      bank: 'bchile',
+      method: 'tarjeta',
+      type: 'debito',
+      installments: 1,
+      status: 'ok',
+      date: new Date().toISOString(),
+      notes: '',
+    });
   };
 
-  const onDeleteExpense = (id) => {
+  const onSaveExpense = async (e) => {
+    try {
+      if (isConfigured && session) {
+        if (e.id === null) {
+          const created = await createExpense(e, session.user.id);
+          setExpenses(prev => [created, ...prev]);
+          audit("expense.created", created.id, `Registrado: ${created.description} — $${created.amount.toLocaleString("es-CL")}`);
+        } else {
+          const updated = await updateExpense(e);
+          setExpenses(prev => prev.map(x => x.id === updated.id ? updated : x));
+          audit("expense.edited", updated.id, `Editado: ${updated.description} — $${updated.amount.toLocaleString("es-CL")}`);
+        }
+      } else {
+        // Modo demo — solo actualiza estado local
+        if (e.id === null) {
+          const demo = { ...e, id: "e" + Date.now() };
+          setExpenses(prev => [demo, ...prev]);
+        } else {
+          setExpenses(prev => prev.map(x => x.id === e.id ? e : x));
+        }
+      }
+      setEditing(null);
+    } catch (err) {
+      console.error("onSaveExpense error:", err);
+      alert("Error al guardar el gasto: " + err.message);
+    }
+  };
+
+  const onDeleteExpense = async (id) => {
     const e = expenses.find(x => x.id === id);
     if (!window.confirm("¿Eliminar este gasto?")) return;
-    setExpenses(prev => prev.filter(x => x.id !== id));
-    if (e) audit("expense.deleted", id, `Eliminado: ${e.description} — $${e.amount.toLocaleString("es-CL")}`);
+    try {
+      if (isConfigured && session) {
+        await removeExpense(id);
+      }
+      setExpenses(prev => prev.filter(x => x.id !== id));
+      if (e) audit("expense.deleted", id, `Eliminado: ${e.description} — $${e.amount.toLocaleString("es-CL")}`);
+    } catch (err) {
+      console.error("onDeleteExpense error:", err);
+      alert("Error al eliminar: " + err.message);
+    }
   };
 
-  const onToggleStatus = (id) => {
+  const onToggleStatus = async (id) => {
     const e = expenses.find(x => x.id === id);
-    setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: x.status === "ok" ? "revisar" : "ok" } : x));
-    if (e) audit(
-      e.status === "ok" ? "expense.flagged" : "expense.edited",
-      id,
-      e.status === "ok" ? `Marcado para revisar: ${e.description}` : `Marcado como revisado: ${e.description}`
-    );
+    if (!e) return;
+    const newStatus = e.status === "ok" ? "revisar" : "ok";
+    try {
+      if (isConfigured && session) {
+        await patchExpense(id, { status: newStatus });
+      }
+      setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: newStatus } : x));
+      audit(
+        newStatus === "revisar" ? "expense.flagged" : "expense.edited",
+        id,
+        newStatus === "revisar" ? `Marcado para revisar: ${e.description}` : `Marcado como revisado: ${e.description}`
+      );
+    } catch (err) {
+      console.error("onToggleStatus error:", err);
+    }
   };
 
   const onResolveUnparsed = (msgId, draft) => {
@@ -221,6 +272,8 @@ export default function App() {
               onEdit={setEditing}
               onDelete={onDeleteExpense}
               onToggleStatus={onToggleStatus}
+              onNew={handleNewExpense}
+              dataSource={expensesSource}
             />
           </>
         )}

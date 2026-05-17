@@ -17,7 +17,8 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
   useEffect(() => { setForm(expense); }, [expense]);
   if (!expense) return null;
 
-  const cat = CATEGORIES.find(c => c.id === form.category);
+  const isNew = expense.id === null;
+  const cat = CATEGORIES.find(c => c.id === form.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0];
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const dateInput = new Date(form.date).toISOString().slice(0, 16);
 
@@ -31,7 +32,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-md grid place-items-center text-[16px]" style={{ background: cat.color + "20" }}>{cat.icon}</div>
             <div className="min-w-0">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">Editar gasto</div>
+              <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">{isNew ? "Nuevo gasto" : "Editar gasto"}</div>
               <div className="font-semibold tracking-tight truncate">{form.description || "—"}</div>
             </div>
           </div>
@@ -122,7 +123,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
           <button
             onClick={() => onSave({ ...form, status: "ok" })}
             className="h-10 px-5 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium">
-            <Icon name="check" size={14}/> Guardar cambios
+            <Icon name="check" size={14}/> {isNew ? "Registrar gasto" : "Guardar cambios"}
           </button>
         </div>
       </div>
