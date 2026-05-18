@@ -91,7 +91,66 @@ function fmtDateChile(iso: string): string {
   }).format(new Date(iso))
 }
 
-// ─── Parser de gastos ────────────────────────────────────────
+// ─── Helpers de fechas y cuotas ─────────────────────────────
+const MESES: Record<string, number> = {
+  enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6,
+  julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12,
+}
+
+// Parsea fechas explícitas en español desde el texto (ya lowercase+sin tildes)
+// Ejemplos: "el 21 de abril", "17 mayo", "05-05-2026", "05/05/2026"
+function parseSpanishDate(lower: string): string | null {
+  const chileToday = chileDate()
+  const [cy] = chileToday.split('-').map(Number)
+
+  // Formato DD-MM-YYYY o DD/MM/YYYY
+  const numericMatch = lower.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/)
+  if (numericMatch) {
+    const d = parseInt(numericMatch[1], 10)
+    const m = parseInt(numericMatch[2], 10)
+    const y = parseInt(numericMatch[3], 10)
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31)
+      return new Date(Date.UTC(y, m - 1, d, 12)).toISOString()
+  }
+
+  // "el DD de MES" o "DD de MES"
+  const withDeMatch = lower.match(/(?:el\s+)?(\d{1,2})\s+de\s+([a-z]+)/)
+  if (withDeMatch) {
+    const d = parseInt(withDeMatch[1], 10)
+    const m = MESES[withDeMatch[2]]
+    if (m && d >= 1 && d <= 31)
+      return new Date(Date.UTC(cy, m - 1, d, 12)).toISOString()
+  }
+
+  // "DD MES" (sin "de", ej: "17 mayo")
+  const withoutDeMatch = lower.match(/\b(\d{1,2})\s+([a-z]{4,})\b/)
+  if (withoutDeMatch) {
+    const d = parseInt(withoutDeMatch[1], 10)
+    const m = MESES[withoutDeMatch[2]]
+    if (m && d >= 1 && d <= 31)
+      return new Date(Date.UTC(cy, m - 1, d, 12)).toISOString()
+  }
+
+  return null
+}
+
+// Calcula el mes de inicio de cuotas según el ciclo de facturación
+function computeInstallmentStart(
+  expenseISO: string,
+  billingDay: number | null,
+): string {
+  const bd = billingDay ?? 20
+  const chileStr = new Intl.DateTimeFormat('en-CA', { timeZone: CHILE_TZ }).format(new Date(expenseISO))
+  const [y, m, d] = chileStr.split('-').map(Number)
+  // expense > billingDay → ciclo cierra mes+1, pago mes+2
+  // expense ≤ billingDay → ciclo cierra este mes, pago mes+1
+  let payMonth = d > bd ? m + 2 : m + 1
+  let payYear  = y
+  while (payMonth > 12) { payMonth -= 12; payYear++ }
+  return `${payYear}-${String(payMonth).padStart(2, '0')}-01`
+}
+
+
 // Ordenado de más específico a más genérico.
 // Cada clave debe coincidir EXACTAMENTE con el label en la tabla categories.
 const CAT_KEYWORDS: Record<string, string[]> = {
@@ -319,11 +378,15 @@ function parseExpense(text: string, categories: Category[]): ParsedExpense {
   }
 
   // Fecha (usando zona horaria Chile)
-  let expenseDate = expenseDateISO(0)
-  if (lower.includes('anteayer')) {
-    expenseDate = expenseDateISO(-2)
-  } else if (lower.includes('ayer')) {
-    expenseDate = expenseDateISO(-1)
+  // Prioridad: fecha explícita > anteayer > ayer > hoy
+  const explicitDate = parseSpanishDate(lower)
+  let expenseDate = explicitDate ?? expenseDateISO(0)
+  if (!explicitDate) {
+    if (lower.includes('anteayer')) {
+      expenseDate = expenseDateISO(-2)
+    } else if (lower.includes('ayer')) {
+      expenseDate = expenseDateISO(-1)
+    }
   }
 
   // Cuotas: "en 3 cuotas", "3 cuotas", "en 12 cuotas"
@@ -567,25 +630,53 @@ Deno.serve(async (req: Request) => {
       return new Response('ok')
     }
 
-    // Si es en cuotas, crear registro en installments
+    // Si es en cuotas, crear registro en installments (idempotente)
     if (parsed.installments && parsed.installments >= 2) {
       const monthlyAmount = Math.round(parsed.amount! / parsed.installments)
-      const startMonth    = new Date().toISOString().slice(0, 7)
-      await supabase.from('installments').insert({
-        user_id:            userId,
-        name:               parsed.description,
-        total_amount:       parsed.amount,
-        installment_amount: monthlyAmount,
-        total_installments: parsed.installments,
-        paid_installments:  0,
-        bank_id:            parsed.bankId,
-        due_day:            5,
-        start_date:         startMonth,
-        auto_pay:           false,
-        last_paid_month:    null,
-        category_id:        parsed.categoryId,
-        status:             'active',
-      })
+
+      // Verificar que no exista ya (misma descripción + monto + cuotas del mismo usuario)
+      const { data: existing } = await supabase
+        .from('installments')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('name', parsed.description)
+        .eq('total_amount', parsed.amount!)
+        .eq('total_installments', parsed.installments)
+        .limit(1)
+
+      if (!existing || existing.length === 0) {
+        // Obtener ciclo de tarjeta del usuario para calcular mes de inicio
+        let startDate = computeInstallmentStart(parsed.expenseDate, null)
+        if (parsed.cardType === 'credito') {
+          const { data: card } = await supabase
+            .from('credit_cards')
+            .select('billing_day, payment_due_day')
+            .eq('user_id', userId)
+            .eq('is_active', true)
+            .order('created_at')
+            .limit(1)
+            .maybeSingle()
+          if (card?.billing_day) {
+            startDate = computeInstallmentStart(parsed.expenseDate, card.billing_day)
+          }
+        }
+
+        const { error: instErr } = await supabase.from('installments').insert({
+          user_id:            userId,
+          name:               parsed.description,
+          total_amount:       parsed.amount!,
+          installment_amount: monthlyAmount,
+          total_installments: parsed.installments,
+          paid_installments:  0,
+          bank_id:            parsed.bankId,
+          due_day:            5,
+          start_date:         startDate,
+          auto_pay:           false,
+          last_paid_month:    null,
+          category_id:        parsed.categoryId,
+        })
+        if (instErr) console.error('insert installments:', instErr)
+      }
     }
 
     // Marcar mensaje como parseado
