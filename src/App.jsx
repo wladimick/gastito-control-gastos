@@ -723,7 +723,14 @@ export default function App() {
             onDeleteInstallment={IS_REAL && session ? onDeleteInstallment : null}
           />
         )}
-        {view === 'reports' && <Reports expenses={expenses}/>}
+        {view === 'reports' && <Reports
+          expenses={expenses}
+          installmentDebts={installmentDebts}
+          recurringList={recurringList}
+          incomeList={incomeList}
+          accounts={accounts}
+          userSettings={userSettings}
+        />}
         {view === 'comparison' && <Comparison expenses={expenses}/>}
         {view === 'unparsed' && (
           <UnparsedMessages

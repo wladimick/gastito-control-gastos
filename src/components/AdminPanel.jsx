@@ -8,6 +8,7 @@ import {
   createCardForUser, updateCardForUser, removeCardForUser,
   logAdminAction,
 } from '../services/adminService'
+import { useBanks, updateBankBranding } from '../services/banksService'
 
 const ROLE_LABELS = { user: 'Usuario', admin: 'Admin', super_admin: 'Super Admin' }
 const ROLE_TONES  = { user: 'muted',   admin: 'info',  super_admin: 'dark' }
@@ -82,7 +83,106 @@ function AdminCardForm({ targetUserId, card, onSave, onCancel, saving }) {
   )
 }
 
+function BanksPanel() {
+  const banks = useBanks()
+  const [editing, setEditing] = useState(null)
+  const [drafts,  setDrafts]  = useState({})
+  const [saving,  setSaving]  = useState(null)
+  const [saved,   setSaved]   = useState(null)
+
+  const startEdit = (bank) => {
+    setEditing(bank.id)
+    setDrafts(p => ({
+      ...p,
+      [bank.id]: { label: bank.label, color: bank.color || '#888888', logoUrl: bank.logoUrl || '' },
+    }))
+  }
+
+  const setDraft = (id, k, v) => setDrafts(p => ({ ...p, [id]: { ...p[id], [k]: v } }))
+
+  const handleSave = async (id) => {
+    setSaving(id)
+    try {
+      await updateBankBranding(id, drafts[id])
+      setSaved(id); setTimeout(() => setSaved(null), 2000)
+      setEditing(null)
+    } catch (err) { alert('Error: ' + err.message) }
+    finally { setSaving(null) }
+  }
+
+  return (
+    <Card padding="p-0">
+      <div className="px-4 py-3 border-b border-[var(--line)] flex items-center justify-between">
+        <div className="font-semibold tracking-tight text-[14px]">Bancos</div>
+        <Badge tone="muted">{banks.length}</Badge>
+      </div>
+      <div className="divide-y divide-[var(--line)]">
+        {banks.map(bank => (
+          <div key={bank.id} className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 rounded shrink-0 border border-[var(--line)]"
+                style={{ background: bank.color || 'var(--hover)' }}/>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium">{bank.label}</div>
+                <div className="text-[11px] text-[var(--muted)] font-mono">{bank.id}</div>
+              </div>
+              <button onClick={() => editing === bank.id ? setEditing(null) : startEdit(bank)}
+                className="w-6 h-6 grid place-items-center rounded hover:bg-[var(--hover)] text-[var(--ink-2)]">
+                <Icon name="pencil" size={12}/>
+              </button>
+            </div>
+            {editing === bank.id && drafts[bank.id] && (
+              <div className="mt-3 flex flex-col gap-2.5 pl-8">
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Nombre">
+                    <input value={drafts[bank.id].label}
+                      onChange={e => setDraft(bank.id, 'label', e.target.value)}
+                      className="w-full h-8 px-2.5 bg-[var(--bg-elev)] border border-[var(--line)] rounded text-[12px] focus:outline-none focus:border-[var(--ink)]"/>
+                  </Field>
+                  <Field label="Color">
+                    <div className="flex items-center gap-1.5">
+                      <input type="color" value={drafts[bank.id].color}
+                        onChange={e => setDraft(bank.id, 'color', e.target.value)}
+                        className="w-8 h-8 cursor-pointer rounded border border-[var(--line)] bg-transparent p-0.5"/>
+                      <input value={drafts[bank.id].color}
+                        onChange={e => setDraft(bank.id, 'color', e.target.value)}
+                        placeholder="#000000"
+                        className="flex-1 h-8 px-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded text-[12px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+                    </div>
+                  </Field>
+                </div>
+                <Field label="Logo URL (opcional)">
+                  <input value={drafts[bank.id].logoUrl}
+                    onChange={e => setDraft(bank.id, 'logoUrl', e.target.value)}
+                    placeholder="https://…"
+                    className="w-full h-8 px-2.5 bg-[var(--bg-elev)] border border-[var(--line)] rounded text-[12px] focus:outline-none focus:border-[var(--ink)]"/>
+                </Field>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleSave(bank.id)} disabled={saving === bank.id}
+                    className="h-7 px-3 bg-[var(--ink)] text-[var(--bg)] rounded text-[11px] font-medium disabled:opacity-50">
+                    {saving === bank.id ? '…' : 'Guardar'}
+                  </button>
+                  <button onClick={() => setEditing(null)}
+                    className="h-7 px-3 border border-[var(--line)] rounded text-[11px] text-[var(--ink-2)] hover:bg-[var(--hover)]">
+                    Cancelar
+                  </button>
+                  {saved === bank.id && (
+                    <span className="text-[12px] text-[var(--accent-ink)] inline-flex items-center gap-1">
+                      <Icon name="check" size={12}/> Guardado
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 export default function AdminPanel({ adminUserId }) {
+  const [section, setSection] = useState('users')
   const [users,         setUsers]         = useState([])
   const [loadingUsers,  setLoadingUsers]  = useState(true)
   const [usersError,    setUsersError]    = useState(null)
@@ -196,7 +296,24 @@ export default function AdminPanel({ adminUserId }) {
   const selectedUser = users.find(u => u.id === selectedId)
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5">
+    <div className="flex flex-col gap-5">
+
+      {/* ── Tab switcher ──────────────────────────────────── */}
+      <div className="inline-flex rounded-lg border border-[var(--line)] overflow-hidden self-start">
+        {[['users', 'Usuarios'], ['banks', 'Bancos']].map(([key, label]) => (
+          <button key={key} onClick={() => setSection(key)}
+            className={`px-4 py-1.5 text-[12px] font-medium transition
+              ${section === key
+                ? 'bg-[var(--ink)] text-[var(--bg)]'
+                : 'bg-[var(--bg)] text-[var(--ink-2)] hover:bg-[var(--hover)]'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'banks' && <BanksPanel/>}
+
+      {section === 'users' && <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5">
 
       {/* ── Lista de usuarios ──────────────────────────────── */}
       <div className="flex flex-col gap-3">
@@ -448,6 +565,8 @@ export default function AdminPanel({ adminUserId }) {
           </>
         )}
       </div>
+    </div>}
+
     </div>
   )
 }

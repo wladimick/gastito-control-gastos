@@ -1,7 +1,11 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import { Card, Badge, BarRow } from './ui'
 import { Icon, fmtCLP, fmtCLPshort, MES } from '../lib/helpers'
-import { CATEGORIES, BANKS } from '../data'
+import { CATEGORIES } from '../data'
+import { useBanks } from '../services/banksService'
+import { buildMonthlyProjection } from '../services/projectionService'
+
+// ─── Shared sub-components ────────────────────────────────────────
 
 function Stat({ label, value, accent }) {
   return (
@@ -69,22 +73,142 @@ function DonutChart({ data, size = 140 }) {
   )
 }
 
-export default function Reports({ expenses }) {
+// ─── Projection sub-components ───────────────────────────────────
+
+function ProjKPI({ label, value, sub, color = 'text-[var(--ink-2)]' }) {
+  return (
+    <Card padding="p-4">
+      <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{label}</div>
+      <div className={`mt-2 font-mono text-[20px] tracking-tight leading-none tabular-nums ${color}`}>{value}</div>
+      {sub && <div className="mt-1.5 text-[11px] text-[var(--muted)]">{sub}</div>}
+    </Card>
+  )
+}
+
+function ProjChart({ months }) {
+  const BAR_H = 160
+  const maxVal = Math.max(1, ...months.flatMap(mo => [mo.income, mo.totalOut]))
+
+  return (
+    <div>
+      {/* Legend */}
+      <div className="flex items-center gap-4 mb-4 flex-wrap text-[11px] text-[var(--muted)]">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm" style={{ background: 'oklch(0.62 0.13 165 / 0.85)' }}/>
+          Ingresos
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm bg-[var(--ink)]"/>
+          Cuotas
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm" style={{ background: 'oklch(0.55 0.15 210 / 0.75)' }}/>
+          Recurrentes
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm" style={{ background: '#C9A227' }}/>
+          Crédito est.
+        </span>
+      </div>
+
+      <div className="flex items-end gap-2 md:gap-3" style={{ height: (BAR_H + 48) + 'px' }}>
+        {months.map(mo => {
+          const incH  = Math.max(Math.round((mo.income   / maxVal) * BAR_H), mo.income   > 0 ? 4 : 0)
+          const outH  = Math.max(Math.round((mo.totalOut / maxVal) * BAR_H), mo.totalOut > 0 ? 4 : 0)
+          const isNeg = mo.net < 0
+
+          // Stacked outflow percentages
+          const instPct  = mo.totalOut > 0 ? (mo.installments   / mo.totalOut * 100).toFixed(1) : 0
+          const recPct   = mo.totalOut > 0 ? (mo.recurring      / mo.totalOut * 100).toFixed(1) : 0
+          const credPct  = mo.totalOut > 0 ? (mo.creditContado  / mo.totalOut * 100).toFixed(1) : 0
+          // instBottom = 0, recBottom = instPct, credBottom = instPct+recPct
+          const recBottom  = parseFloat(instPct)
+          const credBottom = parseFloat(instPct) + parseFloat(recPct)
+
+          return (
+            <div key={mo.key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+              {/* Net change label */}
+              <div className={`text-[9px] font-mono tabular-nums text-center leading-tight ${isNeg ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}`}>
+                {mo.net >= 0 ? '+' : ''}{fmtCLPshort(mo.net)}
+              </div>
+
+              {/* Bars side by side */}
+              <div className="w-full flex gap-0.5 items-end" style={{ height: BAR_H + 'px' }}>
+                {/* Income bar */}
+                <div className="flex-1 rounded-t-[3px] transition-all"
+                  style={{ height: incH + 'px', background: 'oklch(0.62 0.13 165 / 0.85)' }}/>
+
+                {/* Outflow stacked bar */}
+                <div className="flex-1 rounded-t-[3px] overflow-hidden relative transition-all"
+                  style={{ height: outH + 'px' }}>
+                  {mo.installments > 0 && (
+                    <div className="absolute left-0 right-0" style={{
+                      bottom: 0,
+                      height: instPct + '%',
+                      background: 'var(--ink)',
+                    }}/>
+                  )}
+                  {mo.recurring > 0 && (
+                    <div className="absolute left-0 right-0" style={{
+                      bottom: recBottom + '%',
+                      height: recPct + '%',
+                      background: 'oklch(0.55 0.15 210 / 0.75)',
+                    }}/>
+                  )}
+                  {mo.creditContado > 0 && (
+                    <div className="absolute left-0 right-0" style={{
+                      bottom: credBottom + '%',
+                      height: credPct + '%',
+                      background: '#C9A227',
+                    }}/>
+                  )}
+                </div>
+              </div>
+
+              {/* Month label */}
+              <div className="text-[10px] text-[var(--muted)] leading-tight">{MES[mo.m].slice(0, 3)}</div>
+              <div className="text-[9px] text-[var(--muted)] font-mono leading-tight">{mo.y}</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ToggleGroup({ options, value, onChange }) {
+  return (
+    <div className="inline-flex rounded-lg border border-[var(--line)] overflow-hidden">
+      {options.map(o => (
+        <button key={o.value} onClick={() => onChange(o.value)}
+          className={`px-3 py-1.5 text-[12px] transition ${value === o.value
+            ? 'bg-[var(--ink)] text-[var(--bg)] font-medium'
+            : 'bg-[var(--bg)] text-[var(--muted)] hover:bg-[var(--hover)]'}`}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────
+
+export default function Reports({
+  expenses        = [],
+  installmentDebts = [],
+  recurringList   = [],
+  incomeList      = [],
+  accounts        = [],
+  userSettings    = null,
+}) {
+  const banks = useBanks()
   const today = new Date()
 
-  if (expenses.length === 0) {
-    return (
-      <div className="flex flex-col gap-5">
-        <Card padding="p-12" className="text-center">
-          <div className="text-[32px] mb-3">📊</div>
-          <div className="font-semibold text-[15px] tracking-tight">Aún no hay gastos suficientes para reportar</div>
-          <div className="text-[13px] text-[var(--muted)] mt-1">Registra algunos gastos para ver aquí tus reportes y estadísticas.</div>
-        </Card>
-      </div>
-    )
-  }
+  const [tab,      setTab]      = useState('historico')
+  const [horizon,  setHorizon]  = useState(6)
+  const [scenario, setScenario] = useState('sin_compras')
 
-  // Build 6-month history from real expenses
+  // ── Histórico ─────────────────────────────────────────────────
   const monthly = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(today.getFullYear(), today.getMonth() - (5 - i), 1)
     const y = d.getFullYear(), m = d.getMonth()
@@ -119,145 +243,447 @@ export default function Reports({ expenses }) {
   const byBank = {}
   expenses.forEach(e => { byBank[e.bank] = (byBank[e.bank] || 0) + e.amount })
   const bankArr = Object.entries(byBank)
-    .map(([id, v]) => ({ id, v, label: BANKS.find(b => b.id === id)?.label || id }))
+    .map(([id, v]) => {
+      const b = banks.find(x => x.id === id)
+      return { id, v, label: b?.label || id, color: b?.color || null }
+    })
     .sort((a, b) => b.v - a.v)
   const bankMax = bankArr[0]?.v || 1
 
-  // Insights from real data
   const thisMonthExpenses = expenses.filter(e => {
     const d = new Date(e.date)
     return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
   })
-  const maxExpense = thisMonthExpenses.reduce((max, e) => e.amount > max.amount ? e : max, thisMonthExpenses[0] ?? { amount: 0, description: '—' })
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+  const maxExpense = thisMonthExpenses.reduce(
+    (max, e) => e.amount > max.amount ? e : max,
+    thisMonthExpenses[0] ?? { amount: 0, description: '—' }
+  )
   const daysWithExpenses = new Set(thisMonthExpenses.map(e => new Date(e.date).getDate())).size
   const daysWithoutExpenses = today.getDate() - daysWithExpenses
 
+  // ── Proyección ────────────────────────────────────────────────
+  const proj = useMemo(() => buildMonthlyProjection({
+    accounts,
+    installmentDebts,
+    recurringList,
+    incomeList,
+    expenses,
+    horizonMonths:    horizon,
+    withHistoricalAvg: scenario === 'con_promedio',
+  }), [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario])
+
+  const noIncome     = proj.monthlyIncome === 0
+  const noAccounts   = accounts.filter(a => a.active).length === 0
+  const finalIsNeg   = proj.finalBalance < 0
+  const balanceColor = finalIsNeg ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'
+
+  if (expenses.length === 0 && tab === 'historico') {
+    return (
+      <div className="flex flex-col gap-5">
+        {/* Tab nav */}
+        <div className="flex border-b border-[var(--line)]">
+          {[['historico', 'Histórico'], ['proyeccion', 'Proyección']].map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className={`px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition
+                ${tab === id ? 'border-[var(--ink)] text-[var(--ink)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink-2)]'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <Card padding="p-12" className="text-center">
+          <div className="text-[32px] mb-3">📊</div>
+          <div className="font-semibold text-[15px] tracking-tight">Aún no hay gastos suficientes para reportar</div>
+          <div className="text-[13px] text-[var(--muted)] mt-1 mb-4">Registra algunos gastos para ver reportes y estadísticas.</div>
+          <button onClick={() => setTab('proyeccion')}
+            className="h-8 px-4 inline-flex items-center gap-1.5 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[12px] font-medium">
+            Ver proyección <Icon name="chevron" size={12}/>
+          </button>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      <Card padding="p-5 md:p-6">
-        <div className="flex items-end justify-between flex-wrap gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Gastos por mes</div>
-            <div className="mt-1.5 font-semibold tracking-tight text-[18px]">Últimos 6 meses</div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Stat label="Promedio" value={fmtCLP(avgMonthly)}/>
-            <Stat label="Máximo"   value={fmtCLP(monthlyMax)}/>
-            <Stat label="Este mes" value={fmtCLP(thisMonthTotal)} accent/>
-          </div>
-        </div>
 
-        <div className="mt-7 grid grid-cols-6 gap-3 md:gap-5 h-[240px] items-end">
-          {monthly.map((m, i) => {
-            const h = monthlyMax > 0 ? (m.total / monthlyMax) * 100 : 0
-            const isCurrent = i === monthly.length - 1
-            return (
-              <div key={m.month} className="flex flex-col items-center gap-2 group h-full">
-                <div className="flex-1 w-full flex flex-col justify-end relative">
-                  {m.total > 0 && (
-                    <div className="absolute -top-1 left-0 right-0 text-center font-mono text-[10.5px] text-[var(--muted)] opacity-0 group-hover:opacity-100 transition">
-                      {fmtCLPshort(m.total)}
+      {/* ── Tab navigation ────────────────────────────────────── */}
+      <div className="flex border-b border-[var(--line)]">
+        {[['historico', 'Histórico'], ['proyeccion', 'Proyección']].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={`px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition
+              ${tab === id ? 'border-[var(--ink)] text-[var(--ink)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink-2)]'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Histórico tab ─────────────────────────────────────── */}
+      {tab === 'historico' && (
+        <>
+          <Card padding="p-5 md:p-6">
+            <div className="flex items-end justify-between flex-wrap gap-3">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Gastos por mes</div>
+                <div className="mt-1.5 font-semibold tracking-tight text-[18px]">Últimos 6 meses</div>
+              </div>
+              <div className="flex items-center gap-4">
+                <Stat label="Promedio" value={fmtCLP(avgMonthly)}/>
+                <Stat label="Máximo"   value={fmtCLP(monthlyMax)}/>
+                <Stat label="Este mes" value={fmtCLP(thisMonthTotal)} accent/>
+              </div>
+            </div>
+
+            <div className="mt-7 grid grid-cols-6 gap-3 md:gap-5 h-[240px] items-end">
+              {monthly.map((m, i) => {
+                const h = monthlyMax > 0 ? (m.total / monthlyMax) * 100 : 0
+                const isCurrent = i === monthly.length - 1
+                return (
+                  <div key={m.month} className="flex flex-col items-center gap-2 group h-full">
+                    <div className="flex-1 w-full flex flex-col justify-end relative">
+                      {m.total > 0 && (
+                        <div className="absolute -top-1 left-0 right-0 text-center font-mono text-[10.5px] text-[var(--muted)] opacity-0 group-hover:opacity-100 transition">
+                          {fmtCLPshort(m.total)}
+                        </div>
+                      )}
+                      <div className="rounded-t-md transition-all"
+                           style={{ height: Math.max(h, m.total > 0 ? 2 : 0) + '%', background: isCurrent ? 'var(--ink)' : 'var(--ink-3)', minHeight: m.total > 0 ? '4px' : '0' }}/>
                     </div>
-                  )}
-                  <div className="rounded-t-md transition-all"
-                       style={{ height: Math.max(h, m.total > 0 ? 2 : 0) + '%', background: isCurrent ? 'var(--ink)' : 'var(--ink-3)', minHeight: m.total > 0 ? '4px' : '0' }}/>
+                    <div className={`text-[11px] ${isCurrent ? 'font-semibold text-[var(--ink)]' : 'text-[var(--muted)]'}`}>{m.month}</div>
+                    <div className={`font-mono text-[11px] ${isCurrent ? 'text-[var(--ink-2)]' : 'text-[var(--muted)]'}`}>
+                      {m.total > 0 ? fmtCLPshort(m.total) : '—'}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <Card padding="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Por categoría</div>
+                  <div className="mt-1 font-semibold tracking-tight">{fmtCLP(catTotal)}</div>
                 </div>
-                <div className={`text-[11px] ${isCurrent ? 'font-semibold text-[var(--ink)]' : 'text-[var(--muted)]'}`}>{m.month}</div>
-                <div className={`font-mono text-[11px] ${isCurrent ? 'text-[var(--ink-2)]' : 'text-[var(--muted)]'}`}>
-                  {m.total > 0 ? fmtCLPshort(m.total) : '—'}
+                <Badge tone="muted">{catArr.length} cat</Badge>
+              </div>
+
+              {catArr.length > 0 ? (
+                <>
+                  <div className="mt-5 flex items-center gap-6 flex-wrap">
+                    <DonutChart data={catArr.map(c => ({ value: c.v, color: c.color, label: c.label }))} size={160}/>
+                    <div className="flex-1 min-w-[180px] flex flex-col gap-2.5">
+                      {catArr.slice(0, 6).map(c => (
+                        <div key={c.id} className="flex items-center gap-2 text-[12.5px]">
+                          <span className="w-2 h-2 rounded-full" style={{ background: c.color }}></span>
+                          <span className="flex-1 truncate">{c.label}</span>
+                          <span className="font-mono text-[12px] text-[var(--ink-2)] tabular-nums">{catTotal > 0 ? Math.round((c.v / catTotal) * 100) : 0}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-5 pt-5 border-t border-[var(--line)] flex flex-col gap-3">
+                    {catArr.slice(0, 5).map(c => (
+                      <BarRow key={c.id} label={<span>{c.icon} {c.label}</span>} value={c.v} max={catMax} color={c.color}
+                              right={catTotal > 0 ? Math.round((c.v / catTotal) * 100) + '%' : '0%'}/>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="mt-8 text-center text-[13px] text-[var(--muted)]">Sin gastos registrados</div>
+              )}
+            </Card>
+
+            <Card padding="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Por medio de pago</div>
+                  <div className="mt-1 font-semibold tracking-tight">{fmtCLP(methodTotal)}</div>
                 </div>
               </div>
-            )
-          })}
-        </div>
-      </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card padding="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Por categoría</div>
-              <div className="mt-1 font-semibold tracking-tight">{fmtCLP(catTotal)}</div>
-            </div>
-            <Badge tone="muted">{catArr.length} cat</Badge>
-          </div>
+              <div className="mt-4 grid grid-cols-3 gap-2.5">
+                <MethodCard label="Crédito"  value={byMethod.credito}  total={methodTotal} icon="card" color="var(--ink)"/>
+                <MethodCard label="Débito"   value={byMethod.debito}   total={methodTotal} icon="card" color="var(--accent)"/>
+                <MethodCard label="Efectivo" value={byMethod.efectivo} total={methodTotal} icon="cash" color="#C9A227"/>
+              </div>
 
-          {catArr.length > 0 ? (
-            <>
-              <div className="mt-5 flex items-center gap-6 flex-wrap">
-                <DonutChart data={catArr.map(c => ({ value: c.v, color: c.color, label: c.label }))} size={160}/>
-                <div className="flex-1 min-w-[180px] flex flex-col gap-2.5">
-                  {catArr.slice(0, 6).map(c => (
-                    <div key={c.id} className="flex items-center gap-2 text-[12.5px]">
-                      <span className="w-2 h-2 rounded-full" style={{ background: c.color }}></span>
-                      <span className="flex-1 truncate">{c.label}</span>
-                      <span className="font-mono text-[12px] text-[var(--ink-2)] tabular-nums">{catTotal > 0 ? Math.round((c.v / catTotal) * 100) : 0}%</span>
-                    </div>
+              <div className="mt-6 pt-5 border-t border-[var(--line)]">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)] mb-3">Por banco / tarjeta</div>
+                <div className="flex flex-col gap-3">
+                  {bankArr.map(b => (
+                    <BarRow key={b.id} label={b.label} value={b.v} max={bankMax}
+                            color={b.color || 'var(--ink-2)'}
+                            right={methodTotal > 0 ? Math.round((b.v / methodTotal) * 100) + '%' : '0%'}/>
                   ))}
                 </div>
               </div>
-              <div className="mt-5 pt-5 border-t border-[var(--line)] flex flex-col gap-3">
-                {catArr.slice(0, 5).map(c => (
-                  <BarRow key={c.id} label={<span>{c.icon} {c.label}</span>} value={c.v} max={catMax} color={c.color}
-                          right={catTotal > 0 ? Math.round((c.v / catTotal) * 100) + '%' : '0%'}/>
-                ))}
+            </Card>
+          </div>
+
+          <Card padding="p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Icon name="info" size={15}/>
+              <div className="font-semibold tracking-tight">Observaciones</div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Insight
+                title="Mayor gasto del mes"
+                value={fmtCLP(maxExpense.amount)}
+                sub={maxExpense.description !== '—' ? maxExpense.description : 'Sin gastos este mes'}
+              />
+              <Insight
+                title="Días sin gasto (este mes)"
+                value={Math.max(0, daysWithoutExpenses)}
+                sub={`de ${today.getDate()} días transcurridos`}
+              />
+              <Insight
+                title="Crédito acumulado"
+                value={fmtCLP(byMethod.credito)}
+                sub={methodTotal > 0 ? `${Math.round((byMethod.credito / methodTotal) * 100)}% del total` : 'sin datos'}
+              />
+            </div>
+          </Card>
+        </>
+      )}
+
+      {/* ── Proyección tab ────────────────────────────────────── */}
+      {tab === 'proyeccion' && (
+        <>
+          {/* Filters */}
+          <Card padding="p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-[var(--muted)]">Horizonte:</span>
+                <ToggleGroup
+                  options={[{ value: 6, label: '6 meses' }, { value: 12, label: '12 meses' }]}
+                  value={horizon}
+                  onChange={setHorizon}
+                />
               </div>
-            </>
-          ) : (
-            <div className="mt-8 text-center text-[13px] text-[var(--muted)]">Sin gastos registrados</div>
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-[var(--muted)]">Escenario:</span>
+                <ToggleGroup
+                  options={[
+                    { value: 'sin_compras', label: 'Sin compras nuevas' },
+                    { value: 'con_promedio', label: 'Con promedio histórico' },
+                  ]}
+                  value={scenario}
+                  onChange={setScenario}
+                />
+              </div>
+            </div>
+            <div className="mt-2 text-[11px] text-[var(--muted)]">
+              {scenario === 'sin_compras'
+                ? 'Proyección conservadora: solo cuotas y gastos fijos comprometidos.'
+                : 'Incluye el promedio de compras con crédito contado de los últimos 3 meses.'}
+            </div>
+          </Card>
+
+          {/* Warnings */}
+          {noIncome && (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-[var(--amber-soft)] border border-[var(--amber-soft)] text-[12.5px] text-[var(--amber-ink)]">
+              <Icon name="alert" size={14} className="mt-0.5 shrink-0"/>
+              <div>
+                <span className="font-semibold">Sin ingresos configurados.</span>
+                {' '}Agrega un ingreso recurrente (sueldo) en <span className="font-medium">Recurrentes → Ingresos</span> para ver la proyección completa.
+              </div>
+            </div>
           )}
-        </Card>
 
-        <Card padding="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Por medio de pago</div>
-              <div className="mt-1 font-semibold tracking-tight">{fmtCLP(methodTotal)}</div>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            <ProjKPI
+              label={`Saldo proyectado (${horizon}m)`}
+              value={fmtCLP(proj.finalBalance)}
+              sub={noAccounts ? 'sin cuentas configuradas' : `partiendo de ${fmtCLPshort(proj.initialBalance)}`}
+              color={balanceColor}
+            />
+            <ProjKPI
+              label="Total compromisos"
+              value={fmtCLP(proj.totalCommitted)}
+              sub={`${horizon} meses de cuotas + fijos`}
+            />
+            <ProjKPI
+              label="Mes más pesado"
+              value={proj.heaviestMonth?.key ? fmtCLP(proj.heaviestMonth.totalOut) : '—'}
+              sub={proj.heaviestMonth?.key
+                ? `${MES[proj.heaviestMonth.m]} ${proj.heaviestMonth.y}`
+                : 'sin compromisos'}
+            />
+            <ProjKPI
+              label="Neto mensual est."
+              value={proj.monthlyIncome > 0 ? fmtCLP(proj.monthlyIncome - proj.monthlyRecurring) : '—'}
+              sub={proj.monthlyIncome > 0
+                ? `${fmtCLPshort(proj.monthlyIncome)} ing. – ${fmtCLPshort(proj.monthlyRecurring)} fijos`
+                : 'configura tus ingresos'}
+              color={proj.monthlyIncome > 0 && (proj.monthlyIncome - proj.monthlyRecurring) < 0 ? 'text-[#A02828]' : 'text-[var(--ink-2)]'}
+            />
+          </div>
+
+          {/* Chart */}
+          <Card padding="p-5 md:p-6">
+            <div className="flex items-end justify-between flex-wrap gap-3 mb-2">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Flujo proyectado</div>
+                <div className="mt-1 font-semibold tracking-tight">Próximos {horizon} meses</div>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-[var(--muted)]">
+                <span>Saldo inicial: <span className="font-mono text-[var(--ink-2)]">{fmtCLPshort(proj.initialBalance)}</span></span>
+                {proj.savingsBalance > 0 && (
+                  <span>Ahorro: <span className="font-mono text-[var(--accent-ink)]">{fmtCLPshort(proj.savingsBalance)}</span></span>
+                )}
+              </div>
             </div>
-          </div>
+            {proj.months.length > 0 ? (
+              <ProjChart months={proj.months}/>
+            ) : (
+              <div className="h-40 flex items-center justify-center text-[13px] text-[var(--muted)]">
+                Sin datos para proyectar
+              </div>
+            )}
+          </Card>
 
-          <div className="mt-4 grid grid-cols-3 gap-2.5">
-            <MethodCard label="Crédito"  value={byMethod.credito}  total={methodTotal} icon="card" color="var(--ink)"/>
-            <MethodCard label="Débito"   value={byMethod.debito}   total={methodTotal} icon="card" color="var(--accent)"/>
-            <MethodCard label="Efectivo" value={byMethod.efectivo} total={methodTotal} icon="cash" color="#C9A227"/>
-          </div>
-
-          <div className="mt-6 pt-5 border-t border-[var(--line)]">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)] mb-3">Por banco / tarjeta</div>
-            <div className="flex flex-col gap-3">
-              {bankArr.map(b => (
-                <BarRow key={b.id} label={b.label} value={b.v} max={bankMax} color="var(--ink-2)"
-                        right={methodTotal > 0 ? Math.round((b.v / methodTotal) * 100) + '%' : '0%'}/>
-              ))}
+          {/* Monthly detail table */}
+          <Card padding="p-0">
+            <div className="px-5 py-4 border-b border-[var(--line)]">
+              <div className="font-semibold tracking-tight">Detalle mensual</div>
+              <div className="text-[12px] text-[var(--muted)] mt-0.5">Flujo proyectado mes a mes</div>
             </div>
-          </div>
-        </Card>
-      </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12.5px]">
+                <thead>
+                  <tr className="border-b border-[var(--line)]">
+                    {['Mes', 'Saldo inicio', 'Ingresos', 'Cuotas', 'Recurrentes',
+                      scenario === 'con_promedio' ? 'Crédito est.' : null,
+                      'Total egresos', 'Neto', 'Saldo final'
+                    ].filter(Boolean).map(h => (
+                      <th key={h} className="px-4 py-2.5 text-left font-medium text-[var(--muted)] uppercase tracking-[0.08em] text-[10px] whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--line)]">
+                  {proj.months.map(mo => {
+                    const isNeg = mo.net < 0
+                    return (
+                      <tr key={mo.key} className="hover:bg-[var(--hover)]">
+                        <td className="px-4 py-2.5 font-medium whitespace-nowrap">
+                          {MES[mo.m]} {mo.y}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--ink-2)]">
+                          {fmtCLPshort(mo.balanceStart)}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--accent-ink)]">
+                          {mo.income > 0 ? fmtCLPshort(mo.income) : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono tabular-nums">
+                          {mo.installments > 0 ? fmtCLPshort(mo.installments) : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono tabular-nums">
+                          {mo.recurring > 0 ? fmtCLPshort(mo.recurring) : '—'}
+                        </td>
+                        {scenario === 'con_promedio' && (
+                          <td className="px-4 py-2.5 font-mono tabular-nums text-[#C9A227]">
+                            {mo.creditContado > 0 ? fmtCLPshort(mo.creditContado) : '—'}
+                          </td>
+                        )}
+                        <td className="px-4 py-2.5 font-mono tabular-nums">
+                          {fmtCLPshort(mo.totalOut)}
+                        </td>
+                        <td className={`px-4 py-2.5 font-mono tabular-nums font-semibold ${isNeg ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}`}>
+                          {mo.net >= 0 ? '+' : ''}{fmtCLPshort(mo.net)}
+                        </td>
+                        <td className={`px-4 py-2.5 font-mono tabular-nums font-semibold ${mo.balanceEnd < 0 ? 'text-[#A02828]' : ''}`}>
+                          {fmtCLPshort(mo.balanceEnd)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                {proj.months.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-[var(--line)] bg-[var(--bg-elev)]">
+                      <td className="px-4 py-2.5 font-semibold">Total</td>
+                      <td className="px-4 py-2.5"/>
+                      <td className="px-4 py-2.5 font-mono font-semibold tabular-nums text-[var(--accent-ink)]">
+                        {fmtCLPshort(proj.months.reduce((s, m) => s + m.income, 0))}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono font-semibold tabular-nums">
+                        {fmtCLPshort(proj.months.reduce((s, m) => s + m.installments, 0))}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono font-semibold tabular-nums">
+                        {fmtCLPshort(proj.months.reduce((s, m) => s + m.recurring, 0))}
+                      </td>
+                      {scenario === 'con_promedio' && (
+                        <td className="px-4 py-2.5 font-mono font-semibold tabular-nums text-[#C9A227]">
+                          {fmtCLPshort(proj.months.reduce((s, m) => s + m.creditContado, 0))}
+                        </td>
+                      )}
+                      <td className="px-4 py-2.5 font-mono font-semibold tabular-nums">
+                        {fmtCLPshort(proj.totalCommitted)}
+                      </td>
+                      <td className={`px-4 py-2.5 font-mono font-semibold tabular-nums ${proj.totalNet < 0 ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}`}>
+                        {proj.totalNet >= 0 ? '+' : ''}{fmtCLPshort(proj.totalNet)}
+                      </td>
+                      <td className={`px-4 py-2.5 font-mono font-semibold tabular-nums ${proj.finalBalance < 0 ? 'text-[#A02828]' : ''}`}>
+                        {fmtCLPshort(proj.finalBalance)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </Card>
 
-      <Card padding="p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Icon name="info" size={15}/>
-          <div className="font-semibold tracking-tight">Observaciones</div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Insight
-            title="Mayor gasto del mes"
-            value={fmtCLP(maxExpense.amount)}
-            sub={maxExpense.description !== '—' ? maxExpense.description : 'Sin gastos este mes'}
-          />
-          <Insight
-            title="Días sin gasto (este mes)"
-            value={Math.max(0, daysWithoutExpenses)}
-            sub={`de ${today.getDate()} días transcurridos`}
-          />
-          <Insight
-            title="Crédito acumulado"
-            value={fmtCLP(byMethod.credito)}
-            sub={methodTotal > 0 ? `${Math.round((byMethod.credito / methodTotal) * 100)}% del total` : 'sin datos'}
-          />
-        </div>
-      </Card>
+          {/* Income breakdown */}
+          {(recurringList.filter(r => r.kind === 'expense' && r.active !== false).length > 0 ||
+            installmentDebts.filter(d => d.status === 'active').length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {recurringList.filter(r => r.kind === 'expense' && r.active !== false).length > 0 && (
+                <Card padding="p-5">
+                  <div className="font-semibold tracking-tight mb-3">Recurrentes incluidos</div>
+                  <div className="flex flex-col gap-2">
+                    {recurringList.filter(r => r.kind === 'expense' && r.active !== false).map(r => (
+                      <div key={r.id} className="flex items-center justify-between text-[12.5px]">
+                        <span className="text-[var(--ink-2)]">{r.name}</span>
+                        <span className="font-mono tabular-nums">{fmtCLP(r.amount)}</span>
+                      </div>
+                    ))}
+                    <div className="pt-2 border-t border-[var(--line)] flex items-center justify-between text-[12.5px] font-semibold">
+                      <span>Total mensual</span>
+                      <span className="font-mono tabular-nums">{fmtCLP(proj.monthlyRecurring)}</span>
+                    </div>
+                  </div>
+                </Card>
+              )}
+              {installmentDebts.filter(d => d.status === 'active').length > 0 && (
+                <Card padding="p-5">
+                  <div className="font-semibold tracking-tight mb-3">Cuotas activas ({installmentDebts.filter(d => d.status === 'active').length})</div>
+                  <div className="flex flex-col gap-2">
+                    {installmentDebts.filter(d => d.status === 'active').slice(0, 6).map(d => {
+                      const rem = d.installments - d.paid
+                      return (
+                        <div key={d.id} className="flex items-center justify-between text-[12.5px]">
+                          <span className="text-[var(--ink-2)] truncate flex-1 mr-2">{d.description}</span>
+                          <span className="text-[var(--muted)] text-[11px] mr-2">{rem}c rem.</span>
+                          <span className="font-mono tabular-nums">{fmtCLP(d.monthlyAmount)}</span>
+                        </div>
+                      )
+                    })}
+                    {installmentDebts.filter(d => d.status === 'active').length > 6 && (
+                      <div className="text-[11px] text-[var(--muted)]">
+                        + {installmentDebts.filter(d => d.status === 'active').length - 6} más
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
