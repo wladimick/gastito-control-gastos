@@ -92,16 +92,81 @@ function fmtDateChile(iso: string): string {
 }
 
 // ─── Parser de gastos ────────────────────────────────────────
+// Ordenado de más específico a más genérico.
+// Cada clave debe coincidir EXACTAMENTE con el label en la tabla categories.
 const CAT_KEYWORDS: Record<string, string[]> = {
-  'Bencina':       ['bencina','gasolina','combustible','copec','shell','petrobras','terpel'],
-  'Supermercado':  ['supermercado','lider','jumbo','walmart','tottus','unimarc','santa isabel','acuenta',
-                    'carne','carniceria','verdura','fruta','panaderia','pan','abarrotes'],
-  'Comida':        ['comida','almuerzo','cena','desayuno','restauran','restaurant','cafe','pizza','sushi',
-                    'rappi','pedidosya','mcdonalds','empanada','sandwich'],
-  'Farmacia':      ['farmacia','remedios','medicamentos','pastillas','salcobrand','ahumada','cruz verde'],
-  'Transporte':    ['metro','uber','taxi','cabify','bus','micro','transporte','bip','pasaje','aeropuerto'],
-  'Suscripciones': ['netflix','spotify','amazon','disney','youtube','hbo','suscripcion'],
-  'Hogar':         ['hogar','arriendo','luz','agua','gas','internet','cable','mantencion'],
+  // Peajes y estacionamiento primero (muy específicos)
+  'TAG / Peajes':    ['peaje','autopista','viaducto'],
+  'Estacionamiento': ['estacionamiento','parking'],
+
+  // Combustible antes que Vehículo para que "bencina shell" → Bencina
+  'Bencina':         ['bencina','combustible','gasolina','shell','copec','petrobras','terpel','micopiloto'],
+
+  // Panadería antes que Supermercado para que "pan/panadería" no caiga en Supermercado
+  'Panadería':       ['panaderia','panadería','amasanderia','amasandería'],
+
+  // Vehículo (repuestos, taller, permisos)
+  'Vehículo':        ['repuesto','repuestos','mecanico','mecánico','taller mecanico',
+                      'neumatico','neumático','permiso circulacion','revision tecnica'],
+
+  // Aseo antes que Hogar para que "detergente" → Aseo / Limpieza
+  'Aseo / Limpieza': ['detergente','confort','lavaloza','cloro','desinfectante','escoba','trapeador'],
+
+  // Farmacia antes que Salud (más específica)
+  'Farmacia':        ['farmacia','remedio','remedios','medicamento','medicamentos',
+                      'pastilla','pastillas','salcobrand','ahumada','cruz verde'],
+  'Salud':           ['doctor','medico','médico','dentista','consulta','clinica',
+                      'clínica','hospital','isapre','fonasa','kinesiologo'],
+
+  // Servicios básicos (específicos antes que Hogar genérico)
+  'Internet':        ['internet','vtr','entel hogar','movistar hogar','claro hogar'],
+  'Luz':             ['electricidad','factura de luz','cge','enel'],
+  'Agua':            ['aguas andinas','essbio','nuevo sur','factura de agua'],
+  'Gas':             ['lipigas','abastible','gasco','gas domiciliario'],
+
+  // Ropa
+  'Ropa':            ['ropa','zapatilla','zapato','polera','pantalon','pantalón',
+                      'chaqueta','vestido','calzado','camisa','falda'],
+
+  // Mascotas
+  'Mascotas':        ['veterinario','mascota','mascotas','comida perro','comida gato'],
+
+  // Educación
+  'Educación':       ['colegio','universidad','educacion','educación','matricula','liceo'],
+
+  // Suscripciones (plataformas específicas antes que Comida genérica)
+  'Suscripciones':   ['netflix','spotify','disney','amazon prime','youtube premium',
+                      'hbo','paramount','apple tv','suscripcion','suscripción'],
+
+  // Supermercado (alvi añadido; panadería y pan removidos)
+  'Supermercado':    ['supermercado','lider','líder','jumbo','walmart','tottus',
+                      'unimarc','santa isabel','acuenta','alvi','mayorista',
+                      'carne','verdura','fruta','abarrotes'],
+
+  // Comida antes que Salidas para que "sushi" → Comida
+  'Comida':          ['comida','almuerzo','cena','colacion','colación','desayuno',
+                      'restaurante','restaurant','restauran','pizza','sushi','rappi',
+                      'pedidosya','mcdonalds','empanada','sandwich','delivery'],
+
+  // Transporte
+  'Transporte':      ['uber','didi','cabify','metro','micro','bus','colectivo',
+                      'taxi','pasaje','bip','aeropuerto'],
+
+  // Salidas (bar, cine, eventos)
+  'Salidas':         ['bar','cine','teatro','boliche','karaoke','concierto'],
+
+  // Social y familia
+  'Regalos':         ['regalo','regalos','cumpleaños','cumple'],
+  'Familia':         ['familia','papá','papa','mamá','mama','hermano','hermana'],
+
+  // Compromisos financieros
+  'Préstamos':       ['prestamo','préstamo','me prestaron'],
+  'Transferencias':  ['transferencia','transferi','transferí'],
+  'Ahorro':          ['ahorro','ahorrar','alcancia','alcancía'],
+  'Caja chica':      ['caja chica'],
+
+  // Hogar genérico al final
+  'Hogar':           ['hogar','mueble','cortina','sillon','sillón'],
 }
 
 // Ordenado de más específico a más genérico para evitar falsos positivos por substring.
