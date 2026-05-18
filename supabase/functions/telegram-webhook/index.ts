@@ -52,6 +52,45 @@ function stripAccents(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
+// ─── Helpers de fecha Chile ──────────────────────────────────
+const CHILE_TZ = 'America/Santiago'
+
+function chileDate(offsetDays = 0): string {
+  const now = new Date()
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: CHILE_TZ }).format(now)
+  if (offsetDays === 0) return todayStr
+  const [y, m, d] = todayStr.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + offsetDays)).toISOString().slice(0, 10)
+}
+
+function expenseDateISO(offsetDays = 0): string {
+  const dateStr = chileDate(offsetDays)
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d, 12)).toISOString()
+}
+
+function chileStartOfDay(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  for (let h = 0; h <= 6; h++) {
+    const probe = new Date(Date.UTC(y, m - 1, d, h))
+    if (new Intl.DateTimeFormat('en-CA', { timeZone: CHILE_TZ }).format(probe) === dateStr) {
+      return probe
+    }
+  }
+  return new Date(Date.UTC(y, m - 1, d, 4))
+}
+
+function chileDayRange(dateStr: string): { from: string; to: string } {
+  const from = chileStartOfDay(dateStr)
+  return { from: from.toISOString(), to: new Date(from.getTime() + 86400000).toISOString() }
+}
+
+function fmtDateChile(iso: string): string {
+  return new Intl.DateTimeFormat('es-CL', {
+    timeZone: CHILE_TZ, day: 'numeric', month: 'long',
+  }).format(new Date(iso))
+}
+
 // ─── Parser de gastos ────────────────────────────────────────
 const CAT_KEYWORDS: Record<string, string[]> = {
   'Bencina':       ['bencina','gasolina','combustible','copec','shell','petrobras','terpel'],
@@ -214,12 +253,12 @@ function parseExpense(text: string, categories: Category[]): ParsedExpense {
     if (lower.includes(stripAccents(kw))) { bankId = id; break }
   }
 
-  // Fecha
-  let expenseDate = new Date().toISOString()
-  if (lower.includes('ayer')) {
-    const d = new Date(); d.setDate(d.getDate() - 1); expenseDate = d.toISOString()
-  } else if (lower.includes('anteayer')) {
-    const d = new Date(); d.setDate(d.getDate() - 2); expenseDate = d.toISOString()
+  // Fecha (usando zona horaria Chile)
+  let expenseDate = expenseDateISO(0)
+  if (lower.includes('anteayer')) {
+    expenseDate = expenseDateISO(-2)
+  } else if (lower.includes('ayer')) {
+    expenseDate = expenseDateISO(-1)
   }
 
   // Cuotas: "en 3 cuotas", "3 cuotas", "en 12 cuotas"
@@ -335,10 +374,12 @@ Deno.serve(async (req: Request) => {
         .eq('telegram_user_id', telegramUserId).single()
       if (!acc) { await sendMessage(chatId, '❌ Cuenta no vinculada. Escribe /start.'); return new Response('ok') }
 
-      const start = new Date(); start.setHours(0, 0, 0, 0)
+      const range = chileDayRange(chileDate())
       const { data: exps } = await supabase
         .from('expenses').select('amount, description')
-        .eq('user_id', acc.user_id).gte('expense_date', start.toISOString())
+        .eq('user_id', acc.user_id)
+        .gte('expense_date', range.from)
+        .lt('expense_date', range.to)
 
       const total = exps?.reduce((s, e) => s + e.amount, 0) ?? 0
       const n     = exps?.length ?? 0
@@ -354,18 +395,17 @@ Deno.serve(async (req: Request) => {
         .eq('telegram_user_id', telegramUserId).single()
       if (!acc) { await sendMessage(chatId, '❌ Cuenta no vinculada.'); return new Response('ok') }
 
-      const now   = new Date()
-      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const chileNow = chileDate()
+      const [cy, cm] = chileNow.split('-').map(Number)
+      const monthStart = chileStartOfDay(`${cy}-${String(cm).padStart(2, '0')}-01`).toISOString()
       const { data: exps } = await supabase
         .from('expenses').select('amount')
-        .eq('user_id', acc.user_id).gte('expense_date', start.toISOString())
+        .eq('user_id', acc.user_id).gte('expense_date', monthStart)
 
       const total = exps?.reduce((s, e) => s + e.amount, 0) ?? 0
       const n     = exps?.length ?? 0
-      await sendMessage(chatId,
-        `📅 ${now.toLocaleString('es-CL', { month: 'long', year: 'numeric' })}\n` +
-        `${n} gastos · ${fmtCLP(total)}`
-      )
+      const monthLabel = new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric', timeZone: CHILE_TZ }).format(new Date())
+      await sendMessage(chatId, `📅 ${monthLabel}\n${n} gastos · ${fmtCLP(total)}`)
       return new Response('ok')
     }
 
@@ -491,7 +531,7 @@ Deno.serve(async (req: Request) => {
     await sendMessage(chatId,
       `✅ Registrado\n` +
       `${fmtCLP(parsed.amount!)} · ${parsed.categoryLabel}\n` +
-      `📅 ${fmtDate(parsed.expenseDate)}` +
+      `📅 ${fmtDateChile(parsed.expenseDate)}` +
       (parsed.bankId ? `\n🏦 ${parsed.bankId}` : '') +
       (parsed.cardType ? ` · ${parsed.cardType}` : '') +
       (parsed.installments ? `\n💳 ${parsed.installments} cuotas de ${fmtCLP(Math.round(parsed.amount! / parsed.installments))}` : '')

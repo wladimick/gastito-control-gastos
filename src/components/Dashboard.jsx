@@ -82,9 +82,9 @@ export default function Dashboard({
   const primaryCard    = creditCards.find(c => c.isActive !== false)
   const billingDay     = Number(primaryCard?.billingDay ?? 20)
   const paymentDay     = Number(primaryCard?.paymentDueDay ?? 5)
-  const cycleStart     = today.getDate() >= billingDay
-    ? new Date(today.getFullYear(), today.getMonth(), billingDay)
-    : new Date(today.getFullYear(), today.getMonth() - 1, billingDay)
+  const cycleStart     = today.getDate() > billingDay
+    ? new Date(today.getFullYear(), today.getMonth(), billingDay + 1)
+    : new Date(today.getFullYear(), today.getMonth() - 1, billingDay + 1)
   const cycleCredit    = expenses
     .filter(e => e.type === 'credito' && new Date(e.date) >= cycleStart)
     .reduce((s, e) => s + (e.amount || 0), 0)
@@ -95,9 +95,9 @@ export default function Dashboard({
   // ── Per-card spending ─────────────────────────────────────────────────────
   const cardTotals = creditCards.filter(c => c.isActive !== false).map(card => {
     const bd = Number(card.billingDay ?? 20)
-    const cs = today.getDate() >= bd
-      ? new Date(today.getFullYear(), today.getMonth(), bd)
-      : new Date(today.getFullYear(), today.getMonth() - 1, bd)
+    const cs = today.getDate() > bd
+      ? new Date(today.getFullYear(), today.getMonth(), bd + 1)
+      : new Date(today.getFullYear(), today.getMonth() - 1, bd + 1)
     const spent = expenses
       .filter(e => e.type === 'credito' && new Date(e.date) >= cs && (!card.bank || e.bank === card.bank))
       .reduce((s, e) => s + (e.amount || 0), 0)

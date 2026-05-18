@@ -36,6 +36,9 @@ export const sameMonth = (iso, ref) => {
   return a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
 };
 
+export const todayLocal = (tz = 'America/Santiago') =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+
 export const Icon = ({ name, size = 18, className = "" }) => {
   const s = size;
   const props = {

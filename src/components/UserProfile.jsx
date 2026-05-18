@@ -70,16 +70,19 @@ function CardForm({ card, onSave, onCancel, saving, banks }) {
             placeholder="1500000" min={0}
             className="w-full h-9 px-3 bg-[var(--bg-elev)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
-        <Field label="Día de facturación">
+        <Field label="Día de facturación" hint="Día en que cierra el ciclo de compras.">
           <input type="number" value={draft.billingDay} onChange={e => set('billingDay', e.target.value)}
-            placeholder="15" min={1} max={31}
+            placeholder="20" min={1} max={31}
             className="w-full h-9 px-3 bg-[var(--bg-elev)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
-        <Field label="Día de pago">
+        <Field label="Día de pago" hint="Día en que se paga la factura.">
           <input type="number" value={draft.paymentDueDay} onChange={e => set('paymentDueDay', e.target.value)}
             placeholder="5" min={1} max={31}
             className="w-full h-9 px-3 bg-[var(--bg-elev)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
+      </div>
+      <div className="p-3 rounded-md bg-[var(--bg-elev)] border border-[var(--line)] text-[11.5px] text-[var(--muted)] leading-relaxed">
+        <span className="font-medium text-[var(--ink-2)]">Ej:</span> cierre día <strong>20</strong>, pago día <strong>5</strong> → compras del 21 abr al 20 may se pagan el 5 jun.
       </div>
       <div className="flex items-center gap-2 pt-1">
         <button onClick={() => onSave(draft)} disabled={!draft.name.trim() || saving}
@@ -323,20 +326,20 @@ export default function UserProfile({ userId, userEmail }) {
               {CURRENCIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
           </Field>
-          <Field label="Zona horaria">
+          <Field label="Zona horaria" hint="Para Chile usa America/Santiago. Afecta el cálculo de fechas en el bot de Telegram.">
             <select value={settingsDraft.timezone}
               onChange={e => setSettingsDraft(p => ({ ...p, timezone: e.target.value }))}
               className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]">
               {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
             </select>
           </Field>
-          <Field label="Día de pago de sueldo" hint="Entre 1 y 31">
+          <Field label="Día de pago de sueldo" hint="Día del mes en que recibes tu sueldo. Se usa para calcular próximos compromisos y saldo disponible.">
             <input type="number" value={settingsDraft.salary_payment_day}
               onChange={e => setSettingsDraft(p => ({ ...p, salary_payment_day: e.target.value }))}
               placeholder="—" min={1} max={31}
               className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
           </Field>
-          <Field label="Inicio mes financiero" hint="Día en que empieza tu mes (1–28)">
+          <Field label="Inicio mes financiero" hint="Si cobras el día 5, usa 5 para medir gastos del 5 al 4 del mes siguiente. Usa 1 para mes calendario.">
             <input type="number" value={settingsDraft.month_start_day}
               onChange={e => setSettingsDraft(p => ({ ...p, month_start_day: e.target.value }))}
               placeholder="1" min={1} max={28}

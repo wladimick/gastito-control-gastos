@@ -103,12 +103,12 @@ function CreditCardForm({ initial, onSave, onCancel, banks }) {
             onChange={e => set('lastFour', e.target.value.replace(/\D/g,'').slice(0,4))}
             placeholder="1234" className={inp + ' font-mono'}/>
         </Field>
-        <Field label="Día de facturación">
+        <Field label="Día de facturación" hint="Día en que cierra el ciclo de compras.">
           <input type="number" min="1" max="31" value={f.billingDay}
             onChange={e => set('billingDay', e.target.value)}
             placeholder="20" className={inp + ' font-mono'}/>
         </Field>
-        <Field label="Día de pago">
+        <Field label="Día de pago" hint="Día en que se paga la factura.">
           <input type="number" min="1" max="31" value={f.paymentDueDay}
             onChange={e => set('paymentDueDay', e.target.value)}
             placeholder="5" className={inp + ' font-mono'}/>
@@ -118,6 +118,9 @@ function CreditCardForm({ initial, onSave, onCancel, banks }) {
             onChange={e => set('creditLimit', e.target.value)}
             placeholder="1500000" className={inp + ' font-mono'}/>
         </Field>
+      </div>
+      <div className="p-3 rounded-md bg-[var(--bg-elev)] border border-[var(--line)] text-[11.5px] text-[var(--muted)] leading-relaxed">
+        <span className="font-medium text-[var(--ink-2)]">Ej:</span> cierre día <strong>20</strong>, pago día <strong>5</strong> → compras del 21 abr al 20 may se pagan el 5 jun.
       </div>
       <div className="mt-4 flex items-center justify-end gap-2">
         <button onClick={onCancel} className="text-[12.5px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>
@@ -142,31 +145,29 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
   const billingDay  = Number(primaryCard?.billingDay  ?? 20)
   const paymentDay  = Number(primaryCard?.paymentDueDay ?? 5)
 
-  // Inicio del ciclo actual = último día de facturación
-  const cycleStart = today.getDate() >= billingDay
-    ? new Date(today.getFullYear(), today.getMonth(), billingDay)
-    : new Date(today.getFullYear(), today.getMonth() - 1, billingDay)
+  // Ciclo abierto: empieza el día SIGUIENTE al cierre (billingDay + 1)
+  const openCycleStart = today.getDate() > billingDay
+    ? new Date(today.getFullYear(), today.getMonth(), billingDay + 1)
+    : new Date(today.getFullYear(), today.getMonth() - 1, billingDay + 1)
 
-  // Crédito en ciclo actual (desde cycleStart hasta hoy)
-  const cycleCredit = (expenses ?? [])
-    .filter(e => {
-      const d = new Date(e.date)
-      return d >= cycleStart && e.type === 'credito'
-    })
-    .reduce((s, e) => s + e.amount, 0)
-
-  // Crédito no facturado (si el día de facturación ya pasó este mes, hay un nuevo ciclo abierto)
-  const billingPassedThisMonth = today.getDate() >= billingDay
-  const unbilledStart = billingPassedThisMonth
-    ? new Date(today.getFullYear(), today.getMonth(), billingDay)
+  // Si el día de facturación ya pasó, el ciclo anterior quedó cerrado/facturado
+  const billingJustHappened = today.getDate() > billingDay
+  const closedCycleStart = billingJustHappened
+    ? new Date(today.getFullYear(), today.getMonth() - 1, billingDay + 1)
     : null
-  const unbilledCredit = unbilledStart
+
+  const billedCredit = closedCycleStart
     ? (expenses ?? []).filter(e => {
         const d = new Date(e.date)
-        return d >= unbilledStart && e.type === 'credito'
+        return d >= closedCycleStart && d < openCycleStart && e.type === 'credito'
       }).reduce((s, e) => s + e.amount, 0)
     : 0
-  const billedCredit = cycleCredit - unbilledCredit
+
+  const unbilledCredit = (expenses ?? [])
+    .filter(e => new Date(e.date) >= openCycleStart && e.type === 'credito')
+    .reduce((s, e) => s + e.amount, 0)
+
+  const cycleCredit = billedCredit + unbilledCredit
 
   // Próxima fecha de pago
   let nextPayDate = new Date(today.getFullYear(), today.getMonth(), paymentDay)
@@ -283,9 +284,9 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
             <div className="flex flex-col gap-3">
               {creditCards.filter(c => c.isActive !== false).map(card => {
                 const bd = Number(card.billingDay ?? 20)
-                const cs = today.getDate() >= bd
-                  ? new Date(today.getFullYear(), today.getMonth(), bd)
-                  : new Date(today.getFullYear(), today.getMonth() - 1, bd)
+                const cs = today.getDate() > bd
+                  ? new Date(today.getFullYear(), today.getMonth(), bd + 1)
+                  : new Date(today.getFullYear(), today.getMonth() - 1, bd + 1)
                 const cardTotal = (expenses ?? [])
                   .filter(e => {
                     const d = new Date(e.date)
