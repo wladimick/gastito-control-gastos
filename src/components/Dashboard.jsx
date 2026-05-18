@@ -16,6 +16,12 @@ function daysUntil(target, from = new Date()) {
   return Math.round((b - a) / 86400000)
 }
 
+function monthDiff(startStr, endStr) {
+  const [sy, sm] = startStr.split('-').map(Number)
+  const [ey, em] = endStr.split('-').map(Number)
+  return (ey - sy) * 12 + (em - sm)
+}
+
 function payLabel(e) {
   if (e.method === 'efectivo') return 'Efectivo'
   if (e.type === 'credito') return 'Crédito'
@@ -79,30 +85,58 @@ export default function Dashboard({
   // ── Cashflow ──────────────────────────────────────────────────────────────
   const activeAccounts = accounts.filter(a => a.active)
   const totalAvailable = activeAccounts.reduce((s, a) => s + (a.balance || 0), 0)
-  const primaryCard    = creditCards.find(c => c.isActive !== false)
-  const billingDay     = Number(primaryCard?.billingDay ?? 20)
-  const paymentDay     = Number(primaryCard?.paymentDueDay ?? 5)
-  const cycleStart     = today.getDate() > billingDay
-    ? new Date(today.getFullYear(), today.getMonth(), billingDay + 1)
-    : new Date(today.getFullYear(), today.getMonth() - 1, billingDay + 1)
-  const cycleCredit    = expenses
-    .filter(e => e.type === 'credito' && new Date(e.date) >= cycleStart)
-    .reduce((s, e) => s + (e.amount || 0), 0)
   const recurringTotal = (recurring ?? []).filter(r => r.active && r.kind !== 'income')
     .reduce((s, r) => s + (r.amount || 0), 0)
-  const freeBalance    = totalAvailable - cycleCredit - recurringTotal - cuotasThisMonth
 
-  // ── Per-card spending ─────────────────────────────────────────────────────
-  const cardTotals = creditCards.filter(c => c.isActive !== false).map(card => {
+  // ── Per-card next payment ─────────────────────────────────────────────────
+  const cardNextPayments = creditCards.filter(c => c.isActive !== false).map(card => {
     const bd = Number(card.billingDay ?? 20)
-    const cs = today.getDate() > bd
-      ? new Date(today.getFullYear(), today.getMonth(), bd + 1)
-      : new Date(today.getFullYear(), today.getMonth() - 1, bd + 1)
-    const spent = expenses
-      .filter(e => e.type === 'credito' && new Date(e.date) >= cs && (!card.bank || e.bank === card.bank))
+    const pd = Number(card.paymentDueDay ?? 5)
+
+    // Next payment date
+    let npMonth = today.getMonth()
+    let npYear  = today.getFullYear()
+    if (today.getDate() >= pd) {
+      npMonth++
+      if (npMonth > 11) { npMonth = 0; npYear++ }
+    }
+    const nextPayDate     = new Date(npYear, npMonth, pd)
+    const nextPayMonthStr = `${npYear}-${String(npMonth + 1).padStart(2, '0')}`
+
+    // Billing cycle for that payment (month before the pay month)
+    let bmMonth = npMonth - 1; let bmYear = npYear
+    if (bmMonth < 0) { bmMonth = 11; bmYear-- }
+    const cycleEnd = new Date(bmYear, bmMonth, bd)
+    let csMonth = bmMonth - 1; let csYear = bmYear
+    if (csMonth < 0) { csMonth = 11; csYear-- }
+    const cycleStart = new Date(csYear, csMonth, bd + 1)
+
+    // Contado expenses in the billing cycle (not installment purchases)
+    const contadoAmount = expenses
+      .filter(e => {
+        if (e.type !== 'credito') return false
+        if (card.bank && e.bank !== card.bank) return false
+        if ((e.installments ?? 1) > 1) return false
+        const d = new Date(e.date)
+        return d >= cycleStart && d <= cycleEnd
+      })
       .reduce((s, e) => s + (e.amount || 0), 0)
-    return { card, spent, billedThisMonth: today.getDate() >= bd }
+
+    // Installment monthly amounts due in next payment month for this card
+    const cardCuotas = activeDebts.filter(d => {
+      if (card.bank && d.bank !== card.bank) return false
+      if (!d.startMonth) return false
+      const elapsed = monthDiff(d.startMonth, nextPayMonthStr)
+      return elapsed >= 0 && elapsed < d.installments
+    })
+    const cuotasAmount = cardCuotas.reduce((s, d) => s + (d.monthlyAmount || 0), 0)
+    const cuotasCount  = cardCuotas.length
+
+    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, totalAmount: contadoAmount + cuotasAmount, cycleStart, cycleEnd }
   })
+
+  const totalNextCardPayment = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
+  const freeBalance = totalAvailable - totalNextCardPayment - recurringTotal
 
   // ── Salary day ───────────────────────────────────────────────────────────
   const salaryDay     = userSettings?.salary_payment_day ? Number(userSettings.salary_payment_day) : null
@@ -111,12 +145,9 @@ export default function Dashboard({
   const salaryLabel   = nextSalary
     ? `${nextSalary.getDate()} de ${MES[nextSalary.getMonth()]} ${nextSalary.getFullYear()}`
     : null
-  const cardsAtSalary = creditCards.filter(c => c.isActive !== false && Number(c.paymentDueDay) === salaryDay)
-  const creditAtSalary = cardsAtSalary.reduce((s, card) => {
-    const t = cardTotals.find(ct => ct.card.id === card.id)
-    return s + (t?.spent ?? 0)
-  }, 0)
-  const totalAtSalary = recurringTotal + cuotasThisMonth + creditAtSalary
+  const cardsAtSalary  = cardNextPayments.filter(cp => salaryDay && Number(cp.card.paymentDueDay) === salaryDay)
+  const creditAtSalary = cardsAtSalary.reduce((s, cp) => s + cp.totalAmount, 0)
+  const totalAtSalary  = recurringTotal + creditAtSalary
 
   // ── Display helpers ───────────────────────────────────────────────────────
   const byCat = {}
@@ -161,10 +192,10 @@ export default function Dashboard({
     '',
   ]
   const cfItems = [
-    { label: 'Disponible ahora',   value: fmtCLP(totalAvailable), sub: `${activeAccounts.length} cuenta${activeAccounts.length !== 1 ? 's' : ''} activa${activeAccounts.length !== 1 ? 's' : ''}`, color: 'text-[var(--accent-ink)]' },
-    { label: 'Crédito usado',      value: fmtCLP(cycleCredit),    sub: `ciclo actual · pago día ${paymentDay}`,                                                                                    color: '' },
-    { label: 'Compromisos fijos',  value: fmtCLP(recurringTotal + cuotasThisMonth), sub: `${fmtCLPshort(recurringTotal)} recur. + ${fmtCLPshort(cuotasThisMonth)} cuotas`,                       color: '' },
-    { label: 'Saldo libre est.',   value: fmtCLP(freeBalance),    sub: null,                                                                                                                       color: balanceColor },
+    { label: 'Disponible ahora',      value: fmtCLP(totalAvailable),      sub: `${activeAccounts.length} cuenta${activeAccounts.length !== 1 ? 's' : ''} activa${activeAccounts.length !== 1 ? 's' : ''}`, color: 'text-[var(--accent-ink)]' },
+    { label: 'Próximo pago tarjetas', value: fmtCLP(totalNextCardPayment), sub: cardNextPayments.length ? `${cardNextPayments.length} tarjeta${cardNextPayments.length !== 1 ? 's' : ''} · contado + cuotas` : 'sin tarjetas de crédito', color: '' },
+    { label: 'Compromisos fijos',     value: fmtCLP(recurringTotal),       sub: recurringTotal > 0 ? 'gastos recurrentes activos' : 'sin gastos fijos',                                            color: '' },
+    { label: 'Saldo libre est.',      value: fmtCLP(freeBalance),          sub: null,                                                                                                               color: balanceColor },
   ]
 
   return (
@@ -271,17 +302,9 @@ export default function Dashboard({
                 {cardsAtSalary.length > 0 && (
                   <div className="flex items-center justify-between text-[13px]">
                     <span className="text-[var(--muted)] flex items-center gap-1.5">
-                      <Icon name="card" size={13}/> Tarjetas (día {salaryDay})
+                      <Icon name="card" size={13}/> Tarjetas + cuotas (día {salaryDay})
                     </span>
                     <span className="font-mono">{fmtCLP(creditAtSalary)}</span>
-                  </div>
-                )}
-                {cuotasThisMonth > 0 && (
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="text-[var(--muted)] flex items-center gap-1.5">
-                      <Icon name="layers" size={13}/> Cuotas del mes
-                    </span>
-                    <span className="font-mono">{fmtCLP(cuotasThisMonth)}</span>
                   </div>
                 )}
                 {recurringTotal > 0 && (
@@ -351,47 +374,58 @@ export default function Dashboard({
         <StatCard label="Categoría top"   value={topCat?.label ?? '—'} sub={topCat ? `${fmtCLP(catsArr[0]?.v ?? 0)} acumulado` : 'sin gastos'}  icon="tag"/>
       </div>
 
-      {/* ── 4. Tarjetas de crédito ─────────────────────────────────────────── */}
-      {cardTotals.length > 0 && (
+      {/* ── 4. Próximo pago de tarjetas ────────────────────────────────────── */}
+      {cardNextPayments.length > 0 && (
         <Card padding="p-0">
           <SectionHeader
-            title="Tarjetas de crédito"
-            sub={`${cardTotals.length} activa${cardTotals.length !== 1 ? 's' : ''} · ciclo actual`}
+            title="Próximo pago de tarjetas"
+            sub={`${cardNextPayments.length} activa${cardNextPayments.length !== 1 ? 's' : ''} · contado + cuotas del mes`}
             action="Ver cuentas"
             onAction={() => setView('accounts')}
           />
           <ul className="divide-y divide-[var(--line)]">
-            {cardTotals.map(({ card, spent, billedThisMonth }) => {
+            {cardNextPayments.map(({ card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, totalAmount, cycleStart, cycleEnd }) => {
               const lim       = card.creditLimit ? Number(card.creditLimit) : null
-              const util      = lim && lim > 0 ? (spent / lim) * 100 : null
+              const util      = lim && lim > 0 ? (totalAmount / lim) * 100 : null
               const utilColor = util === null ? 'var(--accent)' : util > 80 ? '#A02828' : util > 60 ? 'var(--amber-ink)' : 'var(--accent)'
+              const payLabel  = `${nextPayDate.getDate()} ${MES[nextPayDate.getMonth()]}`
+              const cycleLabel = `${cycleStart.getDate()} ${MES[cycleStart.getMonth()].slice(0, 3).toLowerCase()} – ${cycleEnd.getDate()} ${MES[cycleEnd.getMonth()].slice(0, 3).toLowerCase()}`
               return (
                 <li key={card.id} className="px-5 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-md bg-[var(--bg-elev)] border border-[var(--line)] grid place-items-center text-[var(--muted)] shrink-0">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-md bg-[var(--bg-elev)] border border-[var(--line)] grid place-items-center text-[var(--muted)] shrink-0 mt-0.5">
                       <Icon name="card" size={14}/>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-[13.5px]">{card.name}</span>
                         {card.lastFour && <span className="text-[var(--muted)] font-mono text-[11px]">···{card.lastFour}</span>}
-                        <Badge tone={billedThisMonth ? 'warn' : 'muted'}>
-                          {billedThisMonth ? 'Facturado' : 'Sin facturar'}
-                        </Badge>
                       </div>
-                      <div className="mt-0.5 text-[11px] text-[var(--muted)]">
-                        Factura día <span className="font-mono">{card.billingDay ?? '—'}</span>
-                        {' '}· Paga día <span className="font-mono">{card.paymentDueDay ?? '—'}</span>
-                        {lim && <span> · límite {fmtCLPshort(lim)}</span>}
+                      <div className="mt-1.5 flex flex-col gap-1">
+                        {contadoAmount > 0 && (
+                          <div className="flex items-center justify-between text-[11.5px]">
+                            <span className="text-[var(--muted)]">Compras contado · {cycleLabel}</span>
+                            <span className="font-mono tabular-nums">{fmtCLP(contadoAmount)}</span>
+                          </div>
+                        )}
+                        {cuotasAmount > 0 && (
+                          <div className="flex items-center justify-between text-[11.5px]">
+                            <span className="text-[var(--muted)]">Cuotas del mes · {cuotasCount} activa{cuotasCount !== 1 ? 's' : ''}</span>
+                            <span className="font-mono tabular-nums">{fmtCLP(cuotasAmount)}</span>
+                          </div>
+                        )}
+                        {contadoAmount === 0 && cuotasAmount === 0 && (
+                          <div className="text-[11.5px] text-[var(--muted)]">Sin movimientos en el ciclo</div>
+                        )}
+                        <div className="flex items-center justify-between text-[12px] font-semibold text-[var(--ink-2)] pt-0.5 border-t border-[var(--line)] mt-0.5">
+                          <span>Pagar el {payLabel}</span>
+                          <span className="font-mono tabular-nums">{fmtCLP(totalAmount)}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="font-mono text-[15px] tabular-nums">{fmtCLP(spent)}</div>
-                      {util !== null && <div className="text-[11px] text-[var(--muted)]">{util.toFixed(0)}% usado</div>}
                     </div>
                   </div>
                   {util !== null && (
-                    <div className="mt-2 h-1.5 rounded-full bg-[var(--line)] overflow-hidden">
+                    <div className="mt-2.5 h-1.5 rounded-full bg-[var(--line)] overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: Math.min(100, util) + '%', background: utilColor }}/>
                     </div>
                   )}
@@ -399,6 +433,12 @@ export default function Dashboard({
               )
             })}
           </ul>
+          {cardNextPayments.length > 1 && (
+            <div className="px-5 py-3 border-t border-[var(--line)] flex items-center justify-between">
+              <span className="text-[12.5px] text-[var(--muted)] font-medium">Total tarjetas</span>
+              <span className="font-mono text-[15px] font-semibold tabular-nums">{fmtCLP(totalNextCardPayment)}</span>
+            </div>
+          )}
         </Card>
       )}
 
