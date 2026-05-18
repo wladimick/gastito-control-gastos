@@ -63,7 +63,7 @@ function Field({ label, children }) {
 }
 
 const BLANK = {
-  description: '', total: '', installments: 12, paid: 0,
+  description: '', purchaseAmount: '', total: '', installments: 12, paid: 0,
   monthlyAmount: '', category: 'otros', bank: 'bchile',
   dayOfMonth: 5, startMonth: new Date().toISOString().slice(0, 7),
   autoPay: false, status: 'active',
@@ -74,33 +74,61 @@ function InstallmentForm({ initial, onSave, onCancel, banks }) {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.description.trim() && Number(f.total) > 0 && f.installments >= 1
 
-  // Auto-compute monthly amount
-  useEffect(() => {
-    if (Number(f.total) > 0 && f.installments > 0) {
-      set('monthlyAmount', Math.round(Number(f.total) / f.installments))
-    }
-  }, [f.total, f.installments])
+  // "Total a pagar" changes → recompute cuota
+  const onTotalChange = (v) => {
+    const total = Number(v) || 0
+    const n = Number(f.installments) || 1
+    setF(p => ({ ...p, total: v, ...(total > 0 ? { monthlyAmount: Math.round(total / n) } : {}) }))
+  }
+
+  // "Nº cuotas" changes → recompute cuota (keeping total as source of truth)
+  const onInstallmentsChange = (v) => {
+    const n       = Number(v) || 1
+    const total   = Number(f.total) || 0
+    const monthly = Number(f.monthlyAmount) || 0
+    setF(p => ({
+      ...p, installments: n,
+      ...(total > 0   ? { monthlyAmount: Math.round(total / n) } :
+          monthly > 0 ? { total: String(monthly * n) }          : {}),
+    }))
+  }
+
+  // "Valor cuota" changes → recompute total a pagar
+  const onMonthlyChange = (v) => {
+    const monthly = Number(v) || 0
+    const n = Number(f.installments) || 1
+    setF(p => ({ ...p, monthlyAmount: v, ...(monthly > 0 ? { total: String(monthly * n) } : {}) }))
+  }
+
+  const hasInterest = Number(f.purchaseAmount) > 0 && Number(f.total) > Number(f.purchaseAmount)
 
   return (
     <Card padding="p-5" className="border-[var(--ink)]/20">
-      <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-4">
+      <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-4 flex items-center gap-2">
         {initial.id ? 'Editar cuota' : 'Nueva deuda en cuotas'}
+        {hasInterest && (
+          <span className="px-1.5 py-0.5 rounded bg-[var(--amber-soft)] text-[var(--amber-ink)] text-[10px] font-medium">con interés</span>
+        )}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Field label="Descripción">
           <input value={f.description} onChange={e => set('description', e.target.value)} placeholder="MacBook Air…"
             className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
-        <Field label="Monto total">
-          <input type="text" inputMode="numeric" value={f.total} onChange={e => set('total', e.target.value)}
+        <Field label="Monto original (ref.)">
+          <input type="text" inputMode="numeric" value={f.purchaseAmount} onChange={e => set('purchaseAmount', e.target.value)}
+            placeholder="precio de compra" className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+        </Field>
+        <Field label="Total a pagar">
+          <input type="text" inputMode="numeric" value={f.total} onChange={e => onTotalChange(e.target.value)}
             placeholder="0" className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Nº cuotas">
-          <input type="number" min="1" max="60" value={f.installments} onChange={e => set('installments', Number(e.target.value))}
+          <input type="number" min="1" max="60" value={f.installments} onChange={e => onInstallmentsChange(Number(e.target.value))}
             className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
-        <Field label={`Monto/cuota ≈ $${(Number(f.total) / Math.max(1, f.installments)).toLocaleString('es-CL', { maximumFractionDigits: 0 })}`}>
-          <input type="text" inputMode="numeric" value={f.monthlyAmount} onChange={e => set('monthlyAmount', e.target.value)}
+        <Field label="Valor cuota">
+          <input type="text" inputMode="numeric" value={f.monthlyAmount} onChange={e => onMonthlyChange(e.target.value)}
             placeholder="0" className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Cuotas pagadas">
@@ -122,6 +150,12 @@ function InstallmentForm({ initial, onSave, onCancel, banks }) {
             className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
       </div>
+      {hasInterest && (
+        <div className="mt-3 p-3 rounded-md bg-[var(--amber-soft)] border border-[var(--amber-soft)] text-[11.5px] text-[var(--amber-ink)]">
+          Interés: <span className="font-mono font-semibold">${(Number(f.total) - Number(f.purchaseAmount)).toLocaleString('es-CL')}</span>
+          {' '}· cuota real <span className="font-mono font-semibold">${Number(f.monthlyAmount).toLocaleString('es-CL')}</span> vs sin interés <span className="font-mono">${Math.round(Number(f.purchaseAmount) / Math.max(1, f.installments)).toLocaleString('es-CL')}</span>
+        </div>
+      )}
       <div className="mt-4 flex items-center justify-end gap-2">
         <button onClick={onCancel} className="text-[12.5px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>
         <button onClick={() => valid && onSave(f)} disabled={!valid}

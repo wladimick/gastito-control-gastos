@@ -15,14 +15,15 @@ interface TgUpdate { message?: TgMsg }
 interface Category { id: string; label: string }
 
 interface ParsedExpense {
-  amount:        number | null
-  description:   string
-  categoryId:    string | null
-  categoryLabel: string
-  cardType:      'debito' | 'credito' | null
-  bankId:        string | null
-  expenseDate:   string
-  installments:  number | null
+  amount:            number | null
+  description:       string
+  categoryId:        string | null
+  categoryLabel:     string
+  cardType:          'debito' | 'credito' | null
+  bankId:            string | null
+  expenseDate:       string
+  installments:      number | null
+  installmentAmount: number | null  // cuota real si se especificó ("3 cuotas de 24011")
 }
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -348,6 +349,28 @@ function parseAmount(text: string): number | null {
   return null
 }
 
+// Parsea el valor de cada cuota si se especificó explícitamente:
+//   "3 cuotas de 24011"           → 24011
+//   "cuota de 24011"              → 24011
+//   "cuota 24011"                 → 24011
+//   "3 cuotas con interés, cuota 24011" → 24011
+//   "3 cuotas sin intereses"      → null (usar amount / cuotas)
+function parseInstallmentAmount(lower: string): number | null {
+  // "N cuotas de AMOUNT" — cifra justo después de "cuotas de"
+  const cuotasDeMatch = lower.match(/\d+\s*cuotas?\s+de\s+([\d.,]+)/)
+  if (cuotasDeMatch) {
+    const n = parseAmount(cuotasDeMatch[1])
+    if (n) return n
+  }
+  // "cuota AMOUNT" o "cuota de AMOUNT" (singular, implica valor por cuota)
+  const cuotaAmtMatch = lower.match(/\bcuota\s+(?:de\s+)?([\d.,]+)/)
+  if (cuotaAmtMatch) {
+    const n = parseAmount(cuotaAmtMatch[1])
+    if (n) return n
+  }
+  return null
+}
+
 function parseExpense(text: string, categories: Category[]): ParsedExpense {
   const lower = stripAccents(text.toLowerCase())
   const amount = parseAmount(text)
@@ -399,7 +422,7 @@ function parseExpense(text: string, categories: Category[]): ParsedExpense {
 
   const description = text.length > 100 ? text.slice(0, 97) + '…' : text
 
-  return { amount, description, categoryId, categoryLabel, cardType, bankId, expenseDate, installments }
+  return { amount, description, categoryId, categoryLabel, cardType, bankId, expenseDate, installments, installmentAmount: parseInstallmentAmount(lower) }
 }
 
 // ─── Handler principal ───────────────────────────────────────
@@ -632,15 +655,20 @@ Deno.serve(async (req: Request) => {
 
     // Si es en cuotas, crear registro en installments (idempotente)
     if (parsed.installments && parsed.installments >= 2) {
-      const monthlyAmount = Math.round(parsed.amount! / parsed.installments)
+      // Si se especificó valor de cuota, usarlo; si no, dividir monto original
+      const realMonthly  = parsed.installmentAmount ?? Math.round(parsed.amount! / parsed.installments)
+      // total_amount = total real a pagar (con interés si aplica)
+      const totalAmount  = parsed.installmentAmount
+        ? parsed.installmentAmount * parsed.installments
+        : parsed.amount!
 
-      // Verificar que no exista ya (misma descripción + monto + cuotas del mismo usuario)
+      // Verificar que no exista ya (misma descripción + monto total + cuotas del mismo usuario)
       const { data: existing } = await supabase
         .from('installments')
         .select('id')
         .eq('user_id', userId)
         .eq('name', parsed.description)
-        .eq('total_amount', parsed.amount!)
+        .eq('total_amount', totalAmount)
         .eq('total_installments', parsed.installments)
         .limit(1)
 
@@ -664,8 +692,8 @@ Deno.serve(async (req: Request) => {
         const { error: instErr } = await supabase.from('installments').insert({
           user_id:            userId,
           name:               parsed.description,
-          total_amount:       parsed.amount!,
-          installment_amount: monthlyAmount,
+          total_amount:       totalAmount,   // total real a pagar (con interés si aplica)
+          installment_amount: realMonthly,   // cuota real
           total_installments: parsed.installments,
           paid_installments:  0,
           bank_id:            parsed.bankId,
@@ -684,13 +712,19 @@ Deno.serve(async (req: Request) => {
       .update({ parsed: true, expense_id: expense.id })
       .eq('id', savedMsg.id)
 
+    const realMonthlyForMsg = parsed.installments
+      ? (parsed.installmentAmount ?? Math.round(parsed.amount! / parsed.installments))
+      : null
     await sendMessage(chatId,
       `✅ Registrado\n` +
       `${fmtCLP(parsed.amount!)} · ${parsed.categoryLabel}\n` +
       `📅 ${fmtDateChile(parsed.expenseDate)}` +
       (parsed.bankId ? `\n🏦 ${parsed.bankId}` : '') +
       (parsed.cardType ? ` · ${parsed.cardType}` : '') +
-      (parsed.installments ? `\n💳 ${parsed.installments} cuotas de ${fmtCLP(Math.round(parsed.amount! / parsed.installments))}` : '')
+      (parsed.installments && realMonthlyForMsg
+        ? `\n💳 ${parsed.installments} cuotas de ${fmtCLP(realMonthlyForMsg)}` +
+          (parsed.installmentAmount ? ` (total ${fmtCLP(parsed.installmentAmount * parsed.installments)})` : '')
+        : '')
     )
     return new Response('ok')
 
