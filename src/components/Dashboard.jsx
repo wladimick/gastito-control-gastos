@@ -87,6 +87,10 @@ export default function Dashboard({
   const totalAvailable = activeAccounts.reduce((s, a) => s + (a.balance || 0), 0)
   const recurringTotal = (recurring ?? []).filter(r => r.active && r.kind !== 'income')
     .reduce((s, r) => s + (r.amount || 0), 0)
+  const monthlyIncome = (recurring ?? [])
+    .filter(r => r.active !== false && r.kind === 'income')
+    .reduce((s, r) => s + (r.amount || 0), 0)
+  const afterSalary = freeBalance + monthlyIncome
 
   // ── Per-card next payment ─────────────────────────────────────────────────
   const cardNextPayments = creditCards.filter(c => c.isActive !== false).map(card => {
@@ -184,6 +188,20 @@ export default function Dashboard({
   const balanceColor = freeBalance < 0 ? 'text-[#A02828]' : freeRatio < 0.2 ? 'text-[var(--amber-ink)]' : 'text-[var(--accent-ink)]'
   const balanceBg    = freeBalance < 0 ? 'bg-[#A02828]/8 border-[#A02828]/20' : freeRatio < 0.2 ? 'bg-[var(--amber-soft)] border-[var(--amber-soft)]' : 'bg-[var(--accent-soft)] border-[var(--accent-soft)]'
 
+  // ── After-salary helpers ──────────────────────────────────────────────────
+  const afterSalaryColor = afterSalary >= 0 ? 'text-[var(--accent-ink)]' : 'text-[#A02828]'
+  const afterSalaryBg    = freeBalance < 0 && afterSalary >= 0
+    ? 'bg-[var(--accent-soft)]'
+    : afterSalary < 0
+    ? 'bg-[#A02828]/5'
+    : 'bg-[var(--bg-elev)]'
+  const afterSalaryBadgeBg = freeBalance < 0 && afterSalary >= 0
+    ? 'bg-[var(--accent-soft)] border-[var(--accent-soft)]'
+    : afterSalary < 0
+    ? 'bg-[#A02828]/8 border-[#A02828]/20'
+    : 'bg-[var(--accent-soft)] border-[var(--accent-soft)]'
+  const daysLabel = daysToSalary === 0 ? 'Hoy' : daysToSalary === 1 ? 'Mañana' : daysToSalary !== null ? `En ${daysToSalary} días` : null
+
   // Cashflow grid: border per cell (2-col mobile, 4-col desktop)
   const cfBorders = [
     'border-b border-r md:border-b-0 md:border-r',
@@ -238,6 +256,53 @@ export default function Dashboard({
               </div>
             ))}
           </div>
+
+          {/* ── Después del sueldo ─────────────────────────────────────────── */}
+          {monthlyIncome > 0 ? (
+            <div className={`border-t border-[var(--line)] px-5 py-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-3 ${afterSalaryBg}`}>
+              <div>
+                <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">Después del sueldo</div>
+                <div className={`mt-2 font-mono text-[20px] md:text-[24px] tracking-tight leading-none tabular-nums ${afterSalaryColor}`}>
+                  {fmtCLP(afterSalary)}
+                </div>
+                <div className={`mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10.5px] font-medium ${afterSalaryBadgeBg} ${afterSalaryColor}`}>
+                  {afterSalary < 0
+                    ? <><Icon name="alert" size={11}/> Faltante después del sueldo</>
+                    : freeBalance < 0
+                    ? <><Icon name="check" size={11}/> Se regulariza con sueldo</>
+                    : <><Icon name="check" size={11}/> Positivo tras sueldo</>}
+                </div>
+              </div>
+              <div className="flex items-center gap-6 text-[12px]">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Sueldo</div>
+                  <div className="font-mono font-semibold text-[14px] mt-0.5 text-[var(--accent-ink)]">{fmtCLP(monthlyIncome)}</div>
+                </div>
+                {salaryDay && daysLabel && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Día {salaryDay}</div>
+                    <div className="font-mono text-[14px] mt-0.5 text-[var(--ink-2)]">{daysLabel}</div>
+                  </div>
+                )}
+                {!salaryDay && (
+                  <div className="text-[11px] text-[var(--muted)]">
+                    Configura tu día de sueldo en{' '}
+                    <button className="underline text-[var(--ink-2)]" onClick={() => setView('profile')}>Mi perfil</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="border-t border-[var(--line)] px-5 py-3.5 flex items-center gap-2.5 text-[12px] text-[var(--muted)]">
+              <Icon name="income" size={14} className="shrink-0"/>
+              <span>
+                Sin ingresos configurados.{' '}
+                Agrega tu sueldo en{' '}
+                <button className="underline text-[var(--ink-2)]" onClick={() => setView('recurring')}>Recurrentes</button>
+                {' '}para ver el saldo estimado después de cobrar.
+              </span>
+            </div>
+          )}
         </Card>
       )}
 

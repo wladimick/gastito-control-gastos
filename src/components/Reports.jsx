@@ -75,23 +75,25 @@ function DonutChart({ data, size = 140 }) {
 
 // ─── Projection sub-components ───────────────────────────────────
 
-function ProjKPI({ label, value, sub, color = 'text-[var(--ink-2)]' }) {
+function ProjKPI({ label, value, sub, color = 'text-[var(--ink-2)]', dim }) {
   return (
     <Card padding="p-4">
-      <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{label}</div>
-      <div className={`mt-2 font-mono text-[20px] tracking-tight leading-none tabular-nums ${color}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] leading-snug">{label}</div>
+      <div className={`mt-2 font-mono text-[20px] tracking-tight leading-none tabular-nums ${dim ? 'text-[var(--muted)]' : color}`}>{value}</div>
       {sub && <div className="mt-1.5 text-[11px] text-[var(--muted)]">{sub}</div>}
     </Card>
   )
 }
 
-const RECURRING_COLOR  = 'oklch(0.55 0.15 210 / 0.75)'
-const CREDIT_COLOR     = '#C9A227'
-const INCOME_COLOR     = 'oklch(0.62 0.13 165 / 0.85)'
-const BALANCE_COLOR    = 'oklch(0.45 0.12 250)'
+const RECURRING_COLOR = 'oklch(0.55 0.15 210 / 0.75)'
+const CREDIT_COLOR    = '#C9A227'
+const INCOME_COLOR    = 'oklch(0.62 0.13 165 / 0.85)'
+const VARIABLE_COLOR  = '#9CA3AF'
+const BALANCE_COLOR   = 'oklch(0.45 0.12 250)'
 
 function ProjChart({ months, banksInProj }) {
-  const BAR_H = 160
+  const BAR_H  = 160
+  const hasVar = months.some(mo => mo.varExpenses > 0)
   const maxVal = Math.max(1, ...months.flatMap(mo => [mo.income, mo.totalOut]))
 
   return (
@@ -116,6 +118,12 @@ function ProjChart({ months, banksInProj }) {
           <span className="w-3 h-3 rounded-sm" style={{ background: CREDIT_COLOR }}/>
           Pago tarjetas
         </span>
+        {hasVar && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm" style={{ background: VARIABLE_COLOR }}/>
+            Gastos variables
+          </span>
+        )}
       </div>
 
       {/* Bar chart */}
@@ -125,7 +133,6 @@ function ProjChart({ months, banksInProj }) {
           const outH = Math.max(Math.round((mo.totalOut / maxVal) * BAR_H), mo.totalOut > 0 ? 4 : 0)
           const isNeg = mo.net < 0
 
-          // Per-bank stacking from bottom
           let stackBottom = 0
           const bankSegs = banksInProj.map(b => {
             const amt = mo.byBank[b.id] || 0
@@ -136,50 +143,48 @@ function ProjChart({ months, banksInProj }) {
           })
           const recPct    = mo.totalOut > 0 ? (mo.recurring     / mo.totalOut * 100) : 0
           const recBottom = stackBottom
+          stackBottom += recPct
           const credPct    = mo.totalOut > 0 ? (mo.creditContado / mo.totalOut * 100) : 0
-          const credBottom = recBottom + recPct
+          const credBottom = stackBottom
+          stackBottom += credPct
+          const varPct    = mo.totalOut > 0 ? (mo.varExpenses   / mo.totalOut * 100) : 0
+          const varBottom = stackBottom
 
           return (
             <div key={mo.key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-              {/* Net label */}
               <div className={`text-[9px] font-mono tabular-nums text-center leading-tight ${isNeg ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}`}>
                 {mo.net >= 0 ? '+' : ''}{fmtCLPshort(mo.net)}
               </div>
 
-              {/* Bars side by side */}
               <div className="w-full flex gap-0.5 items-end" style={{ height: BAR_H + 'px' }}>
-                {/* Income bar */}
                 <div className="flex-1 rounded-t-[3px] transition-all"
                   style={{ height: incH + 'px', background: INCOME_COLOR }}/>
 
-                {/* Outflow stacked bar */}
                 <div className="flex-1 rounded-t-[3px] overflow-hidden relative transition-all"
                   style={{ height: outH + 'px' }}>
                   {bankSegs.map(seg => seg.pct > 0 ? (
                     <div key={seg.id} className="absolute left-0 right-0" style={{
-                      bottom: seg.bottom + '%',
-                      height: seg.pct + '%',
-                      background: seg.color,
+                      bottom: seg.bottom + '%', height: seg.pct + '%', background: seg.color,
                     }}/>
                   ) : null)}
                   {mo.recurring > 0 && (
                     <div className="absolute left-0 right-0" style={{
-                      bottom: recBottom + '%',
-                      height: recPct + '%',
-                      background: RECURRING_COLOR,
+                      bottom: recBottom + '%', height: recPct + '%', background: RECURRING_COLOR,
                     }}/>
                   )}
                   {mo.creditContado > 0 && (
                     <div className="absolute left-0 right-0" style={{
-                      bottom: credBottom + '%',
-                      height: credPct + '%',
-                      background: CREDIT_COLOR,
+                      bottom: credBottom + '%', height: credPct + '%', background: CREDIT_COLOR,
+                    }}/>
+                  )}
+                  {mo.varExpenses > 0 && (
+                    <div className="absolute left-0 right-0" style={{
+                      bottom: varBottom + '%', height: varPct + '%', background: VARIABLE_COLOR,
                     }}/>
                   )}
                 </div>
               </div>
 
-              {/* Month label */}
               <div className="text-[10px] text-[var(--muted)] leading-tight">{MES[mo.m].slice(0, 3)}</div>
               <div className="text-[9px] text-[var(--muted)] font-mono leading-tight">{mo.y}</div>
             </div>
@@ -191,8 +196,18 @@ function ProjChart({ months, banksInProj }) {
       <div className="mt-3 pt-3 border-t border-[var(--line)] flex gap-2 md:gap-3">
         {months.map(mo => (
           <div key={mo.key} className="flex-1 text-center">
-            <div className="text-[9px] text-[var(--muted)] mb-0.5">Saldo</div>
-            <div className={`text-[10px] font-mono tabular-nums font-semibold ${mo.balanceEnd < 0 ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}`}
+            {mo.varExpenses > 0 && (
+              <div className="text-[9px] text-[var(--muted)] mb-0.5 leading-tight">sin var.</div>
+            )}
+            {mo.varExpenses > 0 && (
+              <div className={`text-[9px] font-mono tabular-nums ${mo.balanceEndCommitted < 0 ? 'text-[#A02828]' : 'text-[var(--muted)]'}`}>
+                {fmtCLPshort(mo.balanceEndCommitted)}
+              </div>
+            )}
+            <div className="text-[9px] text-[var(--muted)] mb-0.5 leading-tight mt-0.5">
+              {mo.varExpenses > 0 ? 'realista' : 'saldo'}
+            </div>
+            <div className={`text-[10px] font-mono tabular-nums font-semibold ${mo.balanceEnd < 0 ? 'text-[#A02828]' : ''}`}
               style={{ color: mo.balanceEnd >= 0 ? BALANCE_COLOR : undefined }}>
               {fmtCLPshort(mo.balanceEnd)}
             </div>
@@ -207,7 +222,7 @@ function ToggleGroup({ options, value, onChange }) {
   return (
     <div className="inline-flex rounded-lg border border-[var(--line)] overflow-hidden">
       {options.map(o => (
-        <button key={o.value} onClick={() => onChange(o.value)}
+        <button key={String(o.value)} onClick={() => onChange(o.value)}
           className={`px-3 py-1.5 text-[12px] transition ${value === o.value
             ? 'bg-[var(--ink)] text-[var(--bg)] font-medium'
             : 'bg-[var(--bg)] text-[var(--muted)] hover:bg-[var(--hover)]'}`}>
@@ -231,10 +246,11 @@ export default function Reports({
   const banks = useBanks()
   const today = new Date()
 
-  const [tab,            setTab]            = useState('historico')
-  const [horizon,        setHorizon]        = useState(6)
-  const [scenario,       setScenario]       = useState('sin_compras')
-  const [includeSavings, setIncludeSavings] = useState(false)
+  const [tab,             setTab]             = useState('historico')
+  const [horizon,         setHorizon]         = useState(6)
+  const [scenario,        setScenario]        = useState('solo_compromisos')
+  const [varExpensesInput, setVarExpensesInput] = useState('')
+  const [includeSavings,  setIncludeSavings]  = useState(false)
 
   // ── Histórico ─────────────────────────────────────────────────
   const monthly = Array.from({ length: 6 }, (_, i) => {
@@ -291,52 +307,63 @@ export default function Reports({
 
   // ── Proyección ────────────────────────────────────────────────
 
-  // Banks that appear in active installment debts
   const banksInProj = useMemo(() => {
     const active = installmentDebts.filter(d => d.status === 'active')
     const ids = [...new Set(active.map(d => d.bank || '__otros__'))]
     return ids.map(id => {
       const b = banks.find(x => x.id === id)
-      return {
-        id,
-        label: b?.label || (id === '__otros__' ? 'Otros' : id),
-        color: b?.color || '#888888',
-      }
+      return { id, label: b?.label || (id === '__otros__' ? 'Otros' : id), color: b?.color || '#888888' }
     })
   }, [installmentDebts, banks])
+
+  // Scenario → service params
+  const scenarioServiceParams = useMemo(() => ({
+    solo_compromisos:   { varExpensesAmount: 0,                           useHistoricalVar: false },
+    realista:           { varExpensesAmount: Number(varExpensesInput) || 0, useHistoricalVar: false },
+    promedio_historico: { varExpensesAmount: 0,                           useHistoricalVar: true  },
+  }[scenario] ?? {}), [scenario, varExpensesInput])
 
   const projBase = {
     accounts, installmentDebts, recurringList, incomeList, expenses,
     horizonMonths: horizon,
-    withHistoricalAvg: scenario === 'con_promedio',
+    withHistoricalAvg: false,
+    ...scenarioServiceParams,
   }
 
   const proj = useMemo(
     () => buildMonthlyProjection({ ...projBase, includeSavingsBalance: false }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario]
+    [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario, varExpensesInput]
   )
 
   const projWithSavings = useMemo(
     () => buildMonthlyProjection({ ...projBase, includeSavingsBalance: true }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario]
+    [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario, varExpensesInput]
   )
 
   const hasSavingsAccounts = accounts.some(a => a.active && a.type === 'ahorro')
   const activeProjData     = includeSavings && hasSavingsAccounts ? projWithSavings : proj
+  const hasVar             = activeProjData.monthlyVarExpenses > 0
 
   const noIncome   = proj.monthlyIncome === 0
   const noAccounts = accounts.filter(a => a.active).length === 0
-  const finalIsNeg = activeProjData.finalBalance < 0
-  const balColor   = finalIsNeg ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'
 
-  // Banks that actually have installments in the projection horizon
   const activeBanksInProj = useMemo(() => {
     return banksInProj.filter(b =>
       activeProjData.months.some(mo => (mo.byBank[b.id] || 0) > 0)
     )
   }, [banksInProj, activeProjData.months])
+
+  // KPI colors
+  const committedColor = activeProjData.finalBalanceCommitted < 0 ? 'text-[#A02828]' : 'text-[var(--ink-2)]'
+  const realistColor   = activeProjData.finalBalance < 0           ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'
+
+  const SCENARIO_DESC = {
+    solo_compromisos:   'Considera solo cuotas, tarjetas y gastos fijos comprometidos. Optimista por diseño — no incluye ningún gasto variable.',
+    realista:           'Agrega un gasto variable mensual estimado (supermercado, bencina, salidas, farmacia, etc.) para ver un escenario más real.',
+    promedio_historico: 'Usa el promedio real de tus gastos de los últimos 3 meses (excluye compras en cuotas). La proyección más cercana a tu comportamiento habitual.',
+  }
 
   if (expenses.length === 0 && tab === 'historico') {
     return (
@@ -392,7 +419,6 @@ export default function Reports({
                 <Stat label="Este mes" value={fmtCLP(thisMonthTotal)} accent/>
               </div>
             </div>
-
             <div className="mt-7 grid grid-cols-6 gap-3 md:gap-5 h-[240px] items-end">
               {monthly.map((m, i) => {
                 const h = monthlyMax > 0 ? (m.total / monthlyMax) * 100 : 0
@@ -427,7 +453,6 @@ export default function Reports({
                 </div>
                 <Badge tone="muted">{catArr.length} cat</Badge>
               </div>
-
               {catArr.length > 0 ? (
                 <>
                   <div className="mt-5 flex items-center gap-6 flex-wrap">
@@ -461,13 +486,11 @@ export default function Reports({
                   <div className="mt-1 font-semibold tracking-tight">{fmtCLP(methodTotal)}</div>
                 </div>
               </div>
-
               <div className="mt-4 grid grid-cols-3 gap-2.5">
                 <MethodCard label="Crédito"  value={byMethod.credito}  total={methodTotal} icon="card" color="var(--ink)"/>
                 <MethodCard label="Débito"   value={byMethod.debito}   total={methodTotal} icon="card" color="var(--accent)"/>
                 <MethodCard label="Efectivo" value={byMethod.efectivo} total={methodTotal} icon="cash" color="#C9A227"/>
               </div>
-
               <div className="mt-6 pt-5 border-t border-[var(--line)]">
                 <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)] mb-3">Por banco / tarjeta</div>
                 <div className="flex flex-col gap-3">
@@ -525,13 +548,31 @@ export default function Reports({
                 <span className="text-[12px] text-[var(--muted)]">Escenario:</span>
                 <ToggleGroup
                   options={[
-                    { value: 'sin_compras', label: 'Sin compras nuevas' },
-                    { value: 'con_promedio', label: 'Con promedio histórico' },
+                    { value: 'solo_compromisos',   label: 'Solo compromisos' },
+                    { value: 'realista',            label: 'Realista' },
+                    { value: 'promedio_historico',  label: 'Promedio histórico' },
                   ]}
                   value={scenario}
                   onChange={setScenario}
                 />
               </div>
+              {scenario === 'realista' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] text-[var(--muted)]">Gasto variable/mes:</span>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--muted)] pointer-events-none">$</span>
+                    <input
+                      type="number" min="0" placeholder="ej. 600000"
+                      value={varExpensesInput}
+                      onChange={e => setVarExpensesInput(e.target.value)}
+                      className="h-8 pl-6 pr-3 w-36 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg text-[12px] font-mono focus:outline-none focus:border-[var(--ink)]"
+                    />
+                  </div>
+                  {varExpensesInput && Number(varExpensesInput) > 0 && (
+                    <span className="text-[11px] text-[var(--muted)]">{fmtCLPshort(Number(varExpensesInput))}/mes</span>
+                  )}
+                </div>
+              )}
               {hasSavingsAccounts && (
                 <div className="flex items-center gap-2">
                   <span className="text-[12px] text-[var(--muted)]">Ahorro:</span>
@@ -546,10 +587,10 @@ export default function Reports({
                 </div>
               )}
             </div>
-            <div className="mt-2 text-[11px] text-[var(--muted)]">
-              {scenario === 'sin_compras'
-                ? 'Proyección conservadora: solo cuotas y gastos fijos comprometidos.'
-                : 'Incluye el promedio de compras con crédito contado de los últimos 3 meses.'}
+            {/* Scenario description */}
+            <div className="mt-2.5 flex items-start gap-2 text-[11px] text-[var(--muted)]">
+              <Icon name="info" size={12} className="mt-0.5 shrink-0"/>
+              <span>{SCENARIO_DESC[scenario]}</span>
             </div>
           </Card>
 
@@ -572,34 +613,48 @@ export default function Reports({
               </div>
             </div>
           )}
+          {scenario === 'realista' && !varExpensesInput && (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-[var(--line)] text-[12.5px] text-[var(--muted)]">
+              <Icon name="alert" size={14} className="mt-0.5 shrink-0"/>
+              <span>Ingresa un gasto variable mensual estimado (supermercado, bencina, comida, salidas…) para ver el escenario realista.</span>
+            </div>
+          )}
 
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <ProjKPI
-              label={`Saldo proyectado (${horizon}m)`}
-              value={fmtCLP(activeProjData.finalBalance)}
-              sub={noAccounts ? 'sin cuentas configuradas' : `desde ${fmtCLPshort(activeProjData.initialBalance)}`}
-              color={balColor}
+              label="Sin gastos variables"
+              value={fmtCLP(activeProjData.finalBalanceCommitted)}
+              sub={noAccounts ? 'sin cuentas configuradas' : `desde ${fmtCLPshort(activeProjData.initialBalance)} · solo compromisos`}
+              color={committedColor}
             />
             <ProjKPI
-              label="Total compromisos"
+              label="Saldo realista"
+              value={hasVar ? fmtCLP(activeProjData.finalBalance) : '—'}
+              sub={hasVar
+                ? `−${fmtCLPshort(activeProjData.monthlyVarExpenses)}/mes en variables`
+                : scenario === 'realista'
+                  ? 'Ingresa un monto variable arriba'
+                  : 'Usa escenario Realista o Promedio histórico'}
+              color={realistColor}
+              dim={!hasVar}
+            />
+            <ProjKPI
+              label="Compromisos conocidos"
               value={fmtCLP(activeProjData.totalCommitted)}
               sub={`${horizon} meses de cuotas + fijos`}
             />
             <ProjKPI
-              label="Mes más pesado"
-              value={activeProjData.heaviestMonth?.key ? fmtCLP(activeProjData.heaviestMonth.totalOut) : '—'}
-              sub={activeProjData.heaviestMonth?.key
-                ? `${MES[activeProjData.heaviestMonth.m]} ${activeProjData.heaviestMonth.y}`
-                : 'sin compromisos'}
-            />
-            <ProjKPI
-              label="Neto mensual est."
-              value={proj.monthlyIncome > 0 ? fmtCLP(proj.monthlyIncome - proj.monthlyRecurring) : '—'}
+              label="Libre antes de gastos variables"
+              value={proj.monthlyIncome > 0
+                ? fmtCLP(proj.monthlyIncome - proj.monthlyRecurring - (activeProjData.months[0]?.installments ?? 0))
+                : '—'}
               sub={proj.monthlyIncome > 0
-                ? `${fmtCLPshort(proj.monthlyIncome)} ing. – ${fmtCLPshort(proj.monthlyRecurring)} fijos`
+                ? `${fmtCLPshort(proj.monthlyIncome)} ing. − fijos − cuotas`
                 : 'configura tus ingresos'}
-              color={proj.monthlyIncome > 0 && (proj.monthlyIncome - proj.monthlyRecurring) < 0 ? 'text-[#A02828]' : 'text-[var(--ink-2)]'}
+              color={proj.monthlyIncome > 0 &&
+                (proj.monthlyIncome - proj.monthlyRecurring - (activeProjData.months[0]?.installments ?? 0)) < 0
+                  ? 'text-[#A02828]' : 'text-[var(--ink-2)]'}
             />
           </div>
 
@@ -613,17 +668,28 @@ export default function Reports({
                 color="text-[var(--accent-ink)]"
               />
               <ProjKPI
-                label={`Saldo sin ahorro (${horizon}m)`}
-                value={fmtCLP(proj.finalBalance)}
+                label={`Sin ahorro (${horizon}m)`}
+                value={fmtCLP(hasVar ? proj.finalBalance : proj.finalBalanceCommitted)}
                 sub="solo cuentas operativas"
-                color={proj.finalBalance < 0 ? 'text-[#A02828]' : 'text-[var(--ink-2)]'}
+                color={(hasVar ? proj.finalBalance : proj.finalBalanceCommitted) < 0 ? 'text-[#A02828]' : 'text-[var(--ink-2)]'}
               />
               <ProjKPI
-                label={`Saldo con ahorro (${horizon}m)`}
-                value={fmtCLP(projWithSavings.finalBalance)}
+                label={`Con ahorro (${horizon}m)`}
+                value={fmtCLP(hasVar ? projWithSavings.finalBalance : projWithSavings.finalBalanceCommitted)}
                 sub="operativas + ahorro actual"
-                color={projWithSavings.finalBalance < 0 ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}
+                color={(hasVar ? projWithSavings.finalBalance : projWithSavings.finalBalanceCommitted) < 0 ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}
               />
+            </div>
+          )}
+
+          {/* Heaviest month callout — only when var expenses change the picture */}
+          {hasVar && activeProjData.heaviestMonth?.key && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-[var(--line)] bg-[var(--bg-elev)] text-[12.5px]">
+              <Icon name="alert" size={14} className="text-[var(--muted)] shrink-0"/>
+              <span className="text-[var(--muted)]">Mes más pesado:</span>
+              <span className="font-medium">{MES[activeProjData.heaviestMonth.m]} {activeProjData.heaviestMonth.y}</span>
+              <span className="font-mono tabular-nums text-[var(--ink-2)]">{fmtCLP(activeProjData.heaviestMonth.totalOut)}</span>
+              <span className="text-[var(--muted)]">en egresos</span>
             </div>
           )}
 
@@ -638,6 +704,12 @@ export default function Reports({
                 <span>Saldo inicial: <span className="font-mono text-[var(--ink-2)]">{fmtCLPshort(activeProjData.initialBalance)}</span></span>
                 {proj.savingsBalance > 0 && (
                   <span>Ahorro: <span className="font-mono text-[var(--accent-ink)]">{fmtCLPshort(proj.savingsBalance)}</span></span>
+                )}
+                {hasVar && (
+                  <span className="inline-flex items-center gap-1" style={{ color: VARIABLE_COLOR }}>
+                    <span className="w-2 h-2 rounded-sm inline-block" style={{ background: VARIABLE_COLOR }}/>
+                    Variables: {fmtCLPshort(activeProjData.monthlyVarExpenses)}/mes
+                  </span>
                 )}
               </div>
             </div>
@@ -664,8 +736,10 @@ export default function Reports({
                       'Mes', 'Saldo inicio', 'Ingresos',
                       ...activeBanksInProj.map(b => b.label),
                       'Recurrentes',
-                      scenario === 'con_promedio' ? 'Pago tarjetas' : null,
-                      'Total egresos', 'Neto', 'Saldo final',
+                      hasVar ? 'Gastos var.' : null,
+                      'Total egresos',
+                      hasVar ? 'Saldo sin var.' : null,
+                      hasVar ? 'Saldo realista' : 'Saldo final',
                     ].filter(Boolean).map(h => (
                       <th key={h} className="px-4 py-2.5 text-left font-medium text-[var(--muted)] uppercase tracking-[0.08em] text-[10px] whitespace-nowrap">
                         {h}
@@ -674,48 +748,38 @@ export default function Reports({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--line)]">
-                  {activeProjData.months.map(mo => {
-                    const isNeg = mo.net < 0
-                    return (
-                      <tr key={mo.key} className="hover:bg-[var(--hover)]">
-                        <td className="px-4 py-2.5 font-medium whitespace-nowrap">
-                          {MES[mo.m]} {mo.y}
-                        </td>
-                        <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--ink-2)]">
-                          {fmtCLPshort(mo.balanceStart)}
-                        </td>
-                        <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--accent-ink)]">
-                          {mo.income > 0 ? fmtCLPshort(mo.income) : '—'}
-                        </td>
-                        {activeBanksInProj.map(b => {
-                          const amt = mo.byBank[b.id] || 0
-                          return (
-                            <td key={b.id} className="px-4 py-2.5 font-mono tabular-nums"
-                              style={{ color: amt > 0 ? b.color : undefined }}>
-                              {amt > 0 ? fmtCLPshort(amt) : '—'}
-                            </td>
-                          )
-                        })}
-                        <td className="px-4 py-2.5 font-mono tabular-nums">
-                          {mo.recurring > 0 ? fmtCLPshort(mo.recurring) : '—'}
-                        </td>
-                        {scenario === 'con_promedio' && (
-                          <td className="px-4 py-2.5 font-mono tabular-nums" style={{ color: CREDIT_COLOR }}>
-                            {mo.creditContado > 0 ? fmtCLPshort(mo.creditContado) : '—'}
+                  {activeProjData.months.map(mo => (
+                    <tr key={mo.key} className="hover:bg-[var(--hover)]">
+                      <td className="px-4 py-2.5 font-medium whitespace-nowrap">{MES[mo.m]} {mo.y}</td>
+                      <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--ink-2)]">{fmtCLPshort(mo.balanceStart)}</td>
+                      <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--accent-ink)]">{mo.income > 0 ? fmtCLPshort(mo.income) : '—'}</td>
+                      {activeBanksInProj.map(b => {
+                        const amt = mo.byBank[b.id] || 0
+                        return (
+                          <td key={b.id} className="px-4 py-2.5 font-mono tabular-nums"
+                            style={{ color: amt > 0 ? b.color : undefined }}>
+                            {amt > 0 ? fmtCLPshort(amt) : '—'}
                           </td>
-                        )}
-                        <td className="px-4 py-2.5 font-mono tabular-nums">
-                          {fmtCLPshort(mo.totalOut)}
+                        )
+                      })}
+                      <td className="px-4 py-2.5 font-mono tabular-nums">{mo.recurring > 0 ? fmtCLPshort(mo.recurring) : '—'}</td>
+                      {hasVar && (
+                        <td className="px-4 py-2.5 font-mono tabular-nums" style={{ color: VARIABLE_COLOR }}>
+                          {fmtCLPshort(mo.varExpenses)}
                         </td>
-                        <td className={`px-4 py-2.5 font-mono tabular-nums font-semibold ${isNeg ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}`}>
-                          {mo.net >= 0 ? '+' : ''}{fmtCLPshort(mo.net)}
+                      )}
+                      <td className="px-4 py-2.5 font-mono tabular-nums">{fmtCLPshort(mo.totalOut)}</td>
+                      {hasVar && (
+                        <td className={`px-4 py-2.5 font-mono tabular-nums ${mo.balanceEndCommitted < 0 ? 'text-[#A02828]' : 'text-[var(--muted)]'}`}>
+                          {fmtCLPshort(mo.balanceEndCommitted)}
                         </td>
-                        <td className={`px-4 py-2.5 font-mono tabular-nums font-semibold ${mo.balanceEnd < 0 ? 'text-[#A02828]' : ''}`}>
-                          {fmtCLPshort(mo.balanceEnd)}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                      )}
+                      <td className={`px-4 py-2.5 font-mono tabular-nums font-semibold ${mo.balanceEnd < 0 ? 'text-[#A02828]' : ''}`}
+                        style={{ color: mo.balanceEnd >= 0 ? BALANCE_COLOR : undefined }}>
+                        {fmtCLPshort(mo.balanceEnd)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
                 {activeProjData.months.length > 0 && (
                   <tfoot>
@@ -728,8 +792,7 @@ export default function Reports({
                       {activeBanksInProj.map(b => {
                         const total = activeProjData.months.reduce((s, m) => s + (m.byBank[b.id] || 0), 0)
                         return (
-                          <td key={b.id} className="px-4 py-2.5 font-mono font-semibold tabular-nums"
-                            style={{ color: b.color }}>
+                          <td key={b.id} className="px-4 py-2.5 font-mono font-semibold tabular-nums" style={{ color: b.color }}>
                             {fmtCLPshort(total)}
                           </td>
                         )
@@ -737,18 +800,21 @@ export default function Reports({
                       <td className="px-4 py-2.5 font-mono font-semibold tabular-nums">
                         {fmtCLPshort(activeProjData.months.reduce((s, m) => s + m.recurring, 0))}
                       </td>
-                      {scenario === 'con_promedio' && (
-                        <td className="px-4 py-2.5 font-mono font-semibold tabular-nums" style={{ color: CREDIT_COLOR }}>
-                          {fmtCLPshort(activeProjData.months.reduce((s, m) => s + m.creditContado, 0))}
+                      {hasVar && (
+                        <td className="px-4 py-2.5 font-mono font-semibold tabular-nums" style={{ color: VARIABLE_COLOR }}>
+                          {fmtCLPshort(activeProjData.months.reduce((s, m) => s + m.varExpenses, 0))}
                         </td>
                       )}
                       <td className="px-4 py-2.5 font-mono font-semibold tabular-nums">
-                        {fmtCLPshort(activeProjData.totalCommitted)}
+                        {fmtCLPshort(activeProjData.months.reduce((s, m) => s + m.totalOut, 0))}
                       </td>
-                      <td className={`px-4 py-2.5 font-mono font-semibold tabular-nums ${activeProjData.totalNet < 0 ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}`}>
-                        {activeProjData.totalNet >= 0 ? '+' : ''}{fmtCLPshort(activeProjData.totalNet)}
-                      </td>
-                      <td className={`px-4 py-2.5 font-mono font-semibold tabular-nums ${activeProjData.finalBalance < 0 ? 'text-[#A02828]' : ''}`}>
+                      {hasVar && (
+                        <td className={`px-4 py-2.5 font-mono font-semibold tabular-nums ${activeProjData.finalBalanceCommitted < 0 ? 'text-[#A02828]' : 'text-[var(--muted)]'}`}>
+                          {fmtCLPshort(activeProjData.finalBalanceCommitted)}
+                        </td>
+                      )}
+                      <td className={`px-4 py-2.5 font-mono font-semibold tabular-nums ${activeProjData.finalBalance < 0 ? 'text-[#A02828]' : ''}`}
+                        style={{ color: activeProjData.finalBalance >= 0 ? BALANCE_COLOR : undefined }}>
                         {fmtCLPshort(activeProjData.finalBalance)}
                       </td>
                     </tr>
@@ -790,9 +856,7 @@ export default function Reports({
                       const rem = d.installments - d.paid
                       return (
                         <div key={d.id} className="flex items-center gap-2 text-[12.5px]">
-                          {b?.color && (
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: b.color }}/>
-                          )}
+                          {b?.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: b.color }}/>}
                           <span className="text-[var(--ink-2)] truncate flex-1">{d.description}</span>
                           <span className="text-[var(--muted)] text-[11px] shrink-0">{rem}c rem.</span>
                           <span className="font-mono tabular-nums shrink-0">{fmtCLP(d.monthlyAmount)}</span>

@@ -4,14 +4,16 @@
  */
 
 export function buildMonthlyProjection({
-  accounts             = [],
-  installmentDebts     = [],
-  recurringList        = [],
-  incomeList           = [],
-  expenses             = [],
-  horizonMonths        = 6,
-  withHistoricalAvg    = false,
+  accounts              = [],
+  installmentDebts      = [],
+  recurringList         = [],
+  incomeList            = [],
+  expenses              = [],
+  horizonMonths         = 6,
+  withHistoricalAvg     = false,   // legacy: promedio crédito contado
   includeSavingsBalance = false,
+  varExpensesAmount     = 0,       // gasto variable manual mensual
+  useHistoricalVar      = false,   // calcula promedio histórico de gastos variables
 } = {}) {
   const today = new Date()
 
@@ -31,15 +33,20 @@ export function buildMonthlyProjection({
     .filter(r => r.kind === 'expense' && r.active !== false)
     .reduce((s, r) => s + (r.amount || 0), 0)
 
+  // Legacy: promedio de crédito contado (no cuotas)
   const avgCreditContado = withHistoricalAvg
     ? _avgCreditContado(expenses, today)
     : 0
 
+  // Nuevo: promedio de todos los gastos variables (excluye cuotas)
+  const monthlyVar = useHistoricalVar
+    ? _avgVarExpenses(expenses, today)
+    : Math.round(Number(varExpensesAmount) || 0)
+
   const activeDebts = installmentDebts.filter(d => d.status === 'active')
 
-  let balance = includeSavingsBalance
-    ? initialBalance + savingsBalance
-    : initialBalance
+  let balance          = includeSavingsBalance ? initialBalance + savingsBalance : initialBalance
+  let balanceCommitted = balance  // tracks balance without variable expenses
 
   const months = []
 
@@ -49,33 +56,41 @@ export function buildMonthlyProjection({
     const m   = d.getMonth()
     const key = `${y}-${String(m + 1).padStart(2, '0')}`
 
-    const byBank  = _monthInstallmentsByBank(activeDebts, key)
-    const cuotas  = Object.values(byBank).reduce((s, v) => s + v, 0)
-    const totalOut = monthlyRecurring + cuotas + avgCreditContado
-    const net      = monthlyIncome - totalOut
+    const byBank             = _monthInstallmentsByBank(activeDebts, key)
+    const cuotas             = Object.values(byBank).reduce((s, v) => s + v, 0)
+    const totalOutCommitted  = monthlyRecurring + cuotas + avgCreditContado
+    const totalOut           = totalOutCommitted + monthlyVar
+    const netCommitted       = monthlyIncome - totalOutCommitted
+    const net                = monthlyIncome - totalOut
 
     months.push({
       key, y, m,
-      balanceStart:  balance,
-      income:        monthlyIncome,
-      installments:  cuotas,
+      balanceStart:        balance,
+      income:              monthlyIncome,
+      installments:        cuotas,
       byBank,
-      recurring:     monthlyRecurring,
-      creditContado: avgCreditContado,
+      recurring:           monthlyRecurring,
+      creditContado:       avgCreditContado,
+      varExpenses:         monthlyVar,
+      totalOutCommitted,
       totalOut,
+      netCommitted,
       net,
-      balanceEnd:    balance + net,
+      balanceEndCommitted: balanceCommitted + netCommitted,
+      balanceEnd:          balance + net,
     })
 
-    balance += net
+    balance          += net
+    balanceCommitted += netCommitted
   }
 
-  const totalCommitted = months.reduce((s, mo) => s + mo.totalOut, 0)
+  const totalCommitted = months.reduce((s, mo) => s + mo.totalOutCommitted, 0)
   const heaviestMonth  = months.reduce(
     (a, b) => b.totalOut > a.totalOut ? b : a,
     months[0] ?? { totalOut: 0, key: '' }
   )
-  const totalNet = months.reduce((s, mo) => s + mo.net, 0)
+  const totalNet          = months.reduce((s, mo) => s + mo.net, 0)
+  const totalNetCommitted = months.reduce((s, mo) => s + mo.netCommitted, 0)
 
   return {
     months,
@@ -83,14 +98,17 @@ export function buildMonthlyProjection({
     savingsBalance,
     monthlyIncome,
     monthlyRecurring,
+    monthlyVarExpenses:   monthlyVar,
     totalCommitted,
     heaviestMonth,
-    finalBalance: balance,
+    finalBalance:          balance,
+    finalBalanceCommitted: balanceCommitted,
     totalNet,
+    totalNetCommitted,
   }
 }
 
-// Returns installment amounts keyed by bankId for a given month
+// Installment amounts keyed by bankId for a given month
 function _monthInstallmentsByBank(activeDebts, monthKey) {
   const byBank = {}
   for (const d of activeDebts) {
@@ -106,6 +124,7 @@ function _monthInstallmentsByBank(activeDebts, monthKey) {
   return byBank
 }
 
+// Promedio de compras contado con tarjeta de crédito (últimos 3 meses) — legacy
 function _avgCreditContado(expenses, today) {
   let total = 0, count = 0
   for (let i = 1; i <= 3; i++) {
@@ -117,6 +136,25 @@ function _avgCreditContado(expenses, today) {
         const ed = new Date(e.date)
         return ed.getMonth() === m && ed.getFullYear() === y &&
                e.type === 'credito' && (e.installments ?? 1) <= 1
+      })
+      .reduce((s, e) => s + (e.amount || 0), 0)
+    if (amt > 0) { total += amt; count++ }
+  }
+  return count > 0 ? Math.round(total / count) : 0
+}
+
+// Promedio de todos los gastos variables (excluye cuotas) — últimos 3 meses
+function _avgVarExpenses(expenses, today) {
+  let total = 0, count = 0
+  for (let i = 1; i <= 3; i++) {
+    const d   = new Date(today.getFullYear(), today.getMonth() - i, 1)
+    const y   = d.getFullYear()
+    const m   = d.getMonth()
+    const amt = expenses
+      .filter(e => {
+        const ed = new Date(e.date)
+        return ed.getMonth() === m && ed.getFullYear() === y &&
+               (e.installments ?? 1) <= 1
       })
       .reduce((s, e) => s + (e.amount || 0), 0)
     if (amt > 0) { total += amt; count++ }
