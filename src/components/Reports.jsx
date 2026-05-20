@@ -233,6 +233,590 @@ function ToggleGroup({ options, value, onChange }) {
   )
 }
 
+// ─── Plan futuro tab ─────────────────────────────────────────────
+
+function BalanceLine({ months, minBalance }) {
+  if (!months.length) return null
+  const W = 560, H = 110, padT = 10, padB = 28, padX = 8
+  const vals = months.map(mo => mo.balanceEnd)
+  const maxV = Math.max(0, ...vals)
+  const minV = Math.min(0, ...vals)
+  const range = maxV - minV || 1
+  const iW = W - padX * 2
+  const iH = H - padT - padB
+  const toX = i => padX + (months.length > 1 ? (i / (months.length - 1)) * iW : iW / 2)
+  const toY = v => padT + (1 - (v - minV) / range) * iH
+  const pts = months.map((mo, i) => `${toX(i).toFixed(1)},${toY(mo.balanceEnd).toFixed(1)}`).join(' ')
+  const areaBase = toY(Math.max(minV, 0))
+  const areaPts = [`${toX(0)},${areaBase}`, ...months.map((mo, i) => `${toX(i).toFixed(1)},${toY(mo.balanceEnd).toFixed(1)}`), `${toX(months.length - 1)},${areaBase}`].join(' ')
+  const zeroY = toY(0)
+  const minBalY = minBalance > 0 && minBalance >= minV && minBalance <= maxV ? toY(minBalance) : null
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height: '110px' }}>
+      <polyline points={areaPts} fill="oklch(0.62 0.13 165 / 0.07)" stroke="none"/>
+      {zeroY > padT && zeroY < padT + iH && (
+        <line x1={padX} y1={zeroY} x2={W - padX} y2={zeroY} stroke="var(--line)" strokeWidth="1" strokeDasharray="3 3"/>
+      )}
+      {minBalY && (
+        <line x1={padX} y1={minBalY} x2={W - padX} y2={minBalY} stroke="#C9A227" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.7"/>
+      )}
+      <polyline points={pts} fill="none" stroke={INCOME_COLOR} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      {months.map((mo, i) => {
+        const neg = mo.balanceEnd < 0
+        const adj = !neg && minBalance > 0 && mo.balanceEnd < minBalance
+        return <circle key={i} cx={toX(i)} cy={toY(mo.balanceEnd)} r="3.5" fill={neg ? '#A02828' : adj ? '#C9A227' : INCOME_COLOR}/>
+      })}
+      {months.map((mo, i) => (
+        <text key={i} x={toX(i)} y={H - 5} textAnchor="middle" fill="var(--muted)" fontSize="9" fontFamily="ui-monospace,monospace">
+          {MES[mo.m].slice(0, 3)}
+        </text>
+      ))}
+    </svg>
+  )
+}
+
+function FlowBars({ months }) {
+  if (!months.length) return null
+  const BAR_H = 90
+  const maxVal = Math.max(1, ...months.flatMap(mo => [mo.income, mo.totalOut]))
+  return (
+    <div className="flex items-end gap-1" style={{ height: (BAR_H + 24) + 'px' }}>
+      {months.map(mo => {
+        const cuotas = Object.values(mo.byBank).reduce((s, v) => s + v, 0)
+        const incH = Math.max(mo.income > 0 ? 3 : 0, Math.round((mo.income / maxVal) * BAR_H))
+        const outH = Math.max(mo.totalOut > 0 ? 3 : 0, Math.round((mo.totalOut / maxVal) * BAR_H))
+        const cuotaPct = mo.totalOut > 0 ? (cuotas / mo.totalOut) * 100 : 0
+        const recPct   = mo.totalOut > 0 ? (mo.recurring / mo.totalOut) * 100 : 0
+        const varPct   = mo.totalOut > 0 ? (mo.varExpenses / mo.totalOut) * 100 : 0
+        return (
+          <div key={mo.key} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end">
+            <div className="w-full flex gap-[2px] items-end" style={{ height: BAR_H + 'px' }}>
+              <div className="flex-1 rounded-t-sm" style={{ height: incH + 'px', background: INCOME_COLOR }}/>
+              <div className="flex-1 rounded-t-sm overflow-hidden relative" style={{ height: outH + 'px', background: 'var(--line)' }}>
+                {cuotaPct > 0 && <div className="absolute inset-x-0 bottom-0" style={{ height: cuotaPct + '%', background: CREDIT_COLOR }}/>}
+                {recPct > 0 && <div className="absolute inset-x-0" style={{ bottom: cuotaPct + '%', height: recPct + '%', background: RECURRING_COLOR }}/>}
+                {varPct > 0 && <div className="absolute inset-x-0" style={{ bottom: (cuotaPct + recPct) + '%', height: varPct + '%', background: VARIABLE_COLOR }}/>}
+              </div>
+            </div>
+            <div className="text-[8px] text-[var(--muted)] leading-tight">{MES[mo.m].slice(0, 3)}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function MonthStrip({ months, minBalance }) {
+  if (!months.length) return null
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {months.map(mo => {
+        const st = mo.balanceEnd < 0 ? 'r' : minBalance > 0 && mo.balanceEnd < minBalance ? 'a' : 'c'
+        const bg = st === 'r' ? 'bg-[#A02828]/15' : st === 'a' ? 'bg-[var(--amber-soft)]' : 'bg-[var(--accent-soft)]'
+        const txt = st === 'r' ? 'text-[#A02828]' : st === 'a' ? 'text-[var(--amber-ink)]' : 'text-[var(--accent-ink)]'
+        return (
+          <div key={mo.key} title={`${MES[mo.m]} ${mo.y}: ${fmtCLP(mo.balanceEnd)}`}
+            className={`flex flex-col items-center gap-1 cursor-default`}>
+            <div className={`w-7 h-7 rounded-md ${bg} flex items-center justify-center`}>
+              <span className={`text-[9px] font-bold ${txt}`}>
+                {st === 'r' ? '!' : st === 'a' ? '~' : '✓'}
+              </span>
+            </div>
+            <span className="text-[8px] text-[var(--muted)]">{MES[mo.m].slice(0, 3)}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function SimPaymentRow({ label, installments, monthlyAdd, balAfter, verdict, isSelected }) {
+  const c = verdict === 'recomendado' ? 'text-[var(--accent-ink)]' : verdict === 'ajustado' ? 'text-[var(--amber-ink)]' : 'text-[#A02828]'
+  const bg = isSelected ? 'bg-[var(--hover)]' : ''
+  return (
+    <div className={`flex items-center gap-3 px-3 py-2 rounded-md text-[12.5px] ${bg}`}>
+      <span className="w-20 text-[var(--muted)] shrink-0">{label}</span>
+      <span className="w-24 font-mono text-[var(--ink-2)] shrink-0">
+        {installments > 1 ? `${fmtCLPshort(monthlyAdd)}/mes` : fmtCLPshort(monthlyAdd)}
+      </span>
+      <span className={`flex-1 font-mono font-semibold tabular-nums ${c}`}>{fmtCLP(balAfter)}</span>
+      <span className={`text-[11px] font-medium shrink-0 ${c}`}>
+        {verdict === 'recomendado' ? 'OK' : verdict === 'ajustado' ? 'Ajust.' : 'No'}
+      </span>
+    </div>
+  )
+}
+
+function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, expenses }) {
+  const [planVarInput, setPlanVarInput] = useState(
+    () => localStorage.getItem('g_plan_var') ?? ''
+  )
+  const [planMinBal, setPlanMinBal] = useState(
+    () => localStorage.getItem('g_plan_minbal') ?? ''
+  )
+  const [sim, setSim_] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('g_plan_sim') ?? '{}') } catch { return {} }
+  })
+
+  const setSim = (key, val) => {
+    setSim_(prev => {
+      const next = { ...prev, [key]: val }
+      localStorage.setItem('g_plan_sim', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const varAmount  = Math.round(Number(planVarInput) || 0)
+  const minBalance = Math.round(Number(planMinBal)  || 0)
+
+  const plan = useMemo(() => buildMonthlyProjection({
+    accounts, installmentDebts, recurringList, incomeList, expenses,
+    horizonMonths: 12,
+    varExpensesAmount: varAmount,
+  }), [accounts, installmentDebts, recurringList, incomeList, expenses, varAmount])
+
+  const months = plan.months
+
+  const lightest     = months.length > 0 ? months.reduce((a, b) => b.net > a.net ? b : a, months[0]) : null
+  const firstOver1M  = months.find(mo => mo.balanceEnd >= 1_000_000)
+  const firstOver15M = months.find(mo => mo.balanceEnd >= 1_500_000)
+
+  const readingText = useMemo(() => {
+    if (!months.length || !plan.monthlyIncome) return null
+    const intro = varAmount > 0
+      ? `Con un gasto variable de ${fmtCLPshort(varAmount)}/mes`
+      : 'Proyectando solo compromisos'
+    const heavy = plan.heaviestMonth?.key
+      ? `, tu mes más pesado es ${MES[plan.heaviestMonth.m]} ${plan.heaviestMonth.y}`
+      : ''
+    const light = lightest
+      ? `. El mes más cómodo es ${MES[lightest.m]} ${lightest.y} (${fmtCLPshort(lightest.balanceEnd)} al final)`
+      : ''
+    const milestone = firstOver15M
+      ? `. Superás $1.500.000 en ${MES[firstOver15M.m]} ${firstOver15M.y}`
+      : firstOver1M
+        ? `. Superás $1.000.000 en ${MES[firstOver1M.m]} ${firstOver1M.y}`
+        : '. No alcanzás $1.000.000 disponibles en los próximos 12 meses'
+    return intro + heavy + light + milestone + '.'
+  }, [months, plan.monthlyIncome, plan.heaviestMonth, varAmount, lightest, firstOver1M, firstOver15M])
+
+  const simInstallments = sim.payment === 'contado' ? 1 : Number(sim.payment) || 1
+  const simAmount       = Math.round(Number(sim.amount) || 0)
+  const simMonthlyAdd   = simAmount > 0 ? Math.round(simAmount / simInstallments) : 0
+  const simMonthOptions = months.map(mo => ({ value: mo.key, label: `${MES[mo.m]} ${mo.y}` }))
+
+  const _calcBalAfter = (targetIdx, installments, monthlyPmt) => {
+    let bal = plan.initialBalance
+    let balAfter = plan.initialBalance
+    months.forEach((mo, i) => {
+      const extra = (i >= targetIdx && i < targetIdx + installments) ? monthlyPmt : 0
+      bal += mo.net - extra
+      if (i === targetIdx + installments - 1) balAfter = bal
+      if (installments === 1 && i === targetIdx) balAfter = bal
+    })
+    return balAfter
+  }
+
+  const simResult = useMemo(() => {
+    if (!simAmount || !sim.month) return null
+    const targetIdx = months.findIndex(mo => mo.key === sim.month)
+    if (targetIdx < 0) return null
+    const threshold = minBalance > 0 ? minBalance : 0
+    const balAfter = _calcBalAfter(targetIdx, simInstallments, simMonthlyAdd)
+    let verdict = balAfter < 0 ? 'no_recomendado' : minBalance > 0 && balAfter < minBalance ? 'ajustado' : 'recomendado'
+
+    let bestMonth = null
+    if (verdict !== 'recomendado') {
+      for (let i = 0; i < months.length; i++) {
+        if (i + simInstallments > months.length) break
+        let testBal = plan.initialBalance, ok = true
+        months.forEach((mo, j) => {
+          const extra = (j >= i && j < i + simInstallments) ? simMonthlyAdd : 0
+          testBal += mo.net - extra
+          if (j >= i && j < i + simInstallments && testBal < threshold) ok = false
+        })
+        if (ok) { bestMonth = months[i]; break }
+      }
+    }
+    const targetMo = months.find(mo => mo.key === sim.month)
+    return { verdict, balAfter, bestMonth, targetMo }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim.month, sim.payment, simAmount, simInstallments, simMonthlyAdd, months, plan.initialBalance, minBalance])
+
+  const simComparisons = useMemo(() => {
+    if (!simAmount || !sim.month) return []
+    const targetIdx = months.findIndex(mo => mo.key === sim.month)
+    if (targetIdx < 0) return []
+    const threshold = minBalance > 0 ? minBalance : 0
+    return [
+      { label: 'Contado', installments: 1, payment: 'contado' },
+      { label: '3 cuotas', installments: 3, payment: '3' },
+      { label: '6 cuotas', installments: 6, payment: '6' },
+      { label: '12 cuotas', installments: 12, payment: '12' },
+    ].map(opt => {
+      const monthlyAdd = Math.round(simAmount / opt.installments)
+      const balAfter = _calcBalAfter(targetIdx, opt.installments, monthlyAdd)
+      const verdict = balAfter < 0 ? 'no_recomendado' : threshold > 0 && balAfter < threshold ? 'ajustado' : 'recomendado'
+      return { ...opt, monthlyAdd, balAfter, verdict }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simAmount, sim.month, months, plan.initialBalance, minBalance])
+
+  const inp = 'w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]'
+  const hasVar = varAmount > 0
+
+  return (
+    <div className="flex flex-col gap-5">
+
+      {/* ── Parámetros ── */}
+      <Card padding="p-4 md:p-5">
+        <div className="font-semibold tracking-tight mb-3">Parámetros del plan</div>
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="block">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">Gasto variable mensual</div>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--muted)] pointer-events-none">$</span>
+              <input type="number" min="0" placeholder="ej. 550000"
+                value={planVarInput}
+                onChange={e => setPlanVarInput(e.target.value)}
+                onBlur={() => localStorage.setItem('g_plan_var', planVarInput)}
+                className="h-8 pl-6 pr-3 w-36 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg text-[12px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            </div>
+            {varAmount > 0 && <div className="text-[10.5px] text-[var(--muted)] mt-1">{fmtCLPshort(varAmount)}/mes</div>}
+          </label>
+          <label className="block">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">Saldo mínimo de seguridad</div>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--muted)] pointer-events-none">$</span>
+              <input type="number" min="0" placeholder="ej. 200000"
+                value={planMinBal}
+                onChange={e => setPlanMinBal(e.target.value)}
+                onBlur={() => localStorage.setItem('g_plan_minbal', planMinBal)}
+                className="h-8 pl-6 pr-3 w-36 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg text-[12px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            </div>
+            {minBalance > 0 && <div className="text-[10.5px] text-[var(--muted)] mt-1">{fmtCLPshort(minBalance)} mínimo</div>}
+          </label>
+          <div className="text-[11px] text-[var(--muted)] max-w-[220px] leading-relaxed">
+            Guardados automáticamente en el navegador.
+          </div>
+        </div>
+      </Card>
+
+      {/* ── KPIs ── */}
+      {months.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          {[
+            {
+              label: 'Próximo mes',
+              value: fmtCLP(months[0].balanceEnd),
+              sub: `${MES[months[0].m]} ${months[0].y}`,
+              color: months[0].balanceEnd < 0 ? 'text-[#A02828]' : 'text-[var(--accent-ink)]',
+            },
+            {
+              label: 'Mes más pesado',
+              value: plan.heaviestMonth?.key ? `${MES[plan.heaviestMonth.m]} ${plan.heaviestMonth.y}` : '—',
+              sub: plan.heaviestMonth?.totalOut ? `${fmtCLPshort(plan.heaviestMonth.totalOut)} egresos` : '',
+              color: 'text-[var(--amber-ink)]',
+            },
+            {
+              label: 'Mes más cómodo',
+              value: lightest ? `${MES[lightest.m]} ${lightest.y}` : '—',
+              sub: lightest ? `${fmtCLPshort(lightest.balanceEnd)} al final` : '',
+              color: 'text-[var(--accent-ink)]',
+            },
+            {
+              label: 'Primer mes ≥ $1.000.000',
+              value: firstOver1M ? `${MES[firstOver1M.m]} ${firstOver1M.y}` : 'No alcanza',
+              sub: firstOver1M ? fmtCLPshort(firstOver1M.balanceEnd) : 'en 12 meses',
+              color: firstOver1M ? 'text-[var(--accent-ink)]' : 'text-[var(--muted)]',
+            },
+            {
+              label: 'Primer mes ≥ $1.500.000',
+              value: firstOver15M ? `${MES[firstOver15M.m]} ${firstOver15M.y}` : 'No alcanza',
+              sub: firstOver15M ? fmtCLPshort(firstOver15M.balanceEnd) : 'en 12 meses',
+              color: firstOver15M ? 'text-[var(--accent-ink)]' : 'text-[var(--muted)]',
+            },
+            {
+              label: 'Saldo final (12 meses)',
+              value: fmtCLP(plan.finalBalance),
+              sub: `desde ${fmtCLPshort(plan.initialBalance)} inicial`,
+              color: plan.finalBalance < 0 ? 'text-[#A02828]' : 'text-[var(--accent-ink)]',
+            },
+          ].map((k, i) => (
+            <Card key={i} padding="p-4">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{k.label}</div>
+              <div className={`mt-2 font-mono text-[20px] tracking-tight leading-none tabular-nums ${k.color}`}>{k.value}</div>
+              {k.sub && <div className="mt-1.5 text-[11px] text-[var(--muted)]">{k.sub}</div>}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── Gráficos ── */}
+      {months.length > 0 && (
+        <Card padding="p-5">
+          <div className="font-semibold tracking-tight mb-1">Evolución del saldo</div>
+          <div className="text-[11px] text-[var(--muted)] mb-4">
+            Saldo proyectado mes a mes
+            {minBalance > 0 && <> · <span style={{ color: '#C9A227' }}>— línea mínimo</span></>}
+          </div>
+          <BalanceLine months={months} minBalance={minBalance}/>
+
+          <div className="mt-6 pt-5 border-t border-[var(--line)]">
+            <div className="font-semibold tracking-tight mb-1">Ingresos vs egresos</div>
+            <div className="flex items-center gap-3 mb-4 flex-wrap text-[10.5px] text-[var(--muted)]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: INCOME_COLOR }}/>Ingresos
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: CREDIT_COLOR }}/>Cuotas
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: RECURRING_COLOR }}/>Recurrentes
+              </span>
+              {hasVar && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: VARIABLE_COLOR }}/>Variables
+                </span>
+              )}
+            </div>
+            <FlowBars months={months}/>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-[var(--line)]">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-3">Estado por mes</div>
+            <MonthStrip months={months} minBalance={minBalance}/>
+            <div className="flex items-center gap-4 mt-3 text-[10.5px] text-[var(--muted)]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-sm bg-[var(--accent-soft)] flex items-center justify-center text-[8px] font-bold text-[var(--accent-ink)]">✓</span> Cómodo
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-sm bg-[var(--amber-soft)] flex items-center justify-center text-[8px] font-bold text-[var(--amber-ink)]">~</span> Ajustado
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-sm bg-[#A02828]/15 flex items-center justify-center text-[8px] font-bold text-[#A02828]">!</span> Riesgo
+              </span>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Lectura automática ── */}
+      {readingText && (
+        <Card padding="p-4 md:p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-md bg-[var(--bg-elev)] border border-[var(--line)] grid place-items-center shrink-0 mt-0.5">
+              <Icon name="info" size={14}/>
+            </div>
+            <div>
+              <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Lectura automática</div>
+              <p className="text-[13.5px] leading-relaxed">{readingText}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Tabla mes a mes ── */}
+      <Card padding="p-0">
+        <div className="px-5 py-4 border-b border-[var(--line)]">
+          <div className="font-semibold tracking-tight">Saldo realista mes a mes</div>
+          <div className="text-[12px] text-[var(--muted)] mt-0.5">
+            12 meses · {varAmount > 0 ? `${fmtCLPshort(varAmount)}/mes en variables` : 'solo compromisos'}
+            {minBalance > 0 ? ` · mínimo ${fmtCLPshort(minBalance)}` : ''}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12.5px]">
+            <thead>
+              <tr className="border-b border-[var(--line)]">
+                {['Mes', 'Saldo inicial', 'Ingresos', 'Cuotas', 'Recurrentes', 'Variables', 'Saldo final', 'Estado'].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left font-medium text-[var(--muted)] uppercase tracking-[0.08em] text-[10px] whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--line)]">
+              {months.map(mo => {
+                const cuotas = Object.values(mo.byBank).reduce((s, v) => s + v, 0)
+                const st = mo.balanceEnd < 0 ? 'riesgo'
+                  : minBalance > 0 && mo.balanceEnd < minBalance ? 'ajustado'
+                  : 'comodo'
+                return (
+                  <tr key={mo.key} className="hover:bg-[var(--hover)]">
+                    <td className="px-4 py-2.5 font-medium whitespace-nowrap">{MES[mo.m]} {mo.y}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--ink-2)]">{fmtCLPshort(mo.balanceStart)}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--accent-ink)]">{mo.income > 0 ? fmtCLPshort(mo.income) : '—'}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums">{cuotas > 0 ? fmtCLPshort(cuotas) : '—'}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums">{mo.recurring > 0 ? fmtCLPshort(mo.recurring) : '—'}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums" style={{ color: mo.varExpenses > 0 ? VARIABLE_COLOR : undefined }}>
+                      {mo.varExpenses > 0 ? fmtCLPshort(mo.varExpenses) : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums font-semibold"
+                      style={{ color: mo.balanceEnd < 0 ? '#A02828' : BALANCE_COLOR }}>
+                      {fmtCLPshort(mo.balanceEnd)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {st === 'riesgo'
+                        ? <span className="px-2 py-0.5 rounded-md bg-[#A02828]/10 text-[#A02828] text-[10.5px] font-medium">Riesgo</span>
+                        : st === 'ajustado'
+                        ? <span className="px-2 py-0.5 rounded-md bg-[var(--amber-soft)] text-[var(--amber-ink)] text-[10.5px] font-medium">Ajustado</span>
+                        : <span className="px-2 py-0.5 rounded-md bg-[var(--accent-soft)] text-[var(--accent-ink)] text-[10.5px] font-medium">Cómodo</span>
+                      }
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          {months.length === 0 && (
+            <div className="px-5 py-8 text-center text-[13px] text-[var(--muted)]">
+              Sin datos suficientes. Configura cuentas e ingresos en Recurrentes.
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ── Simulador ── */}
+      <Card padding="p-5">
+        <div className="font-semibold tracking-tight mb-4">Simulador de proyecto futuro</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">Nombre del proyecto</div>
+            <input type="text" placeholder="ej. Notebook, Viaje, Moto…"
+              value={sim.name || ''}
+              onChange={e => setSim('name', e.target.value)}
+              className={inp}/>
+          </label>
+          <label className="block">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">Monto total</div>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--muted)] pointer-events-none">$</span>
+              <input type="number" min="0" placeholder="ej. 1200000"
+                value={sim.amount || ''}
+                onChange={e => setSim('amount', e.target.value)}
+                className="w-full h-9 pl-6 pr-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            </div>
+          </label>
+          <label className="block">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">Mes objetivo</div>
+            <select value={sim.month || ''} onChange={e => setSim('month', e.target.value)} className={inp}>
+              <option value="">Seleccionar mes…</option>
+              {simMonthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">Forma de pago</div>
+            <ToggleGroup
+              options={[
+                { value: 'contado', label: 'Contado' },
+                { value: '3',  label: '3c' },
+                { value: '6',  label: '6c' },
+                { value: '12', label: '12c' },
+              ]}
+              value={sim.payment || 'contado'}
+              onChange={v => setSim('payment', v)}
+            />
+            {simAmount > 0 && simInstallments > 1 && (
+              <div className="text-[10.5px] text-[var(--muted)] mt-1.5">
+                {simInstallments} cuotas de {fmtCLP(simMonthlyAdd)}/mes
+              </div>
+            )}
+          </label>
+        </div>
+
+        {/* Resultado del simulador */}
+        {simResult && (
+          <div className="mt-5 flex flex-col gap-3">
+            {/* Veredicto principal */}
+            <div className={`p-4 rounded-xl border-2 ${
+              simResult.verdict === 'recomendado' ? 'bg-[var(--accent-soft)] border-[var(--accent-soft)]'
+              : simResult.verdict === 'ajustado'  ? 'bg-[var(--amber-soft)] border-[var(--amber-soft)]'
+              : 'bg-[#A02828]/8 border-[#A02828]/20'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-lg grid place-items-center text-[18px] shrink-0 ${
+                  simResult.verdict === 'recomendado' ? 'bg-[var(--accent-ink)]/15'
+                  : simResult.verdict === 'ajustado'  ? 'bg-[var(--amber-ink)]/15'
+                  : 'bg-[#A02828]/15'
+                }`}>
+                  {simResult.verdict === 'recomendado' ? '✓' : simResult.verdict === 'ajustado' ? '~' : '✗'}
+                </div>
+                <div>
+                  <div className={`font-bold text-[16px] tracking-tight ${
+                    simResult.verdict === 'recomendado' ? 'text-[var(--accent-ink)]'
+                    : simResult.verdict === 'ajustado'  ? 'text-[var(--amber-ink)]'
+                    : 'text-[#A02828]'
+                  }`}>
+                    {simResult.verdict === 'recomendado' ? 'Recomendado'
+                     : simResult.verdict === 'ajustado'  ? 'Ajustado — bajo mínimo'
+                     : 'No recomendado'}
+                  </div>
+                  <div className="text-[12px] text-[var(--muted)] mt-0.5">
+                    {sim.name ? `"${sim.name}" · ` : ''}{fmtCLP(simAmount)}
+                    {simInstallments > 1 ? ` en ${simInstallments} cuotas de ${fmtCLP(simMonthlyAdd)}/mes` : ' contado'}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Saldo después del proyecto</div>
+                  <div className={`mt-1 font-mono text-[18px] font-semibold tabular-nums ${
+                    simResult.balAfter < 0 ? 'text-[#A02828]'
+                    : simResult.verdict === 'ajustado' ? 'text-[var(--amber-ink)]'
+                    : 'text-[var(--accent-ink)]'
+                  }`}>{fmtCLP(simResult.balAfter)}</div>
+                </div>
+                {simResult.bestMonth && simResult.verdict !== 'recomendado' && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Mejor mes sugerido</div>
+                    <div className="mt-1 font-semibold text-[15px]">{MES[simResult.bestMonth.m]} {simResult.bestMonth.y}</div>
+                  </div>
+                )}
+                {!simResult.bestMonth && simResult.verdict !== 'recomendado' && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Mejor mes sugerido</div>
+                    <div className="mt-1 text-[13px] text-[var(--muted)]">No hay mes viable en 12 meses</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Comparación de opciones de pago */}
+            {simComparisons.length > 0 && (
+              <div className="rounded-lg border border-[var(--line)] overflow-hidden">
+                <div className="px-3 py-2.5 border-b border-[var(--line)] bg-[var(--bg-elev)]">
+                  <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] font-medium">
+                    Comparación de formas de pago en {simResult.targetMo ? `${MES[simResult.targetMo.m]} ${simResult.targetMo.y}` : sim.month}
+                  </div>
+                </div>
+                <div className="divide-y divide-[var(--line)]">
+                  {simComparisons.map(opt => (
+                    <SimPaymentRow
+                      key={opt.payment}
+                      label={opt.label}
+                      installments={opt.installments}
+                      monthlyAdd={opt.monthlyAdd}
+                      balAfter={opt.balAfter}
+                      verdict={opt.verdict}
+                      isSelected={opt.payment === (sim.payment || 'contado')}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!simResult && (simAmount > 0 || sim.month) && (
+          <div className="mt-4 text-[12px] text-[var(--muted)]">
+            Completa el monto y el mes objetivo para ver el resultado.
+          </div>
+        )}
+      </Card>
+
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────
 
 export default function Reports({
@@ -369,7 +953,7 @@ export default function Reports({
     return (
       <div className="flex flex-col gap-5">
         <div className="flex border-b border-[var(--line)]">
-          {[['historico', 'Histórico'], ['proyeccion', 'Proyección']].map(([id, label]) => (
+          {[['historico', 'Histórico'], ['proyeccion', 'Proyección'], ['planfuturo', 'Plan futuro']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition
                 ${tab === id ? 'border-[var(--ink)] text-[var(--ink)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink-2)]'}`}>
@@ -395,7 +979,7 @@ export default function Reports({
 
       {/* ── Tab navigation ────────────────────────────────────── */}
       <div className="flex border-b border-[var(--line)]">
-        {[['historico', 'Histórico'], ['proyeccion', 'Proyección']].map(([id, label]) => (
+        {[['historico', 'Histórico'], ['proyeccion', 'Proyección'], ['planfuturo', 'Plan futuro']].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition
               ${tab === id ? 'border-[var(--ink)] text-[var(--ink)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink-2)]'}`}>
@@ -528,6 +1112,17 @@ export default function Reports({
             </div>
           </Card>
         </>
+      )}
+
+      {/* ── Plan futuro tab ───────────────────────────────────── */}
+      {tab === 'planfuturo' && (
+        <PlanFuturo
+          accounts={accounts}
+          installmentDebts={installmentDebts}
+          recurringList={recurringList}
+          incomeList={incomeList}
+          expenses={expenses}
+        />
       )}
 
       {/* ── Proyección tab ────────────────────────────────────── */}
@@ -824,7 +1419,7 @@ export default function Reports({
             </div>
           </Card>
 
-          {/* Breakdown cards */}
+          {/* ── Recurrentes / cuotas incluidas ── */}
           {(recurringList.filter(r => r.kind === 'expense' && r.active !== false).length > 0 ||
             installmentDebts.filter(d => d.status === 'active').length > 0) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
