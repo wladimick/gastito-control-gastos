@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Card, Badge, Select } from './ui'
+import { Card, Badge, Select, BankLogo } from './ui'
 import { Icon, fmtCLP, fmtCLPshort } from '../lib/helpers'
 import { useBanks } from '../services/banksService'
 
@@ -13,6 +13,14 @@ const TYPE_MAP = Object.fromEntries(ACCOUNT_TYPES.map(t => [t.id, t]))
 
 const BLANK_ACCOUNT = { name: '', type: 'debito', bankId: '', balance: '', active: true }
 const BLANK_CARD    = { name: '', bank: '', lastFour: '', billingDay: '', paymentDueDay: '', creditLimit: '' }
+
+const SHORT_MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+
+function monthDiff(startStr, toStr) {
+  const [sy, sm] = startStr.split('-').map(Number)
+  const [ty, tm] = toStr.split('-').map(Number)
+  return (ty - sy) * 12 + (tm - sm)
+}
 
 function Field({ label, hint, children }) {
   return (
@@ -137,59 +145,80 @@ function CreditCardForm({ initial, onSave, onCancel, banks }) {
 
 function CashflowTab({ accounts, creditCards, expenses, recurringList, installmentDebts }) {
   const today = new Date()
+  const banks = useBanks()
   const activeAccounts = accounts.filter(a => a.active)
   const totalAvailable = activeAccounts.reduce((s, a) => s + (a.balance ?? 0), 0)
 
-  // Tarjeta de crédito principal (primera activa) para parámetros del ciclo
-  const primaryCard = creditCards.find(c => c.isActive !== false)
-  const billingDay  = Number(primaryCard?.billingDay  ?? 20)
-  const paymentDay  = Number(primaryCard?.paymentDueDay ?? 5)
-
-  // Ciclo abierto: empieza el día SIGUIENTE al cierre (billingDay + 1)
-  const openCycleStart = today.getDate() > billingDay
-    ? new Date(today.getFullYear(), today.getMonth(), billingDay + 1)
-    : new Date(today.getFullYear(), today.getMonth() - 1, billingDay + 1)
-
-  // Si el día de facturación ya pasó, el ciclo anterior quedó cerrado/facturado
-  const billingJustHappened = today.getDate() > billingDay
-  const closedCycleStart = billingJustHappened
-    ? new Date(today.getFullYear(), today.getMonth() - 1, billingDay + 1)
-    : null
-
-  const billedCredit = closedCycleStart
-    ? (expenses ?? []).filter(e => {
-        const d = new Date(e.date)
-        return d >= closedCycleStart && d < openCycleStart && e.type === 'credito'
-      }).reduce((s, e) => s + e.amount, 0)
-    : 0
-
-  const unbilledCredit = (expenses ?? [])
-    .filter(e => new Date(e.date) >= openCycleStart && e.type === 'credito')
-    .reduce((s, e) => s + e.amount, 0)
-
-  const cycleCredit = billedCredit + unbilledCredit
-
-  // Próxima fecha de pago
-  let nextPayDate = new Date(today.getFullYear(), today.getMonth(), paymentDay)
-  if (nextPayDate <= today) nextPayDate = new Date(today.getFullYear(), today.getMonth() + 1, paymentDay)
-  const daysToPayment = Math.ceil((nextPayDate - today) / 86400000)
-
-  // Dinero comprometido (por pagar, como préstamos)
+  // Dinero comprometido (por pagar, préstamos personales)
   const pendingPayables = (recurringList ?? []).filter(r => r.active && r.kind === 'payable' && r.status !== 'paid')
   const pendingPayableTotal = pendingPayables.reduce((s, r) => s + r.amount, 0)
   const usableBalance = totalAvailable - pendingPayableTotal
 
-  // Compromisos fijos (solo gastos recurrentes, sin payables)
+  // Compromisos fijos: solo gastos recurrentes (sin payables)
   const recurringTotal = (recurringList ?? [])
     .filter(r => r.active && r.kind === 'expense')
     .reduce((s, r) => s + r.amount, 0)
-  const cuotasTotal = (installmentDebts ?? [])
-    .filter(d => d.status === 'active')
-    .reduce((s, d) => s + d.monthlyAmount, 0)
 
-  // Saldo libre parte del disponible usable
-  const totalCommitted = cycleCredit + recurringTotal + cuotasTotal
-  const freeBalance    = usableBalance - totalCommitted
+  // Cuotas activas para cálculo por tarjeta
+  const activeDebts = (installmentDebts ?? []).filter(d => d.status === 'active')
+
+  // Próximo pago por tarjeta — misma lógica que Dashboard
+  const cardNextPayments = creditCards.filter(c => c.isActive !== false).map(card => {
+    const bd = Number(card.billingDay ?? 20)
+    const pd = Number(card.paymentDueDay ?? 5)
+
+    let npMonth = today.getMonth()
+    let npYear  = today.getFullYear()
+    if (today.getDate() >= pd) {
+      npMonth++
+      if (npMonth > 11) { npMonth = 0; npYear++ }
+    }
+    const nextPayDate     = new Date(npYear, npMonth, pd)
+    const nextPayMonthStr = `${npYear}-${String(npMonth + 1).padStart(2, '0')}`
+
+    let bmMonth = npMonth - 1; let bmYear = npYear
+    if (bmMonth < 0) { bmMonth = 11; bmYear-- }
+    const cycleEnd = new Date(bmYear, bmMonth, bd)
+    let csMonth = bmMonth - 1; let csYear = bmYear
+    if (csMonth < 0) { csMonth = 11; csYear-- }
+    const cycleStart = new Date(csYear, csMonth, bd + 1)
+
+    const contadoAmount = (expenses ?? [])
+      .filter(e => {
+        if (e.type !== 'credito') return false
+        if (card.bank && e.bank !== card.bank) return false
+        if ((e.installments ?? 1) > 1) return false
+        const d = new Date(e.date)
+        return d >= cycleStart && d <= cycleEnd
+      })
+      .reduce((s, e) => s + (e.amount || 0), 0)
+
+    const cardCuotas = activeDebts.filter(d => {
+      if (card.bank && d.bank !== card.bank) return false
+      if (!d.startMonth) return false
+      const elapsed = monthDiff(d.startMonth, nextPayMonthStr)
+      return elapsed >= 0 && elapsed < d.installments
+    })
+    const cuotasAmount = cardCuotas.reduce((s, d) => s + (d.monthlyAmount || 0), 0)
+    const cuotasCount  = cardCuotas.length
+
+    // Ciclo actual acumulado (dato informativo secundario)
+    const openCycleStart = today.getDate() > bd
+      ? new Date(today.getFullYear(), today.getMonth(), bd + 1)
+      : new Date(today.getFullYear(), today.getMonth() - 1, bd + 1)
+    const cycleCredit = (expenses ?? [])
+      .filter(e => {
+        const d = new Date(e.date)
+        return d >= openCycleStart && e.type === 'credito' && (!card.bank || e.bank === card.bank)
+      })
+      .reduce((s, e) => s + e.amount, 0)
+
+    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount,
+             totalAmount: contadoAmount + cuotasAmount, cycleCredit }
+  })
+
+  const totalNextCardPayment = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
+  const freeBalance = usableBalance - totalNextCardPayment - recurringTotal
   const netColor = freeBalance >= 0 ? 'text-[var(--accent-ink)]' : 'text-[#A02828]'
 
   return (
@@ -215,23 +244,22 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
 
         <Card padding="p-4">
           <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] flex items-center gap-1.5">
-            <Icon name="card" size={12}/> Crédito ciclo actual
+            <Icon name="card" size={12}/> Próximo pago tarjetas
           </div>
-          <div className="mt-2 font-mono text-[22px] tracking-tight leading-none">{fmtCLP(cycleCredit)}</div>
+          <div className="mt-2 font-mono text-[22px] tracking-tight leading-none">{fmtCLP(totalNextCardPayment)}</div>
           <div className="mt-1.5 text-[11px] text-[var(--muted)]">
-            {billedCredit > 0 && <span className="text-[var(--amber-ink)]">{fmtCLPshort(billedCredit)} facturado · </span>}
-            pago en {daysToPayment}d
+            {cardNextPayments.length > 0
+              ? `${cardNextPayments.length} tarjeta${cardNextPayments.length !== 1 ? 's' : ''} · contado + cuotas`
+              : 'sin tarjetas activas'}
           </div>
         </Card>
 
         <Card padding="p-4">
           <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] flex items-center gap-1.5">
-            <Icon name="repeat" size={12}/> Compromisos fijos
+            <Icon name="repeat" size={12}/> Recurrentes fijos
           </div>
-          <div className="mt-2 font-mono text-[22px] tracking-tight leading-none">{fmtCLP(recurringTotal + cuotasTotal)}</div>
-          <div className="mt-1.5 text-[11px] text-[var(--muted)]">
-            {fmtCLPshort(recurringTotal)} rec. + {fmtCLPshort(cuotasTotal)} cuotas
-          </div>
+          <div className="mt-2 font-mono text-[22px] tracking-tight leading-none">{fmtCLP(recurringTotal)}</div>
+          <div className="mt-1.5 text-[11px] text-[var(--muted)]">gastos recurrentes activos</div>
         </Card>
 
         <Card padding="p-4">
@@ -245,7 +273,7 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
         </Card>
       </div>
 
-      {/* Desglose + tarjetas */}
+      {/* Desglose + próximo pago de tarjetas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card padding="p-5">
           <div className="font-semibold tracking-tight mb-4">Desglose</div>
@@ -255,40 +283,24 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
               <span className="font-mono text-[var(--accent-ink)]">{fmtCLP(totalAvailable)}</span>
             </div>
             {pendingPayableTotal > 0 && (
-              <div className="flex justify-between">
-                <span className="text-[var(--muted)]">— Dinero comprometido/por pagar</span>
-                <span className="font-mono text-[var(--amber-ink)]">{fmtCLP(pendingPayableTotal)}</span>
-              </div>
-            )}
-            {pendingPayableTotal > 0 && (
-              <div className="flex justify-between text-[12px] border-t border-[var(--line)] pt-1">
-                <span className="text-[var(--muted)] font-medium">= Disponible usable</span>
-                <span className="font-mono text-[var(--accent-ink)] font-medium">{fmtCLP(usableBalance)}</span>
-              </div>
+              <>
+                <div className="flex justify-between">
+                  <span className="text-[var(--muted)]">— Dinero comprometido/por pagar</span>
+                  <span className="font-mono text-[var(--amber-ink)]">{fmtCLP(pendingPayableTotal)}</span>
+                </div>
+                <div className="flex justify-between text-[12px] border-t border-[var(--line)] pt-1">
+                  <span className="text-[var(--muted)] font-medium">= Disponible usable</span>
+                  <span className="font-mono text-[var(--accent-ink)] font-medium">{fmtCLP(usableBalance)}</span>
+                </div>
+              </>
             )}
             <div className={`${pendingPayableTotal > 0 ? '' : 'border-t border-[var(--line)] pt-2'} flex justify-between`}>
-              <span className="text-[var(--muted)]">— Crédito ciclo actual</span>
-              <span className="font-mono">{fmtCLP(cycleCredit)}</span>
+              <span className="text-[var(--muted)]">— Próximo pago tarjetas</span>
+              <span className="font-mono">{fmtCLP(totalNextCardPayment)}</span>
             </div>
-            {billedCredit > 0 && (
-              <div className="flex justify-between pl-4 text-[12px]">
-                <span className="text-[var(--muted)]">Facturado (vence día {paymentDay})</span>
-                <span className="font-mono text-[var(--amber-ink)]">{fmtCLP(billedCredit)}</span>
-              </div>
-            )}
-            {unbilledCredit > 0 && (
-              <div className="flex justify-between pl-4 text-[12px]">
-                <span className="text-[var(--muted)]">Sin facturar aún</span>
-                <span className="font-mono">{fmtCLP(unbilledCredit)}</span>
-              </div>
-            )}
             <div className="flex justify-between">
               <span className="text-[var(--muted)]">— Gastos recurrentes/mes</span>
               <span className="font-mono">{fmtCLP(recurringTotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--muted)]">— Cuotas este mes</span>
-              <span className="font-mono">{fmtCLP(cuotasTotal)}</span>
             </div>
             <div className="border-t border-[var(--line)] pt-2.5 flex justify-between font-semibold">
               <span>Saldo libre estimado</span>
@@ -298,44 +310,54 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
         </Card>
 
         <Card padding="p-5">
-          <div className="font-semibold tracking-tight mb-4">Tarjetas de crédito — ciclo actual</div>
-          {creditCards.filter(c => c.isActive !== false).length === 0 ? (
+          <div className="font-semibold tracking-tight mb-4">Próximo pago de tarjetas</div>
+          {cardNextPayments.length === 0 ? (
             <div className="text-center py-4 text-[13px] text-[var(--muted)]">
               No hay tarjetas activas.{' '}
               <span className="underline cursor-pointer">Agrega una en la pestaña Tarjetas.</span>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {creditCards.filter(c => c.isActive !== false).map(card => {
-                const bd = Number(card.billingDay ?? 20)
-                const cs = today.getDate() > bd
-                  ? new Date(today.getFullYear(), today.getMonth(), bd + 1)
-                  : new Date(today.getFullYear(), today.getMonth() - 1, bd + 1)
-                const cardTotal = (expenses ?? [])
-                  .filter(e => {
-                    const d = new Date(e.date)
-                    return d >= cs && e.type === 'credito' &&
-                      (!card.bank || e.bank === card.bank)
-                  })
-                  .reduce((s, e) => s + e.amount, 0)
-                const lim = card.creditLimit ? Number(card.creditLimit) : null
-                const util = lim ? (cardTotal / lim) * 100 : null
+              {cardNextPayments.map(({ card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, totalAmount, cycleCredit }) => {
+                const bank   = banks.find(b => b.id === card.bank)
+                const payLbl = `${nextPayDate.getDate()} ${SHORT_MES[nextPayDate.getMonth()]}`
+                const lim    = card.creditLimit ? Number(card.creditLimit) : null
+                const util   = lim && lim > 0 ? (totalAmount / lim) * 100 : null
                 return (
                   <div key={card.id} className="p-3 rounded-lg border border-[var(--line)] bg-[var(--bg)]">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-[13px]">
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <BankLogo bank={bank} size="sm"/>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-[13px] truncate">
                           {card.name}
                           {card.lastFour && <span className="text-[var(--muted)] font-mono text-[11px] ml-1">···{card.lastFour}</span>}
                         </div>
-                        <div className="text-[11px] text-[var(--muted)] mt-0.5">
-                          Factura día {card.billingDay ?? '—'} · Paga día {card.paymentDueDay ?? '—'}
+                        <div className="text-[11px] text-[var(--muted)]">Pago el {payLbl}</div>
+                      </div>
+                      <div className="font-mono text-[14px] font-semibold shrink-0">{fmtCLP(totalAmount)}</div>
+                    </div>
+                    <div className="flex flex-col gap-1 pl-8">
+                      {contadoAmount > 0 && (
+                        <div className="flex justify-between text-[11.5px]">
+                          <span className="text-[var(--muted)]">Compras contado</span>
+                          <span className="font-mono">{fmtCLP(contadoAmount)}</span>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-mono text-[14px]">{fmtCLP(cardTotal)}</div>
-                        {lim && <div className="text-[11px] text-[var(--muted)]">de {fmtCLPshort(lim)}</div>}
-                      </div>
+                      )}
+                      {cuotasAmount > 0 && (
+                        <div className="flex justify-between text-[11.5px]">
+                          <span className="text-[var(--muted)]">Cuotas del mes · {cuotasCount} activa{cuotasCount !== 1 ? 's' : ''}</span>
+                          <span className="font-mono">{fmtCLP(cuotasAmount)}</span>
+                        </div>
+                      )}
+                      {contadoAmount === 0 && cuotasAmount === 0 && (
+                        <div className="text-[11.5px] text-[var(--muted)]">Sin movimientos facturados</div>
+                      )}
+                      {cycleCredit > 0 && (
+                        <div className="flex justify-between text-[10.5px] pt-0.5 border-t border-[var(--line)] text-[var(--muted)]">
+                          <span>Ciclo actual acumulado</span>
+                          <span className="font-mono">{fmtCLP(cycleCredit)}</span>
+                        </div>
+                      )}
                     </div>
                     {util !== null && (
                       <div className="mt-2">
@@ -345,12 +367,18 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
                             background: util > 80 ? '#A02828' : util > 60 ? 'var(--amber-ink)' : 'var(--accent)'
                           }}/>
                         </div>
-                        <div className="mt-1 text-[10.5px] text-[var(--muted)]">{util.toFixed(0)}% del límite usado</div>
+                        <div className="mt-1 text-[10.5px] text-[var(--muted)]">{util.toFixed(0)}% del límite</div>
                       </div>
                     )}
                   </div>
                 )
               })}
+              {cardNextPayments.length > 1 && (
+                <div className="flex justify-between pt-1 border-t border-[var(--line)] text-[12.5px] font-semibold">
+                  <span>Total tarjetas</span>
+                  <span className="font-mono">{fmtCLP(totalNextCardPayment)}</span>
+                </div>
+              )}
             </div>
           )}
         </Card>
@@ -550,9 +578,7 @@ export default function Accounts({
                 const isActive = card.isActive !== false
                 return (
                   <li key={card.id} className={`px-5 py-3.5 flex items-center gap-3 ${!isActive ? 'opacity-50' : ''}`}>
-                    <div className="w-9 h-9 rounded-md grid place-items-center text-[18px] bg-[var(--bg-elev)] shrink-0">
-                      💳
-                    </div>
+                    <BankLogo bank={bank} size="md"/>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-[14px]">{card.name}</span>

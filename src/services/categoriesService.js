@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { CATEGORIES } from '../data'
 
 // Merge global (user_id IS NULL) + user's own categories
 export async function fetchAllCategories() {
@@ -41,4 +43,14 @@ export async function updateUserCategory(cat) {
 export async function removeUserCategory(id) {
   const { error } = await supabase.from('categories').delete().eq('id', id)
   if (error) throw error
+}
+
+export function useCategories() {
+  const [categories, setCategories] = useState(CATEGORIES)
+  useEffect(() => {
+    fetchAllCategories()
+      .then(cats => { if (cats?.length) setCategories(cats) })
+      .catch(() => {})
+  }, [])
+  return categories
 }

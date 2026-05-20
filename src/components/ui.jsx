@@ -105,6 +105,26 @@ export function Select({ value, onChange, options, placeholder, className = "" }
   );
 }
 
+export function BankLogo({ bank, size = 'md' }) {
+  const sz = size === 'sm' ? 'w-6 h-6 text-[9px]' : size === 'lg' ? 'w-10 h-10 text-[13px]' : 'w-8 h-8 text-[11px]'
+  const [w, h] = sz.split(' ')
+  if (bank?.logoUrl) {
+    return (
+      <img src={bank.logoUrl} alt={bank.label || ''}
+        className={`${w} ${h} rounded-md object-contain border border-[var(--line)] bg-white p-0.5 shrink-0`}/>
+    )
+  }
+  const letter = (bank?.label || '?')[0].toUpperCase()
+  const bg = bank?.color ? bank.color + '20' : 'var(--hover)'
+  const fg = bank?.color || 'var(--ink-2)'
+  return (
+    <div className={`${w} ${h} rounded-md grid place-items-center shrink-0 font-bold`}
+      style={{ background: bg, color: fg, border: `1.5px solid ${fg}30` }}>
+      <span className={size === 'sm' ? 'text-[9px]' : 'text-[11px]'}>{letter}</span>
+    </div>
+  )
+}
+
 export function TextInput({ value, onChange, placeholder, type = "text", icon, className = "" }) {
   return (
     <div className={`relative flex items-center ${className}`}>

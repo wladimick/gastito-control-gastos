@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { Card, Badge, IconBtn, Select } from './ui'
 import { Icon, fmtCLP, MES } from '../lib/helpers'
-import { CATEGORIES } from '../data'
 import { useBanks } from '../services/banksService'
+import { useCategories } from '../services/categoriesService'
 
 function TabBtn({ active, onClick, label, badge, warn }) {
   return (
@@ -44,6 +44,7 @@ const BLANK_INCOME = {
 }
 
 function RecurringForm({ initial, onSave, onCancel, banks }) {
+  const categories = useCategories()
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const isIncome = f.kind === 'income'
@@ -71,7 +72,7 @@ function RecurringForm({ initial, onSave, onCancel, banks }) {
             placeholder="1" className={inp + ' font-mono'}/>
         </Field>
         <Field label="Categoría">
-          <Select value={f.category} onChange={v => set('category', v)} options={CATEGORIES.map(c => ({ value: c.id, label: c.label }))}/>
+          <Select value={f.category} onChange={v => set('category', v)} options={categories.map(c => ({ value: c.id, label: c.label }))}/>
         </Field>
         {!isIncome && (
           <Field label="Banco">
@@ -133,6 +134,7 @@ function BLANK_RELATION(kind) {
 }
 
 function RelationForm({ initial, onSave, onCancel }) {
+  const categories = useCategories()
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const isPayable = f.kind === 'payable'
@@ -165,7 +167,7 @@ function RelationForm({ initial, onSave, onCancel }) {
             className={inp}/>
         </Field>
         <Field label="Categoría">
-          <Select value={f.category} onChange={v => set('category', v)} options={CATEGORIES.map(c => ({ value: c.id, label: c.label }))}/>
+          <Select value={f.category} onChange={v => set('category', v)} options={categories.map(c => ({ value: c.id, label: c.label }))}/>
         </Field>
         <Field label="Modo">
           <div className="grid grid-cols-2 gap-1.5">
@@ -201,11 +203,12 @@ function RelationForm({ initial, onSave, onCancel }) {
 
 function RelationRow({ item, onMarkPaid, onEdit, onDelete, isSupabase }) {
   const today      = new Date()
+  const categories = useCategories()
   const due        = item.dueDate ? new Date(item.dueDate) : null
   const isPaid     = item.status === 'paid'
   const isOverdue  = !isPaid && due && due < today
   const dueDiff    = due ? Math.round((due - today) / 86400000) : null
-  const cat        = CATEGORIES.find(c => c.id === item.category)
+  const cat        = categories.find(c => c.id === item.category)
 
   return (
     <li className={`px-5 py-3.5 flex items-center gap-3 ${isPaid ? 'opacity-50' : ''}`}>
@@ -264,6 +267,7 @@ export default function Recurring({
   salaryPaymentDay,
 }) {
   const banks      = useBanks()
+  const categories = useCategories()
   const today     = new Date()
   const monthLabel = `${MES[today.getMonth()]} ${today.getFullYear()}`
   const monthStr   = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
@@ -443,7 +447,7 @@ export default function Recurring({
           ) : (
             <ul className="divide-y divide-[var(--line)]">
               {recurring.map(r => {
-                const cat     = CATEGORIES.find(c => c.id === r.category) ?? CATEGORIES[0]
+                const cat     = categories.find(c => c.id === r.category) ?? categories[0]
                 const charged = r.lastChargedMonth === monthStr
                 return (
                   <li key={r.id} className={`px-5 py-3.5 flex items-center gap-3 ${!r.active ? 'opacity-55' : ''}`}>
@@ -498,7 +502,7 @@ export default function Recurring({
           ) : (
             <ul className="divide-y divide-[var(--line)]">
               {income_.map(i => {
-                const cat     = CATEGORIES.find(c => c.id === i.category) ?? CATEGORIES.find(c => c.id === 'sueldo') ?? CATEGORIES[0]
+                const cat     = categories.find(c => c.id === i.category) ?? categories.find(c => c.id === 'sueldo') ?? categories[0]
                 const charged = i.lastChargedMonth === monthStr
                 return (
                   <li key={i.id} className={`px-5 py-3.5 flex items-center gap-3 ${!i.active ? 'opacity-55' : ''}`}>
