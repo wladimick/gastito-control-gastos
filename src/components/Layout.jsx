@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Icon } from '../lib/helpers'
+import { GastitoLogo } from './Brand'
 
 const BASE_NAV_GROUPS = [
   {
@@ -72,13 +73,8 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
       {/* Sidebar desktop */}
       <aside className="hidden lg:flex flex-col w-64 border-r border-[#222220] sticky top-0 h-screen shrink-0 bg-[#0F0F0E]">
         <div className="px-5 pt-6 pb-5 border-b border-[#222220]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-white text-[#0F0F0E] grid place-items-center font-semibold tracking-tight">G</div>
-            <div>
-              <div className="font-semibold tracking-tight leading-none text-white">Gastito</div>
-              <div className="text-[11px] text-[#525250] mt-1 leading-none">Control vía Telegram</div>
-            </div>
-          </div>
+          <GastitoLogo light={true} size="sm"/>
+          <div className="text-[11px] text-[#525250] mt-2 leading-none pl-0.5">Control vía Telegram</div>
         </div>
 
         <nav className="px-3 py-3 flex-1 overflow-y-auto flex flex-col gap-3">
@@ -218,10 +214,7 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpenMobile(false)}></div>
           <div className="absolute left-0 top-0 bottom-0 w-72 bg-[#0F0F0E] border-r border-[#222220] p-4 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-white text-[#0F0F0E] grid place-items-center font-semibold">G</div>
-                <span className="font-semibold tracking-tight text-white">Gastito</span>
-              </div>
+              <GastitoLogo light={true} size="sm"/>
               <button onClick={() => setOpenMobile(false)} className="w-8 h-8 grid place-items-center rounded-md border border-[#222220] text-[#A0A09A]">
                 <Icon name="x" size={16}/>
               </button>

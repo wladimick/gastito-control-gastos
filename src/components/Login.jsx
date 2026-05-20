@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Icon } from '../lib/helpers'
+import { GastitoIcon } from './Brand'
 import {
   signInWithPassword, signUp,
   sendPasswordReset, updatePassword, signInWithMagicLink,
@@ -19,12 +20,17 @@ function humanizeError(err) {
 
 function Logo() {
   return (
-    <div className="mb-8 text-center">
-      <div className="w-12 h-12 rounded-xl bg-[var(--ink)] text-[var(--bg)] grid place-items-center mx-auto">
-        <Icon name="wallet" size={22}/>
+    <div className="mb-6 sm:mb-8 flex flex-col items-center">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="w-11 h-11 sm:w-[60px] sm:h-[60px] shrink-0" style={{ lineHeight: 0 }}>
+          <GastitoIcon size="100%" light={true}/>
+        </div>
+        <span className="font-extrabold tracking-[-0.04em] text-[28px] sm:text-[36px] leading-none text-[var(--ink)]"
+          style={{ fontFamily: "'Manrope', system-ui, sans-serif" }}>
+          Gastito
+        </span>
       </div>
-      <div className="mt-4 font-semibold text-[20px] tracking-tight">Gastito</div>
-      <div className="mt-1 text-[13px] text-[var(--muted)]">Control de gastos</div>
+      <div className="mt-2.5 text-[13px] text-[var(--muted)]">Control de gastos</div>
     </div>
   )
 }
@@ -76,7 +82,7 @@ export function NewPasswordForm({ onComplete }) {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4 overflow-y-auto">
       <div className="w-full max-w-sm">
         <Logo/>
         {done ? (
@@ -141,6 +147,47 @@ export default function Login() {
   const [sent,     setSent]     = useState(false)   // confirmación enviada (register o reset)
   const [sentType, setSentType] = useState(null)    // 'confirm' | 'reset' | 'magic'
 
+  const emailRef = useRef(null)
+
+  const applyDomain = (domain) => {
+    const atIdx = email.indexOf('@')
+    const user  = atIdx >= 0 ? email.slice(0, atIdx) : email
+    if (!user.trim()) { emailRef.current?.focus(); return }
+    if (domain === null) {
+      const next = user + '@'
+      setEmail(next)
+      setTimeout(() => {
+        if (emailRef.current) {
+          emailRef.current.focus()
+          emailRef.current.setSelectionRange(next.length, next.length)
+        }
+      }, 0)
+    } else {
+      setEmail(user + '@' + domain)
+      emailRef.current?.focus()
+    }
+  }
+
+  const EmailShortcuts = () => (
+    <div className="mt-2">
+      <div className="text-[11px] text-[var(--muted)] mb-1.5">
+        Puedes escribir tu correo completo o usar un acceso rápido.
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { label: 'Gmail',   domain: 'gmail.com'   },
+          { label: 'Hotmail', domain: 'hotmail.com' },
+          { label: 'Empresa', domain: null           },
+        ].map(({ label, domain }) => (
+          <button key={label} type="button" onClick={() => applyDomain(domain)}
+            className="h-7 px-3 text-[12px] rounded-full border border-[var(--line)] bg-[var(--bg-elev)] text-[var(--ink-2)] hover:border-[var(--ink)] hover:text-[var(--ink)] transition">
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
   const switchMode = (m) => { setMode(m); setError(null); setConfirm(''); setSent(false) }
 
   const handleSubmit = async (e) => {
@@ -192,7 +239,7 @@ export default function Login() {
       magic:   'Haz clic en el enlace para ingresar sin contraseña.',
     }
     return (
-      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4 overflow-y-auto">
         <div className="w-full max-w-sm">
           <Logo/>
           <ConfirmScreen
@@ -210,7 +257,7 @@ export default function Login() {
   const isLogin    = mode === 'login'
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4 overflow-y-auto">
       <div className="w-full max-w-sm">
         <Logo/>
 
@@ -229,10 +276,11 @@ export default function Login() {
                 <label className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">
                   Correo electrónico
                 </label>
-                <input type="email" required autoFocus
+                <input type="email" required autoFocus ref={emailRef}
                   value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="tu@correo.com"
                   className="w-full h-11 px-3 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg text-[14px] focus:outline-none focus:border-[var(--ink)]"/>
+                <EmailShortcuts/>
               </div>
               {error && (
                 <div className="text-[12px] text-[#A02828] bg-[#FDECEC] rounded-md px-3 py-2.5">{error}</div>
@@ -267,10 +315,11 @@ export default function Login() {
                 <label className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">
                   Correo electrónico
                 </label>
-                <input type="email" required autoFocus
+                <input type="email" required autoFocus ref={emailRef}
                   value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="tu@correo.com"
                   className="w-full h-11 px-3 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg text-[14px] focus:outline-none focus:border-[var(--ink)]"/>
+                <EmailShortcuts/>
               </div>
 
               <div>
