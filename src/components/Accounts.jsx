@@ -174,17 +174,22 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
   if (nextPayDate <= today) nextPayDate = new Date(today.getFullYear(), today.getMonth() + 1, paymentDay)
   const daysToPayment = Math.ceil((nextPayDate - today) / 86400000)
 
-  // Compromisos fijos
+  // Dinero comprometido (por pagar, como préstamos)
+  const pendingPayables = (recurringList ?? []).filter(r => r.active && r.kind === 'payable' && r.status !== 'paid')
+  const pendingPayableTotal = pendingPayables.reduce((s, r) => s + r.amount, 0)
+  const usableBalance = totalAvailable - pendingPayableTotal
+
+  // Compromisos fijos (solo gastos recurrentes, sin payables)
   const recurringTotal = (recurringList ?? [])
-    .filter(r => r.active && r.kind !== 'income')
+    .filter(r => r.active && r.kind === 'expense')
     .reduce((s, r) => s + r.amount, 0)
   const cuotasTotal = (installmentDebts ?? [])
     .filter(d => d.status === 'active')
     .reduce((s, d) => s + d.monthlyAmount, 0)
 
-  // Saldo libre
+  // Saldo libre parte del disponible usable
   const totalCommitted = cycleCredit + recurringTotal + cuotasTotal
-  const freeBalance    = totalAvailable - totalCommitted
+  const freeBalance    = usableBalance - totalCommitted
   const netColor = freeBalance >= 0 ? 'text-[var(--accent-ink)]' : 'text-[#A02828]'
 
   return (
@@ -193,12 +198,19 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card padding="p-4">
           <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] flex items-center gap-1.5">
-            <Icon name="wallet" size={12}/> Disponible
+            <Icon name="wallet" size={12}/> {pendingPayableTotal > 0 ? 'Total en cuentas' : 'Disponible'}
           </div>
           <div className={`mt-2 font-mono text-[22px] tracking-tight leading-none ${totalAvailable > 0 ? 'text-[var(--accent-ink)]' : ''}`}>
             {fmtCLP(totalAvailable)}
           </div>
-          <div className="mt-1.5 text-[11px] text-[var(--muted)]">{activeAccounts.length} cuentas activas</div>
+          {pendingPayableTotal > 0 ? (
+            <div className="mt-1 flex flex-col gap-0.5">
+              <div className="text-[10.5px] text-[var(--amber-ink)]">− {fmtCLPshort(pendingPayableTotal)} comprometido</div>
+              <div className="text-[10.5px] text-[var(--muted)]">Usable: <span className="font-mono text-[var(--accent-ink)]">{fmtCLPshort(usableBalance)}</span></div>
+            </div>
+          ) : (
+            <div className="mt-1.5 text-[11px] text-[var(--muted)]">{activeAccounts.length} cuentas activas</div>
+          )}
         </Card>
 
         <Card padding="p-4">
@@ -239,10 +251,22 @@ function CashflowTab({ accounts, creditCards, expenses, recurringList, installme
           <div className="font-semibold tracking-tight mb-4">Desglose</div>
           <div className="flex flex-col gap-2.5 text-[13px]">
             <div className="flex justify-between">
-              <span className="text-[var(--muted)]">Disponible en cuentas</span>
+              <span className="text-[var(--muted)]">Total en cuentas</span>
               <span className="font-mono text-[var(--accent-ink)]">{fmtCLP(totalAvailable)}</span>
             </div>
-            <div className="border-t border-[var(--line)] pt-2 flex justify-between">
+            {pendingPayableTotal > 0 && (
+              <div className="flex justify-between">
+                <span className="text-[var(--muted)]">— Dinero comprometido/por pagar</span>
+                <span className="font-mono text-[var(--amber-ink)]">{fmtCLP(pendingPayableTotal)}</span>
+              </div>
+            )}
+            {pendingPayableTotal > 0 && (
+              <div className="flex justify-between text-[12px] border-t border-[var(--line)] pt-1">
+                <span className="text-[var(--muted)] font-medium">= Disponible usable</span>
+                <span className="font-mono text-[var(--accent-ink)] font-medium">{fmtCLP(usableBalance)}</span>
+              </div>
+            )}
+            <div className={`${pendingPayableTotal > 0 ? '' : 'border-t border-[var(--line)] pt-2'} flex justify-between`}>
               <span className="text-[var(--muted)]">— Crédito ciclo actual</span>
               <span className="font-mono">{fmtCLP(cycleCredit)}</span>
             </div>

@@ -85,12 +85,16 @@ export default function Dashboard({
   // ── Cashflow ──────────────────────────────────────────────────────────────
   const activeAccounts = accounts.filter(a => a.active)
   const totalAvailable = activeAccounts.reduce((s, a) => s + (a.balance || 0), 0)
-  const recurringTotal = (recurring ?? []).filter(r => r.active && r.kind !== 'income')
+  const pendingPayables = (recurring ?? []).filter(r => r.active && r.kind === 'payable' && r.status !== 'paid')
+  const pendingPayableTotal = pendingPayables.reduce((s, r) => s + (r.amount || 0), 0)
+  const usableBalance = totalAvailable - pendingPayableTotal
+  const recurringTotal = (recurring ?? []).filter(r => r.active && r.kind === 'expense')
     .reduce((s, r) => s + (r.amount || 0), 0)
-  const monthlyIncome = (recurring ?? [])
-    .filter(r => r.active !== false && r.kind === 'income')
-    .reduce((s, r) => s + (r.amount || 0), 0)
-  const afterSalary = freeBalance + monthlyIncome
+  const recurringIncomeItems = (recurring ?? []).filter(r => r.active !== false && r.kind === 'income')
+  const recurringIncomeTotal = recurringIncomeItems.reduce((s, r) => s + (r.amount || 0), 0)
+  const punctualIncomeItems = (recurring ?? []).filter(r => r.active !== false && r.kind === 'receivable' && r.status !== 'paid')
+  const punctualIncomeTotal = punctualIncomeItems.reduce((s, r) => s + (r.amount || 0), 0)
+  const monthlyIncome = recurringIncomeTotal + punctualIncomeTotal
 
   // ── Per-card next payment ─────────────────────────────────────────────────
   const cardNextPayments = creditCards.filter(c => c.isActive !== false).map(card => {
@@ -140,7 +144,9 @@ export default function Dashboard({
   })
 
   const totalNextCardPayment = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
-  const freeBalance = totalAvailable - totalNextCardPayment - recurringTotal
+  const freeBalance = usableBalance - totalNextCardPayment - recurringTotal
+  const afterExpectedIncome = usableBalance + monthlyIncome - totalNextCardPayment - recurringTotal - pendingPayableTotal
+  const afterSalary = afterExpectedIncome
 
   // ── Salary day ───────────────────────────────────────────────────────────
   const salaryDay     = userSettings?.salary_payment_day ? Number(userSettings.salary_payment_day) : null
@@ -210,10 +216,10 @@ export default function Dashboard({
     '',
   ]
   const cfItems = [
-    { label: 'Disponible ahora',      value: fmtCLP(totalAvailable),      sub: `${activeAccounts.length} cuenta${activeAccounts.length !== 1 ? 's' : ''} activa${activeAccounts.length !== 1 ? 's' : ''}`, color: 'text-[var(--accent-ink)]' },
+    { label: 'Disponible usable', value: fmtCLP(usableBalance), sub: pendingPayableTotal > 0 ? `${fmtCLPshort(totalAvailable)} en cuentas · ${fmtCLPshort(pendingPayableTotal)} comprometido` : `${activeAccounts.length} cuenta${activeAccounts.length !== 1 ? 's' : ''} activa${activeAccounts.length !== 1 ? 's' : ''}`, color: 'text-[var(--accent-ink)]' },
     { label: 'Próximo pago tarjetas', value: fmtCLP(totalNextCardPayment), sub: cardNextPayments.length ? `${cardNextPayments.length} tarjeta${cardNextPayments.length !== 1 ? 's' : ''} · contado + cuotas` : 'sin tarjetas de crédito', color: '' },
-    { label: 'Compromisos fijos',     value: fmtCLP(recurringTotal),       sub: recurringTotal > 0 ? 'gastos recurrentes activos' : 'sin gastos fijos',                                            color: '' },
-    { label: 'Saldo libre est.',      value: fmtCLP(freeBalance),          sub: null,                                                                                                               color: balanceColor },
+    { label: 'Recurrentes fijos', value: fmtCLP(recurringTotal), sub: recurringTotal > 0 ? 'gastos recurrentes activos' : 'sin gastos fijos', color: '' },
+    { label: 'Saldo libre est.', value: fmtCLP(freeBalance), sub: pendingPayableTotal > 0 ? `Sin contar ${fmtCLPshort(pendingPayableTotal)} por pagar` : null, color: balanceColor },
   ]
 
   return (
@@ -257,37 +263,48 @@ export default function Dashboard({
             ))}
           </div>
 
-          {/* ── Después del sueldo ─────────────────────────────────────────── */}
+          {/* ── Después de ingresos esperados ──────────────────────────────── */}
           {monthlyIncome > 0 ? (
             <div className={`border-t border-[var(--line)] px-5 py-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-3 ${afterSalaryBg}`}>
               <div>
-                <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">Después del sueldo</div>
+                <div className="text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">Después de ingresos esperados</div>
                 <div className={`mt-2 font-mono text-[20px] md:text-[24px] tracking-tight leading-none tabular-nums ${afterSalaryColor}`}>
                   {fmtCLP(afterSalary)}
                 </div>
                 <div className={`mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10.5px] font-medium ${afterSalaryBadgeBg} ${afterSalaryColor}`}>
                   {afterSalary < 0
-                    ? <><Icon name="alert" size={11}/> Faltante después del sueldo</>
+                    ? <><Icon name="alert" size={11}/> Faltante después de ingresos</>
                     : freeBalance < 0
-                    ? <><Icon name="check" size={11}/> Se regulariza con sueldo</>
-                    : <><Icon name="check" size={11}/> Positivo tras sueldo</>}
+                    ? <><Icon name="check" size={11}/> Se regulariza con ingresos</>
+                    : <><Icon name="check" size={11}/> Positivo tras ingresos</>}
                 </div>
               </div>
-              <div className="flex items-center gap-6 text-[12px]">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Sueldo</div>
-                  <div className="font-mono font-semibold text-[14px] mt-0.5 text-[var(--accent-ink)]">{fmtCLP(monthlyIncome)}</div>
-                </div>
-                {salaryDay && daysLabel && (
+              <div className="flex flex-col gap-2.5 text-[12px]">
+                <div className="flex items-center gap-6">
                   <div>
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Día {salaryDay}</div>
-                    <div className="font-mono text-[14px] mt-0.5 text-[var(--ink-2)]">{daysLabel}</div>
+                    <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Ingresos esperados</div>
+                    <div className="font-mono font-semibold text-[14px] mt-0.5 text-[var(--accent-ink)]">{fmtCLP(monthlyIncome)}</div>
+                    {punctualIncomeTotal > 0 && (
+                      <div className="text-[10.5px] text-[var(--muted)] mt-0.5">incluye {fmtCLPshort(punctualIncomeTotal)} puntuales</div>
+                    )}
                   </div>
-                )}
-                {!salaryDay && (
-                  <div className="text-[11px] text-[var(--muted)]">
-                    Configura tu día de sueldo en{' '}
-                    <button className="underline text-[var(--ink-2)]" onClick={() => setView('profile')}>Mi perfil</button>
+                  {salaryDay && daysLabel && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)]">Día {salaryDay}</div>
+                      <div className="font-mono text-[14px] mt-0.5 text-[var(--ink-2)]">{daysLabel}</div>
+                    </div>
+                  )}
+                  {!salaryDay && (
+                    <div className="text-[11px] text-[var(--muted)]">
+                      Configura tu día de sueldo en{' '}
+                      <button className="underline text-[var(--ink-2)]" onClick={() => setView('profile')}>Mi perfil</button>
+                    </div>
+                  )}
+                </div>
+                {pendingPayableTotal > 0 && (
+                  <div className="flex items-center justify-between gap-4 text-[11.5px] border-t border-[var(--line)] pt-2">
+                    <span className="text-[var(--muted)]">Por pagar comprometido</span>
+                    <span className="font-mono text-[var(--amber-ink)]">−{fmtCLP(pendingPayableTotal)}</span>
                   </div>
                 )}
               </div>
