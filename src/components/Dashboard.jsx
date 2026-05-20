@@ -48,6 +48,7 @@ function SectionHeader({ title, sub, action, onAction }) {
 export default function Dashboard({
   expenses = [], setView, openChat, botStatus, lastBotMessage,
   installmentDebts = [], recurring = [], accounts = [], creditCards = [],
+  income = [], receivables = [],
   userSettings = null,
 }) {
   const banks = useBanks()
@@ -90,9 +91,9 @@ export default function Dashboard({
   const usableBalance = totalAvailable - pendingPayableTotal
   const recurringTotal = (recurring ?? []).filter(r => r.active && r.kind === 'expense')
     .reduce((s, r) => s + (r.amount || 0), 0)
-  const recurringIncomeItems = (recurring ?? []).filter(r => r.active !== false && r.kind === 'income')
+  const recurringIncomeItems = (income ?? []).filter(r => r.active !== false)
   const recurringIncomeTotal = recurringIncomeItems.reduce((s, r) => s + (r.amount || 0), 0)
-  const punctualIncomeItems = (recurring ?? []).filter(r => r.active !== false && r.kind === 'receivable' && r.status !== 'paid')
+  const punctualIncomeItems = (receivables ?? []).filter(r => r.status !== 'paid')
   const punctualIncomeTotal = punctualIncomeItems.reduce((s, r) => s + (r.amount || 0), 0)
   const monthlyIncome = recurringIncomeTotal + punctualIncomeTotal
 
@@ -145,7 +146,7 @@ export default function Dashboard({
 
   const totalNextCardPayment = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
   const freeBalance = usableBalance - totalNextCardPayment - recurringTotal
-  const afterExpectedIncome = usableBalance + monthlyIncome - totalNextCardPayment - recurringTotal - pendingPayableTotal
+  const afterExpectedIncome = usableBalance + monthlyIncome - totalNextCardPayment - recurringTotal
   const afterSalary = afterExpectedIncome
 
   // ── Salary day ───────────────────────────────────────────────────────────
