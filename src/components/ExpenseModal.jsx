@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { Badge, Select } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
-import { CATEGORIES, PAYMENT_METHODS } from '../data'
+import { PAYMENT_METHODS } from '../data'
 import { useBanks } from '../services/banksService'
+import { useCategories } from '../services/categoriesService'
 
 function Field({ label, children }) {
   return (
@@ -14,13 +15,14 @@ function Field({ label, children }) {
 }
 
 export default function ExpenseModal({ expense, onClose, onSave }) {
-  const banks = useBanks()
+  const banks      = useBanks()
+  const categories = useCategories()
   const [form, setForm] = useState(expense);
   useEffect(() => { setForm(expense); }, [expense]);
   if (!expense) return null;
 
   const isNew = expense.id === null;
-  const cat = CATEGORIES.find(c => c.id === form.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0];
+  const cat = categories.find(c => c.id === form.category) ?? categories.find(c => c.id === 'otros') ?? categories[0];
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const dateInput = new Date(form.date).toISOString().slice(0, 16);
 
@@ -68,7 +70,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Categoría">
               <Select value={form.category} onChange={v => setF("category", v)}
-                options={CATEGORIES.map(c => ({ value: c.id, label: c.label }))}/>
+                options={categories.map(c => ({ value: c.id, label: c.label }))}/>
             </Field>
             <Field label="Fecha y hora">
               <input type="datetime-local" value={dateInput}

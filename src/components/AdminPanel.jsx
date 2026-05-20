@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Card, Badge } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
 import { BANKS } from '../data'
+import { BankLogo } from './ui'
 import {
   fetchUserList, fetchUserDetails,
   updateUserProfile, updateUserSettings,
@@ -120,8 +121,7 @@ function BanksPanel() {
         {banks.map(bank => (
           <div key={bank.id} className="px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="w-5 h-5 rounded shrink-0 border border-[var(--line)]"
-                style={{ background: bank.color || 'var(--hover)' }}/>
+              <BankLogo bank={bank} size="sm"/>
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-medium">{bank.label}</div>
                 <div className="text-[11px] text-[var(--muted)] font-mono">{bank.id}</div>
