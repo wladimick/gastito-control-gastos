@@ -18,6 +18,7 @@ const BASE_NAV_GROUPS = [
       { id: "savings",      label: "Ahorros",          icon: "savings", short: "Ahorros" },
       { id: "recurring",    label: "Recurrentes",      icon: "repeat",  short: "Recurr." },
       { id: "installments", label: "Cuotas",           icon: "layers",  short: "Cuotas" },
+      { id: "projection",   label: "Proyección",       icon: "trend",   short: "Proyec." },
     ],
   },
   {

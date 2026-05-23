@@ -15,6 +15,7 @@ import AdminPanel from './components/AdminPanel'
 import UserProfile from './components/UserProfile'
 import Savings from './components/Savings'
 import Accounts from './components/Accounts'
+import Projection from './components/Projection'
 import BotChat from './components/BotChat'
 import { Icon } from './lib/helpers'
 import {
@@ -731,6 +732,15 @@ export default function App() {
           accounts={accounts}
           userSettings={userSettings}
         />}
+        {view === 'projection' && (
+          <Projection
+            accounts={accounts}
+            recurringList={recurringList}
+            incomeList={incomeList}
+            receivables={receivablesList}
+            installmentDebts={installmentDebts}
+          />
+        )}
         {view === 'comparison' && <Comparison expenses={expenses}/>}
         {view === 'unparsed' && (
           <UnparsedMessages
