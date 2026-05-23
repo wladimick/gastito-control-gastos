@@ -107,7 +107,7 @@ function computeMonths({
       if (stmt.status === 'paid') continue
       const stmtMk = stmt.month || (stmt.dueDate ? stmt.dueDate.slice(0, 7) : null)
       if (stmtMk !== mk) continue
-      ccDetail.push({ item: stmt, amount: stmt.billedAmount || 0 })
+      ccDetail.push({ item: stmt, amount: stmtTotal(stmt) })
     }
     const ccTotal     = ccDetail.reduce((s, x) => s + x.amount, 0)
     const cuotasTotal = cuotas + ccTotal
@@ -215,9 +215,18 @@ const mkBlank = () => ({
 })
 const blankStatement = (month = '') => ({
   cardName: '', bankId: 'bchile',
+  comprasUnaC: '',
+  cuotasMes: '',
+  cargosComisiones: '',
   billedAmount: '', minimumPayment: '',
   dueDate: '', month, description: '', status: 'pending',
 })
+
+const parseAmt = v => Number(String(v || 0).replace(/[^0-9]/g, '')) || 0
+const stmtTotal = stmt => {
+  const breakdown = parseAmt(stmt.comprasUnaC) + parseAmt(stmt.cuotasMes) + parseAmt(stmt.cargosComisiones)
+  return breakdown > 0 ? breakdown : parseAmt(stmt.billedAmount)
+}
 
 // ── Clickable flow row ─────────────────────────────────────────
 // modal=true: chevron always points right, no inline expand (opens a modal instead)
@@ -261,16 +270,19 @@ function FlowRow({ label, amount, type, items, open, onToggle, modal = false }) 
 function CcStatementForm({ defaultMonth, banks, onSave, onCancel }) {
   const [f, setF] = useState(blankStatement(defaultMonth))
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
-  const valid = f.cardName.trim() &&
-    Number(String(f.billedAmount).replace(/[^0-9]/g, '')) > 0 &&
-    f.dueDate
+
+  const totalAPagar = parseAmt(f.comprasUnaC) + parseAmt(f.cuotasMes) + parseAmt(f.cargosComisiones)
+  const valid = f.cardName.trim() && totalAPagar > 0 && f.dueDate
 
   const handleSave = () => {
     const month = f.dueDate ? f.dueDate.slice(0, 7) : f.month
     onSave({
       ...f,
-      billedAmount:   Number(String(f.billedAmount).replace(/[^0-9]/g, ''))   || 0,
-      minimumPayment: Number(String(f.minimumPayment).replace(/[^0-9]/g, '')) || 0,
+      comprasUnaC:      parseAmt(f.comprasUnaC),
+      cuotasMes:        parseAmt(f.cuotasMes),
+      cargosComisiones: parseAmt(f.cargosComisiones),
+      billedAmount:     totalAPagar,
+      minimumPayment:   parseAmt(f.minimumPayment),
       month,
       id: 'cc' + Date.now(),
     })
@@ -293,9 +305,21 @@ function CcStatementForm({ defaultMonth, banks, onSave, onCancel }) {
             options={banks.map(b => ({ value: b.id, label: b.label }))}/>
         </div>
         <div>
-          <label className="text-[11px] text-[var(--muted)] block mb-1.5">Monto facturado</label>
-          <input type="text" inputMode="numeric" value={f.billedAmount}
-            onChange={e => set('billedAmount', e.target.value)}
+          <label className="text-[11px] text-[var(--muted)] block mb-1.5">Compras / una cuota</label>
+          <input type="text" inputMode="numeric" value={f.comprasUnaC}
+            onChange={e => set('comprasUnaC', e.target.value)}
+            placeholder="0" className={fi + ' font-mono'}/>
+        </div>
+        <div>
+          <label className="text-[11px] text-[var(--muted)] block mb-1.5">Cuotas del mes</label>
+          <input type="text" inputMode="numeric" value={f.cuotasMes}
+            onChange={e => set('cuotasMes', e.target.value)}
+            placeholder="0" className={fi + ' font-mono'}/>
+        </div>
+        <div>
+          <label className="text-[11px] text-[var(--muted)] block mb-1.5">Cargos y comisiones</label>
+          <input type="text" inputMode="numeric" value={f.cargosComisiones}
+            onChange={e => set('cargosComisiones', e.target.value)}
             placeholder="0" className={fi + ' font-mono'}/>
         </div>
         <div>
@@ -314,6 +338,12 @@ function CcStatementForm({ defaultMonth, banks, onSave, onCancel }) {
             placeholder="Opcional" className={fi}/>
         </div>
       </div>
+      {totalAPagar > 0 && (
+        <div className="rounded-lg bg-[var(--bg-elev)] border border-[var(--line)] px-3 py-2 flex items-center justify-between">
+          <span className="text-[11.5px] text-[var(--muted)]">Total a pagar</span>
+          <span className="font-mono text-[14px] font-semibold">{fmtCLP(totalAPagar)}</span>
+        </div>
+      )}
       <div className="flex items-center justify-end gap-2">
         <button onClick={onCancel} className="text-[12px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>
         <button onClick={handleSave} disabled={!valid}
@@ -443,44 +473,64 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
               )}
 
               {periodStatements.map(stmt => {
-                const st   = stmtStatus(stmt)
-                const bank = banks.find(b => b.id === stmt.bankId)
+                const st      = stmtStatus(stmt)
+                const bank    = banks.find(b => b.id === stmt.bankId)
+                const total   = stmtTotal(stmt)
+                const hasBreakdown = stmt.comprasUnaC > 0 || stmt.cuotasMes > 0 || stmt.cargosComisiones > 0
                 return (
-                  <div key={stmt.id} className={`rounded-lg border border-[var(--line)] px-4 py-3 flex items-start gap-3 ${stmt.status === 'paid' ? 'opacity-55' : ''}`}>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[13px] font-medium">{stmt.cardName}</span>
-                        {bank && <span className="text-[11px] text-[var(--muted)]">{bank.label}</span>}
-                        <span className="text-[10px] px-1.5 py-0.5 rounded"
-                          style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                  <div key={stmt.id} className={`rounded-lg border border-[var(--line)] px-4 py-3 flex flex-col gap-2 ${stmt.status === 'paid' ? 'opacity-55' : ''}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[13px] font-medium">{stmt.cardName}</span>
+                          {bank && <span className="text-[11px] text-[var(--muted)]">{bank.label}</span>}
+                          <span className="text-[10px] px-1.5 py-0.5 rounded"
+                            style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                        </div>
+                        <div className="text-[11.5px] text-[var(--muted)] mt-0.5 flex flex-wrap gap-x-1.5">
+                          {stmt.dueDate && <span>Vence: {stmt.dueDate.split('-').reverse().join('/')}</span>}
+                          {stmt.minimumPayment > 0 && <><span>·</span><span>Mín: {fmtCLP(stmt.minimumPayment)}</span></>}
+                          {stmt.description && <><span>·</span><span>{stmt.description}</span></>}
+                        </div>
                       </div>
-                      <div className="text-[11.5px] text-[var(--muted)] mt-0.5 flex flex-wrap gap-x-1.5">
-                        {stmt.dueDate && (
-                          <span>Vence: {stmt.dueDate.split('-').reverse().join('/')}</span>
-                        )}
-                        {stmt.minimumPayment > 0 && (
-                          <><span>·</span><span>Mín: {fmtCLP(stmt.minimumPayment)}</span></>
-                        )}
-                        {stmt.description && (
-                          <><span>·</span><span>{stmt.description}</span></>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="font-mono text-[14px] font-semibold">{fmtCLP(stmt.billedAmount)}</div>
-                      <div className="flex gap-1 mt-1 justify-end">
-                        {stmt.status !== 'paid' && (
-                          <button onClick={() => onMarkStatementPaid(stmt.id)}
-                            className="text-[10px] px-1.5 h-6 rounded border border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--hover)] transition">
-                            Pagado
+                      <div className="text-right shrink-0">
+                        <div className="font-mono text-[14px] font-semibold">{fmtCLP(total)}</div>
+                        <div className="flex gap-1 mt-1 justify-end">
+                          {stmt.status !== 'paid' && (
+                            <button onClick={() => onMarkStatementPaid(stmt.id)}
+                              className="text-[10px] px-1.5 h-6 rounded border border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--hover)] transition">
+                              Pagado
+                            </button>
+                          )}
+                          <button onClick={() => onDeleteStatement(stmt.id)}
+                            className="w-6 h-6 grid place-items-center rounded border border-[var(--line)] text-[var(--muted)] hover:text-red-500 hover:bg-[var(--hover)] transition">
+                            <Icon name="trash" size={11}/>
                           </button>
-                        )}
-                        <button onClick={() => onDeleteStatement(stmt.id)}
-                          className="w-6 h-6 grid place-items-center rounded border border-[var(--line)] text-[var(--muted)] hover:text-red-500 hover:bg-[var(--hover)] transition">
-                          <Icon name="trash" size={11}/>
-                        </button>
+                        </div>
                       </div>
                     </div>
+                    {hasBreakdown && (
+                      <div className="flex flex-col gap-1 pt-1.5 border-t border-[var(--line)]">
+                        {stmt.comprasUnaC > 0 && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[var(--muted)]">Compras / una cuota</span>
+                            <span className="font-mono tabular-nums text-[var(--ink-2)]">{fmtCLP(stmt.comprasUnaC)}</span>
+                          </div>
+                        )}
+                        {stmt.cuotasMes > 0 && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[var(--muted)]">Transacciones en cuotas</span>
+                            <span className="font-mono tabular-nums text-[var(--ink-2)]">{fmtCLP(stmt.cuotasMes)}</span>
+                          </div>
+                        )}
+                        {stmt.cargosComisiones > 0 && (
+                          <div className="flex items-center justify-between text-[11px] font-medium">
+                            <span className="text-[var(--amber-ink)]">Cargos y comisiones</span>
+                            <span className="font-mono tabular-nums text-[var(--amber-ink)]">{fmtCLP(stmt.cargosComisiones)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -507,7 +557,7 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
           {/* ── Aviso doble descuento ─────────────────────────── */}
           <div className="rounded-lg bg-[var(--bg)] border border-[var(--line)] px-3.5 py-3 text-[11.5px] text-[var(--muted)] leading-snug flex items-start gap-2">
             <Icon name="info" size={13} className="mt-px shrink-0"/>
-            <span>Para evitar doble descuento, registra aquí solo el total del estado de cuenta mensual, no compras que ya están en la sección Cuotas de la app.</span>
+            <span>Ingresa los montos tal como aparecen en tu estado de cuenta. Los <strong className="text-[var(--ink)]">cargos y comisiones</strong> se suman al dashboard automáticamente. Si ya registraste las cuotas en la sección Cuotas de la app, no las dobles en "Cuotas del mes".</span>
           </div>
         </div>
 
