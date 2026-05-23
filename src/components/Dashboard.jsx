@@ -1,8 +1,11 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Card, StatCard, Badge, BarRow } from './ui'
 import { Icon, fmtCLP, fmtCLPshort, relDate, timeOnly, MES } from '../lib/helpers'
 import { CATEGORIES } from '../data'
 import { useBanks } from '../services/banksService'
+
+const DASH_CC_KEY = 'gastito_cc_v1'
+const loadCCStatements = () => { try { return JSON.parse(localStorage.getItem(DASH_CC_KEY) || '[]') } catch { return [] } }
 
 function nextOccurrence(day, from = new Date()) {
   const d = new Date(from.getFullYear(), from.getMonth(), day)
@@ -54,6 +57,7 @@ export default function Dashboard({
   const banks = useBanks()
   const today = new Date()
   const AUTO_PAY_DAY = 5
+  const ccStatements = useMemo(() => loadCCStatements(), [])
 
   // ── Monthly ──────────────────────────────────────────────────────────────
   const thisMonth = expenses.filter(e => {
@@ -141,7 +145,15 @@ export default function Dashboard({
     const cuotasAmount = cardCuotas.reduce((s, d) => s + (d.monthlyAmount || 0), 0)
     const cuotasCount  = cardCuotas.length
 
-    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, totalAmount: contadoAmount + cuotasAmount, cycleStart, cycleEnd }
+    // Cargos y comisiones from CC statements for this card's next payment month
+    const cardStatements = ccStatements.filter(s =>
+      s.status !== 'paid' &&
+      (s.bankId === card.bank) &&
+      ((s.month || s.dueDate?.slice(0, 7)) === nextPayMonthStr)
+    )
+    const cargosComisiones = cardStatements.reduce((s, st) => s + (st.cargosComisiones || 0), 0)
+
+    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, cardStatements, totalAmount: contadoAmount + cuotasAmount + cargosComisiones, cycleStart, cycleEnd }
   })
 
   const totalNextCardPayment = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
@@ -467,12 +479,13 @@ export default function Dashboard({
             onAction={() => setView('accounts')}
           />
           <ul className="divide-y divide-[var(--line)]">
-            {cardNextPayments.map(({ card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, totalAmount, cycleStart, cycleEnd }) => {
+            {cardNextPayments.map(({ card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, cardStatements, totalAmount, cycleStart, cycleEnd }) => {
               const lim       = card.creditLimit ? Number(card.creditLimit) : null
               const util      = lim && lim > 0 ? (totalAmount / lim) * 100 : null
               const utilColor = util === null ? 'var(--accent)' : util > 80 ? '#A02828' : util > 60 ? 'var(--amber-ink)' : 'var(--accent)'
               const payLabel  = `${nextPayDate.getDate()} ${MES[nextPayDate.getMonth()]}`
               const cycleLabel = `${cycleStart.getDate()} ${MES[cycleStart.getMonth()].slice(0, 3).toLowerCase()} – ${cycleEnd.getDate()} ${MES[cycleEnd.getMonth()].slice(0, 3).toLowerCase()}`
+              const bankLabel = banks.find(b => b.id === card.bank)?.label || card.bank || ''
               return (
                 <li key={card.id} className="px-5 py-3.5">
                   <div className="flex items-start gap-3">
@@ -497,7 +510,13 @@ export default function Dashboard({
                             <span className="font-mono tabular-nums">{fmtCLP(cuotasAmount)}</span>
                           </div>
                         )}
-                        {contadoAmount === 0 && cuotasAmount === 0 && (
+                        {cargosComisiones > 0 && (
+                          <div className="flex items-center justify-between text-[11.5px]">
+                            <span className="text-[var(--amber-ink)]">Cargos y comisiones{bankLabel ? ` · ${bankLabel}` : ''}</span>
+                            <span className="font-mono tabular-nums text-[var(--amber-ink)]">{fmtCLP(cargosComisiones)}</span>
+                          </div>
+                        )}
+                        {contadoAmount === 0 && cuotasAmount === 0 && cargosComisiones === 0 && (
                           <div className="text-[11.5px] text-[var(--muted)]">Sin movimientos en el ciclo</div>
                         )}
                         <div className="flex items-center justify-between text-[12px] font-semibold text-[var(--ink-2)] pt-0.5 border-t border-[var(--line)] mt-0.5">
