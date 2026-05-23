@@ -30,16 +30,43 @@ function Field({ label, children }) {
 
 const inp = "w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"
 
+function fmtLocalDate(s) {
+  if (!s) return ''
+  const [y, m, d] = s.split('-').map(Number)
+  return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
+}
+
+function nextChargeDate(r, today = new Date()) {
+  const dom     = Number(r.dayOfMonth) || 1
+  const todayYM = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+  if (r.startDate) {
+    const startYM = r.startDate.slice(0, 7)
+    if (startYM > todayYM) {
+      const [sy, sm] = startYM.split('-').map(Number)
+      return new Date(sy, sm - 1, dom)
+    }
+  }
+  if (dom > today.getDate()) return new Date(today.getFullYear(), today.getMonth(), dom)
+  return new Date(today.getFullYear(), today.getMonth() + 1, dom)
+}
+
+function fmtNextCharge(r, today) {
+  const d = nextChargeDate(r, today)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}
+
 // ── Expense/Income form ───────────────────────────────────────
 
 const BLANK_EXPENSE = {
   name: '', amount: '', category: 'hogar', bank: 'bchile',
   method: 'tarjeta', type: 'debito', dayOfMonth: '',
+  startDate: new Date().toISOString().slice(0, 10), endDate: '',
   active: true, autoRegister: false, lastChargedMonth: null, kind: 'expense',
 }
 const BLANK_INCOME = {
   name: '', amount: '', category: 'sueldo', bank: '',
   method: 'transfer', type: 'debito', dayOfMonth: '',
+  startDate: new Date().toISOString().slice(0, 10), endDate: '',
   active: true, autoRegister: true, lastChargedMonth: null, kind: 'income',
 }
 
@@ -70,6 +97,14 @@ function RecurringForm({ initial, onSave, onCancel, banks }) {
         <Field label="Día del mes">
           <input type="text" inputMode="numeric" value={f.dayOfMonth} onChange={e => set('dayOfMonth', e.target.value)}
             placeholder="1" className={inp + ' font-mono'}/>
+        </Field>
+        <Field label="Inicia">
+          <input type="date" value={f.startDate || ''} onChange={e => set('startDate', e.target.value)}
+            className={inp}/>
+        </Field>
+        <Field label="Termina (opcional)">
+          <input type="date" value={f.endDate || ''} onChange={e => set('endDate', e.target.value)}
+            className={inp}/>
         </Field>
         <Field label="Categoría">
           <Select value={f.category} onChange={v => set('category', v)} options={categories.map(c => ({ value: c.id, label: c.label }))}/>
@@ -307,7 +342,13 @@ export default function Recurring({
   }
 
   const handleSaveExpense = async (form) => {
-    const toSave = { ...form, amount: Number(form.amount) || 0, dayOfMonth: Number(form.dayOfMonth) || 1 }
+    const toSave = {
+      ...form,
+      amount:     Number(form.amount) || 0,
+      dayOfMonth: Number(form.dayOfMonth) || 1,
+      startDate:  form.startDate || null,
+      endDate:    form.endDate   || null,
+    }
     if (formState?.id) {
       const updated = { ...toSave, id: formState.id }
       if (onUpdateRecurring) await onUpdateRecurring(updated)
@@ -320,7 +361,13 @@ export default function Recurring({
   }
 
   const handleSaveIncome = async (form) => {
-    const toSave = { ...form, amount: Number(form.amount) || 0, dayOfMonth: Number(form.dayOfMonth) || 1 }
+    const toSave = {
+      ...form,
+      amount:     Number(form.amount) || 0,
+      dayOfMonth: Number(form.dayOfMonth) || 1,
+      startDate:  form.startDate || null,
+      endDate:    form.endDate   || null,
+    }
     if (formState?.id) {
       const updated = { ...toSave, id: formState.id }
       if (onUpdateIncome) await onUpdateIncome(updated)
@@ -460,8 +507,11 @@ export default function Recurring({
                         {r.active && !charged && <Badge tone="warn">pendiente</Badge>}
                         {r.autoRegister && <Badge tone="info">auto</Badge>}
                       </div>
-                      <div className="mt-1 text-[11.5px] text-[var(--muted)]">
-                        <Icon name="calendar" size={11}/> Día {r.dayOfMonth}
+                      <div className="mt-1 text-[11.5px] text-[var(--muted)] leading-snug">
+                        Cobra el día {r.dayOfMonth}
+                        {r.startDate && <> · Inicia: {fmtLocalDate(r.startDate)}</>}
+                        {r.endDate   && <> · Termina: {fmtLocalDate(r.endDate)}</>}
+                        {r.active && !charged && <> · Próximo cobro: {fmtNextCharge(r, today)}</>}
                         {r.bank && ` · ${banks.find(b => b.id === r.bank)?.label ?? r.bank}`}
                       </div>
                     </div>
