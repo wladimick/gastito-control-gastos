@@ -4,6 +4,31 @@ import { Icon, fmtCLP, MES } from '../lib/helpers'
 import { useBanks } from '../services/banksService'
 import { useCategories } from '../services/categoriesService'
 
+function ModalShell({ title, onClose, children }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}/>
+      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center pointer-events-none">
+        <div className="pointer-events-auto w-full md:max-w-xl
+                        max-h-[90vh] md:max-h-[85vh]
+                        rounded-t-2xl md:rounded-xl
+                        bg-[var(--bg)] flex flex-col overflow-hidden shadow-2xl"
+             style={{ animation: 'slideUpR .22s ease-out' }}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--line)] shrink-0">
+            <div className="font-semibold tracking-tight">{title}</div>
+            <button type="button" onClick={onClose}
+              className="w-8 h-8 rounded-md hover:bg-[var(--hover)] grid place-items-center">
+              <Icon name="x" size={15}/>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">{children}</div>
+        </div>
+      </div>
+      <style>{`@keyframes slideUpR{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+    </>
+  )
+}
+
 function TabBtn({ active, onClick, label, badge, warn }) {
   return (
     <button onClick={onClick}
@@ -70,20 +95,22 @@ const BLANK_INCOME = {
   active: true, autoRegister: true, lastChargedMonth: null, kind: 'income',
 }
 
-function RecurringForm({ initial, onSave, onCancel, banks }) {
+function RecurringForm({ initial, onSave, onCancel, banks, bare = false }) {
   const categories = useCategories()
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const isIncome = f.kind === 'income'
   const valid = f.name.trim() && Number(f.amount) > 0
 
-  return (
-    <Card padding="p-5" className="border-[var(--ink)]/20">
-      <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-4">
-        {initial.id
-          ? (isIncome ? 'Editar ingreso' : 'Editar gasto recurrente')
-          : (isIncome ? 'Nuevo ingreso recurrente' : 'Nuevo gasto recurrente')}
-      </div>
+  const inner = (
+    <>
+      {!bare && (
+        <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-4">
+          {initial.id
+            ? (isIncome ? 'Editar ingreso' : 'Editar gasto recurrente')
+            : (isIncome ? 'Nuevo ingreso recurrente' : 'Nuevo gasto recurrente')}
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Field label={isIncome ? 'Fuente / Nombre' : 'Nombre'}>
           <input value={f.name} onChange={e => set('name', e.target.value)}
@@ -148,14 +175,16 @@ function RecurringForm({ initial, onSave, onCancel, banks }) {
         </Field>
       </div>
       <div className="mt-4 flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="text-[12.5px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>
+        {!bare && <button onClick={onCancel} className="text-[12.5px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>}
         <button onClick={() => valid && onSave(f)} disabled={!valid}
           className="h-9 px-4 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium disabled:opacity-40">
           <Icon name="check" size={13}/> {initial.id ? 'Guardar cambios' : (isIncome ? 'Crear ingreso' : 'Crear recurrente')}
         </button>
       </div>
-    </Card>
+    </>
   )
+  if (bare) return inner
+  return <Card padding="p-5" className="border-[var(--ink)]/20">{inner}</Card>
 }
 
 // ── Receivable / Payable form ─────────────────────────────────
@@ -168,20 +197,22 @@ function BLANK_RELATION(kind) {
   }
 }
 
-function RelationForm({ initial, onSave, onCancel }) {
+function RelationForm({ initial, onSave, onCancel, bare = false }) {
   const categories = useCategories()
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const isPayable = f.kind === 'payable'
   const valid = (f.personName || f.name).trim() && Number(f.amount) > 0
 
-  return (
-    <Card padding="p-5" className="border-[var(--ink)]/20">
-      <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-4">
-        {initial.id
-          ? (isPayable ? 'Editar deuda' : 'Editar por cobrar')
-          : (isPayable ? 'Nueva deuda personal' : 'Nuevo por cobrar')}
-      </div>
+  const inner = (
+    <>
+      {!bare && (
+        <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-4">
+          {initial.id
+            ? (isPayable ? 'Editar deuda' : 'Editar por cobrar')
+            : (isPayable ? 'Nueva deuda personal' : 'Nuevo por cobrar')}
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Field label={isPayable ? 'A quién le debo' : 'Quién me debe'}>
           <input value={f.personName} onChange={e => { set('personName', e.target.value); set('name', e.target.value) }}
@@ -224,14 +255,16 @@ function RelationForm({ initial, onSave, onCancel }) {
         </div>
       </div>
       <div className="mt-4 flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="text-[12.5px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>
+        {!bare && <button onClick={onCancel} className="text-[12.5px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>}
         <button onClick={() => valid && onSave(f)} disabled={!valid}
           className="h-9 px-4 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium disabled:opacity-40">
           <Icon name="check" size={13}/> {initial.id ? 'Guardar cambios' : (isPayable ? 'Registrar deuda' : 'Registrar por cobrar')}
         </button>
       </div>
-    </Card>
+    </>
   )
+  if (bare) return inner
+  return <Card padding="p-5" className="border-[var(--ink)]/20">{inner}</Card>
 }
 
 // ── Relation list row ─────────────────────────────────────────
@@ -455,11 +488,26 @@ export default function Recurring({
         </Card>
       </div>
 
-      {/* Form */}
+      {/* Form modal */}
       {formState !== null && (
-        tab === 'expenses' || tab === 'income'
-          ? <RecurringForm initial={formState} onSave={tab === 'income' ? handleSaveIncome : handleSaveExpense} onCancel={() => setFormState(null)} banks={banks}/>
-          : <RelationForm  initial={formState} onSave={tab === 'receivables' ? handleSaveReceivable : handleSavePayable} onCancel={() => setFormState(null)}/>
+        <ModalShell
+          title={
+            tab === 'expenses'    && formState.id ? 'Editar gasto recurrente'
+            : tab === 'expenses'                  ? 'Nuevo gasto recurrente'
+            : tab === 'income'    && formState.id ? 'Editar ingreso recurrente'
+            : tab === 'income'                    ? 'Nuevo ingreso recurrente'
+            : tab === 'receivables' && formState.id ? 'Editar por cobrar'
+            : tab === 'receivables'               ? 'Nuevo por cobrar'
+            : tab === 'payables'  && formState.id ? 'Editar por pagar'
+            : 'Nuevo por pagar'
+          }
+          onClose={() => setFormState(null)}>
+          <div className="p-5">
+            {tab === 'expenses' || tab === 'income'
+              ? <RecurringForm initial={formState} onSave={tab === 'income' ? handleSaveIncome : handleSaveExpense} onCancel={() => setFormState(null)} banks={banks} bare/>
+              : <RelationForm  initial={formState} onSave={tab === 'receivables' ? handleSaveReceivable : handleSavePayable} onCancel={() => setFormState(null)} bare/>}
+          </div>
+        </ModalShell>
       )}
 
       {/* Tabs + list */}

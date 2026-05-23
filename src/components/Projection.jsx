@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { Select } from './ui'
 import { Icon, fmtCLP, fmtCLPshort, MES } from '../lib/helpers'
 import { PAYMENT_METHODS } from '../data'
@@ -331,10 +331,18 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
   const today    = new Date()
   const todayDay = today.getDate()
 
-  // All statements for this period (including paid), for a complete picture
   const periodStatements = allStatements.filter(s =>
     (s.month || s.dueDate?.slice(0, 7)) === period.key
   )
+
+  useEffect(() => {
+    console.log('[projection:credit-detail-modal]', {
+      periodo: `${MES[period.m]} ${period.y}`,
+      totalCuotas: period.cuotasTotal,
+      cantidadItems: period.cuotasDetail.length + periodStatements.length,
+      isMobile: window.innerWidth < 768,
+    })
+  }, [])
 
   const stmtStatus = stmt => {
     if (stmt.status === 'paid') return { label: 'pagado',   color: 'var(--accent-ink)', bg: 'var(--accent-soft)' }
@@ -353,21 +361,28 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
   return (
     <div className="fixed inset-0 z-50 flex md:items-stretch items-end justify-end">
       <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" onClick={onClose}/>
-      <div className="relative w-full md:max-w-[460px] md:h-screen bg-[var(--bg-elev)] border-l border-[var(--line)]
-                      rounded-t-2xl md:rounded-none overflow-y-auto"
+      <div className="relative w-full md:max-w-[460px]
+                      max-h-[85vh] md:max-h-none md:h-full
+                      bg-[var(--bg-elev)] border-l border-[var(--line)]
+                      rounded-t-2xl md:rounded-none flex flex-col overflow-hidden"
            style={{ animation: 'slideUp .2s ease-out' }}>
 
-        <div className="sticky top-0 bg-[var(--bg-elev)] border-b border-[var(--line)] px-5 py-4 flex items-center justify-between">
+        {/* Header — always visible */}
+        <div className="shrink-0 bg-[var(--bg-elev)] border-b border-[var(--line)] px-5 py-3.5 flex items-center justify-between">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">Cuotas de crédito</div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Cuotas de crédito</div>
             <div className="font-semibold tracking-tight">{MES[period.m]} {period.y}</div>
+            {period.cuotasTotal > 0 && (
+              <div className="text-[11px] font-mono text-[var(--muted)] mt-0.5">Total: −{fmtCLP(period.cuotasTotal)}</div>
+            )}
           </div>
           <button onClick={onClose} className="w-9 h-9 grid place-items-center rounded-md border border-[var(--line)] hover:bg-[var(--hover)]">
             <Icon name="x" size={16}/>
           </button>
         </div>
 
-        <div className="p-5 flex flex-col gap-5">
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
 
           {/* ── Compras en cuotas ─────────────────────────────── */}
           {period.cuotasDetail.length > 0 && (
@@ -380,12 +395,12 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
                   const st   = debtStatus(x)
                   const bank = banks.find(b => b.id === x.item.bank)
                   return (
-                    <div key={i} className="rounded-lg border border-[var(--line)] px-4 py-3 flex items-center gap-3">
+                    <div key={i} className="rounded-lg border border-[var(--line)] px-3.5 py-2.5 flex items-center gap-2.5">
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-medium truncate">
                           {x.item.description || x.item.name || '—'}
                         </div>
-                        <div className="text-[11.5px] text-[var(--muted)] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <div className="text-[11px] text-[var(--muted)] mt-0.5 flex items-center gap-1 flex-wrap">
                           {bank && <span>{bank.label}</span>}
                           <span>·</span>
                           <span>cuota {x.installmentNum}/{x.item.installments}</span>
@@ -393,8 +408,8 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="font-mono text-[14px] font-semibold">{fmtCLP(x.amount)}</div>
-                        <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded"
+                        <div className="font-mono text-[13px] font-semibold">{fmtCLP(x.amount)}</div>
+                        <span className="inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded"
                           style={{ background: st.bg, color: st.color }}>{st.label}</span>
                       </div>
                     </div>
@@ -483,14 +498,14 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
 
           {/* ── Total ─────────────────────────────────────────── */}
           {period.cuotasTotal > 0 && (
-            <div className="rounded-lg border border-[var(--line)] px-4 py-3 flex items-center justify-between">
-              <span className="text-[12px] text-[var(--muted)]">Total cuotas de crédito</span>
+            <div className="rounded-lg bg-[var(--bg)] border border-[var(--line)] px-3.5 py-2.5 flex items-center justify-between">
+              <span className="text-[12px] text-[var(--muted)]">Total del periodo</span>
               <span className="font-mono text-[14px] font-semibold">−{fmtCLP(period.cuotasTotal)}</span>
             </div>
           )}
 
           {/* ── Aviso doble descuento ─────────────────────────── */}
-          <div className="rounded-lg bg-[var(--bg)] border border-[var(--line)] px-4 py-3 text-[11.5px] text-[var(--muted)] leading-snug flex items-start gap-2">
+          <div className="rounded-lg bg-[var(--bg)] border border-[var(--line)] px-3.5 py-3 text-[11.5px] text-[var(--muted)] leading-snug flex items-start gap-2">
             <Icon name="info" size={13} className="mt-px shrink-0"/>
             <span>Para evitar doble descuento, registra aquí solo el total del estado de cuenta mensual, no compras que ya están en la sección Cuotas de la app.</span>
           </div>
