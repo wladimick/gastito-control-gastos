@@ -6,6 +6,31 @@ import { useCategories } from '../services/categoriesService'
 
 const AUTO_PAY_DAY = 5
 
+function ModalShell({ title, onClose, children }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}/>
+      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center pointer-events-none">
+        <div className="pointer-events-auto w-full md:max-w-xl
+                        max-h-[90vh] md:max-h-[85vh]
+                        rounded-t-2xl md:rounded-xl
+                        bg-[var(--bg)] flex flex-col overflow-hidden shadow-2xl"
+             style={{ animation: 'slideUpM .22s ease-out' }}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--line)] shrink-0">
+            <div className="font-semibold tracking-tight">{title}</div>
+            <button type="button" onClick={onClose}
+              className="w-8 h-8 rounded-md hover:bg-[var(--hover)] grid place-items-center">
+              <Icon name="x" size={15}/>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">{children}</div>
+        </div>
+      </div>
+      <style>{`@keyframes slideUpM{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+    </>
+  )
+}
+
 function parseYM(s) { const [y, m] = s.split('-').map(Number); return { y, m: m - 1 } }
 function addMonths(y, m, n) {
   const date = new Date(y, m + n, 1)
@@ -69,7 +94,7 @@ const BLANK = {
   autoPay: false, status: 'active',
 }
 
-function InstallmentForm({ initial, onSave, onCancel, banks }) {
+function InstallmentForm({ initial, onSave, onCancel, banks, bare = false }) {
   const categories = useCategories()
   const [f, setF] = useState(initial)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -103,14 +128,16 @@ function InstallmentForm({ initial, onSave, onCancel, banks }) {
 
   const hasInterest = Number(f.purchaseAmount) > 0 && Number(f.total) > Number(f.purchaseAmount)
 
-  return (
-    <Card padding="p-5" className="border-[var(--ink)]/20">
-      <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-4 flex items-center gap-2">
-        {initial.id ? 'Editar cuota' : 'Nueva deuda en cuotas'}
-        {hasInterest && (
-          <span className="px-1.5 py-0.5 rounded bg-[var(--amber-soft)] text-[var(--amber-ink)] text-[10px] font-medium">con interés</span>
-        )}
-      </div>
+  const formContent = (
+    <>
+      {!bare && (
+        <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-4 flex items-center gap-2">
+          {initial.id ? 'Editar cuota' : 'Nueva deuda en cuotas'}
+          {hasInterest && (
+            <span className="px-1.5 py-0.5 rounded bg-[var(--amber-soft)] text-[var(--amber-ink)] text-[10px] font-medium">con interés</span>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Field label="Descripción">
           <input value={f.description} onChange={e => set('description', e.target.value)} placeholder="MacBook Air…"
@@ -158,13 +185,18 @@ function InstallmentForm({ initial, onSave, onCancel, banks }) {
         </div>
       )}
       <div className="mt-4 flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="text-[12.5px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>
+        {!bare && <button onClick={onCancel} className="text-[12.5px] text-[var(--muted)] hover:text-[var(--ink)] underline">Cancelar</button>}
         <button onClick={() => valid && onSave(f)} disabled={!valid}
           className="h-9 px-4 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium disabled:opacity-40">
           <Icon name="check" size={13}/> {initial.id ? 'Guardar cambios' : 'Crear cuota'}
         </button>
       </div>
-    </Card>
+    </>
+  )
+
+  if (bare) return formContent
+  return (
+    <Card padding="p-5" className="border-[var(--ink)]/20">{formContent}</Card>
   )
 }
 
@@ -174,8 +206,9 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
   const today = new Date()
   const curY = today.getFullYear(), curM = today.getMonth()
   const curKey = ymKey(curY, curM)
-  const [formState, setFormState] = useState(null)
+  const [formState,    setFormState]    = useState(null)
   const [expandedDebt, setExpandedDebt] = useState(null)
+  const [filterBank,   setFilterBank]   = useState(null)
 
   useEffect(() => {
     let needsUpdate = false
@@ -195,27 +228,44 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
   const allCuotas = useMemo(() => debts.flatMap(d => expandSchedule(d).map(c => ({ ...c, debt: d }))), [debts])
   const activeRecurring = (recurring ?? []).filter(r => r.active)
 
-  const active         = debts.filter(d => d.status === 'active')
+  // Bank filter derived values
+  const bankIdsInDebts      = useMemo(() => [...new Set(debts.map(d => d.bank).filter(Boolean))], [debts])
+  const availableBanksInDebts = useMemo(() => bankIdsInDebts.map(id => banks.find(b => b.id === id)).filter(Boolean), [bankIdsInDebts, banks])
+  const filteredDebts       = filterBank ? debts.filter(d => d.bank === filterBank) : debts
+  const filteredCuotas      = filterBank ? allCuotas.filter(c => c.bank === filterBank) : allCuotas
+
+  useEffect(() => {
+    const filtMonthly = filteredCuotas
+      .filter(c => c.monthKey === curKey && !c.paid)
+      .reduce((s, c) => s + c.amount, 0)
+    console.log('[installments:bank-filter]', {
+      bancoSeleccionado: filterBank ? (banks.find(b => b.id === filterBank)?.label || filterBank) : 'Todos',
+      totalFiltrado: filtMonthly,
+      itemsFiltrados: filteredDebts.filter(d => d.status === 'active').length,
+    })
+  }, [filterBank])
+
+  const active         = filteredDebts.filter(d => d.status === 'active')
   const totalRemaining = active.reduce((s, d) => s + d.monthlyAmount * (d.installments - d.paid), 0)
   const totalCommitted = active.reduce((s, d) => s + d.total, 0)
-  const monthlyNow     = allCuotas.filter(c => c.monthKey === curKey && !c.paid).reduce((s, c) => s + c.amount, 0)
+  const monthlyNow     = filteredCuotas.filter(c => c.monthKey === curKey && !c.paid).reduce((s, c) => s + c.amount, 0)
   const monthlyAvg6    = (() => {
     let total = 0
     for (let i = 0; i < 6; i++) {
       const { y, m } = addMonths(curY, curM, i)
       const key = ymKey(y, m)
-      total += allCuotas.filter(c => c.monthKey === key && !c.paid).reduce((s, c) => s + c.amount, 0)
+      total += filteredCuotas.filter(c => c.monthKey === key && !c.paid).reduce((s, c) => s + c.amount, 0)
     }
     return total / 6
   })()
-  const activeCuotasCount = allCuotas.filter(c => !c.paid && new Date(c.y, c.m, 1) >= new Date(curY, curM, 1)).length
+  const activeCuotasCount = filteredCuotas.filter(c => !c.paid && new Date(c.y, c.m, 1) >= new Date(curY, curM, 1)).length
 
   const upcomingMonths = useMemo(() => {
     const months = []
     for (let i = 0; i < 6; i++) {
       const { y, m } = addMonths(curY, curM, i)
       const key      = ymKey(y, m)
-      const cuotas   = allCuotas.filter(c => c.monthKey === key && !c.paid).sort((a, b) => a.day - b.day)
+      const cuotas   = filteredCuotas.filter(c => c.monthKey === key && !c.paid).sort((a, b) => a.day - b.day)
       const recCharges = activeRecurring.map(r => ({
         kind: 'recurring', debtId: r.id, description: r.name,
         amount: r.amount, day: r.dayOfMonth, bank: r.bank, category: r.category,
@@ -225,7 +275,7 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
       months.push({ y, m, key, cuotas, recCharges, cuotaTotal, recTotal, total: cuotaTotal + recTotal })
     }
     return months
-  }, [allCuotas, activeRecurring])
+  }, [filteredCuotas, activeRecurring])
 
   const maxMonthTotal = Math.max(1, ...upcomingMonths.map(m => m.total))
 
@@ -293,12 +343,19 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
       </div>
 
       {formState !== null && (
-        <InstallmentForm
-          initial={formState}
-          onSave={handleSave}
-          onCancel={() => setFormState(null)}
-          banks={banks}
-        />
+        <ModalShell
+          title={formState.id ? 'Editar cuota' : 'Nueva cuota de crédito'}
+          onClose={() => setFormState(null)}>
+          <div className="p-5">
+            <InstallmentForm
+              initial={formState}
+              onSave={handleSave}
+              onCancel={() => setFormState(null)}
+              banks={banks}
+              bare
+            />
+          </div>
+        </ModalShell>
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -308,17 +365,51 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
         <KPI label="Cuotas pendientes"    value={activeCuotasCount}       sub={`en ${active.length} deudas`}                icon="card"/>
       </div>
 
+      {/* ── Bank filter ── */}
+      {availableBanksInDebts.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap items-center">
+          <span className="text-[11.5px] text-[var(--muted)]">Banco:</span>
+          <button type="button" onClick={() => setFilterBank(null)}
+            className={`px-2.5 py-1 rounded-full text-[11.5px] transition ${
+              filterBank === null
+                ? 'bg-[var(--ink)] text-[var(--bg)]'
+                : 'bg-[var(--bg-elev)] text-[var(--muted)] hover:bg-[var(--hover)]'
+            }`}>
+            Todos
+          </button>
+          {availableBanksInDebts.map(b => (
+            <button key={b.id} type="button" onClick={() => setFilterBank(filterBank === b.id ? null : b.id)}
+              className={`px-2.5 py-1 rounded-full text-[11.5px] transition border ${
+                filterBank === b.id
+                  ? 'text-white border-transparent'
+                  : 'bg-[var(--bg-elev)] text-[var(--muted)] border-[var(--line)] hover:bg-[var(--hover)]'
+              }`}
+              style={filterBank === b.id ? { background: b.color || 'var(--ink)' } : {}}>
+              {b.label}
+            </button>
+          ))}
+          {filterBank && (
+            <button type="button" onClick={() => setFilterBank(null)}
+              className="text-[11px] text-[var(--muted)] hover:text-[var(--ink)] underline ml-1">
+              Limpiar filtro
+            </button>
+          )}
+        </div>
+      )}
+
       <Card padding="p-0">
         <div className="px-5 py-4 border-b border-[var(--line)] flex items-center justify-between">
           <div>
             <div className="font-semibold tracking-tight">Deudas en cuotas</div>
             <div className="text-[12px] text-[var(--muted)] mt-0.5">
-              {active.length} activas · {debts.filter(d => d.status === 'paid').length} pagadas
+              {active.length} activas
+              {filterBank && <span className="text-[var(--amber-ink)]"> · filtrado por {banks.find(b => b.id === filterBank)?.label}</span>}
+              {' · '}{debts.filter(d => d.status === 'paid').length} pagadas
             </div>
           </div>
         </div>
         <ul className="divide-y divide-[var(--line)]">
-          {debts.map(d => {
+          {filteredDebts.map(d => {
             const cat       = categories.find(c => c.id === d.category) ?? categories.find(c => c.id === 'otros') ?? categories[0]
             const bank      = banks.find(b => b.id ===d.bank)
             const remaining = d.monthlyAmount * (d.installments - d.paid)
@@ -413,6 +504,11 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
               </li>
             )
           })}
+          {filteredDebts.length === 0 && (
+            <li className="px-5 py-8 text-center text-[13px] text-[var(--muted)]">
+              Sin cuotas para {banks.find(b => b.id === filterBank)?.label || 'este banco'}
+            </li>
+          )}
         </ul>
       </Card>
 
