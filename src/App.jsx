@@ -730,6 +730,8 @@ export default function App() {
           recurringList={recurringList}
           incomeList={incomeList}
           accounts={accounts}
+          receivables={receivablesList}
+          payables={payablesList}
           userSettings={userSettings}
         />}
         {view === 'projection' && (
