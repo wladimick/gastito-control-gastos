@@ -991,6 +991,10 @@ export default function Reports({
       {/* ── Histórico tab ─────────────────────────────────────── */}
       {tab === 'historico' && (
         <>
+          <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--muted)]">
+            <Icon name="info" size={13}/>
+            <span>Este reporte muestra movimientos del periodo seleccionado. No reemplaza tu saldo actual.</span>
+          </div>
           <Card padding="p-5 md:p-6">
             <div className="flex items-end justify-between flex-wrap gap-3">
               <div>

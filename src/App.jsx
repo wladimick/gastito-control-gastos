@@ -738,6 +738,7 @@ export default function App() {
             recurringList={recurringList}
             incomeList={incomeList}
             receivables={receivablesList}
+            payables={payablesList}
             installmentDebts={installmentDebts}
           />
         )}

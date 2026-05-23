@@ -18,24 +18,30 @@ function mDiff(a, b) {
 }
 function mkKey(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}` }
 
-// incomeItems  = incomeList (recurring, with dayOfMonth)
-// receivables  = one-time pending receivables
-// recurringItems = recurringList (expenses, with dayOfMonth)
-// For the current month, only future-dated items are included (dayOfMonth > today).
-// For future months, full monthly amounts are used.
+// ── Core projection engine ─────────────────────────────────────
+// Three rolling trajectories per month:
+//   balConservative = start - outflows (no income)
+//   balExpected     = start + income - outflows
+//   balSim          = balExpected - simulated items
+//
+// Recurring items are filtered by startDate/endDate to avoid
+// counting subscriptions that haven't started yet.
 function computeMonths({
-  startBalance,     // usableBalance or manual override
-  incomeItems,
-  receivables,
-  recurringItems,
-  installmentDebts,
-  projectedItems,
+  startBalance,
+  incomeItems      = [],
+  receivables      = [],
+  payables         = [],
+  recurringItems   = [],
+  installmentDebts = [],
+  projectedItems   = [],
+  sw               = {},
 }) {
   const today    = new Date()
   const todayDay = today.getDate()
   const active   = projectedItems.filter(i => i.active)
-  let balBase    = startBalance
-  let balSim     = startBalance
+  let balC = startBalance
+  let balE = startBalance
+  let balS = startBalance
 
   return [0, 1, 2].map(offset => {
     const d         = new Date(today.getFullYear(), today.getMonth() + offset, 1)
@@ -44,48 +50,55 @@ function computeMonths({
     const mk        = mkKey(y, m)
     const isCurrent = offset === 0
 
-    // Income for this period
-    let income = 0
-    if (isCurrent) {
-      // Recurring income only if dayOfMonth is still in the future
-      income += (incomeItems ?? [])
-        .filter(r => r.active !== false && (r.dayOfMonth == null || Number(r.dayOfMonth) > todayDay))
-        .reduce((s, r) => s + (r.amount || 0), 0)
-      // Pending one-time receivables are still future regardless of date
-      income += (receivables ?? [])
-        .filter(r => r.status !== 'paid')
-        .reduce((s, r) => s + (r.amount || 0), 0)
-    } else {
-      // Full recurring income for future months; receivables resolved by then
-      income = (incomeItems ?? [])
-        .filter(r => r.active !== false)
-        .reduce((s, r) => s + (r.amount || 0), 0)
+    // ── Recurring expenses (startDate/endDate aware) ────────────
+    const recurringDetail = []
+    for (const r of recurringItems) {
+      if (r.kind !== 'expense' || r.active === false) continue
+      // Skip if subscription hasn't started for this period
+      if (r.startDate && r.startDate.slice(0, 7) > mk) continue
+      // Skip if subscription has ended for this period
+      if (r.endDate && r.endDate.slice(0, 7) < mk) continue
+      // Current month: skip if charge day already passed
+      if (isCurrent && r.dayOfMonth != null && Number(r.dayOfMonth) <= todayDay) continue
+      recurringDetail.push({ item: r, amount: r.amount || 0 })
     }
+    const recurring = recurringDetail.reduce((s, x) => s + x.amount, 0)
 
-    // Recurring outflows
-    let recurring = 0
-    if (isCurrent) {
-      recurring = (recurringItems ?? [])
-        .filter(r => r.kind === 'expense' && r.active !== false &&
-          (r.dayOfMonth == null || Number(r.dayOfMonth) > todayDay))
-        .reduce((s, r) => s + (r.amount || 0), 0)
-    } else {
-      recurring = (recurringItems ?? [])
-        .filter(r => r.kind === 'expense' && r.active !== false)
-        .reduce((s, r) => s + (r.amount || 0), 0)
+    // ── Income ──────────────────────────────────────────────────
+    const incomeDetail = []
+    for (const r of incomeItems) {
+      if (r.active === false) continue
+      if (r.startDate && r.startDate.slice(0, 7) > mk) continue
+      if (r.endDate   && r.endDate.slice(0, 7)   < mk) continue
+      if (isCurrent && r.dayOfMonth != null && Number(r.dayOfMonth) <= todayDay) continue
+      incomeDetail.push({ item: r, amount: r.amount || 0 })
     }
+    const income = incomeDetail.reduce((s, x) => s + x.amount, 0)
 
-    // Cuotas: for current month skip already-charged debts
-    const cuotas = (installmentDebts ?? [])
-      .filter(d => d.status === 'active' && d.startMonth)
-      .reduce((s, d) => {
-        const el = mDiff(d.startMonth, mk)
-        if (el < 0 || el >= d.installments) return s
-        if (isCurrent && d.dayOfMonth != null && Number(d.dayOfMonth) <= todayDay) return s
-        return s + (d.monthlyAmount || 0)
-      }, 0)
+    // ── Receivables (one-time, only current month) ──────────────
+    const recvDetail = isCurrent
+      ? receivables.filter(r => r.status !== 'paid').map(r => ({ item: r, amount: r.amount || 0 }))
+      : []
+    const recvAmt = recvDetail.reduce((s, x) => s + x.amount, 0)
 
-    // Projected items
+    // ── Payables (one-time personal debts, only current month) ──
+    const payDetail = isCurrent
+      ? payables.filter(p => p.status !== 'paid').map(p => ({ item: p, amount: p.amount || 0 }))
+      : []
+    const payAmt = payDetail.reduce((s, x) => s + x.amount, 0)
+
+    // ── Cuotas ──────────────────────────────────────────────────
+    const cuotasDetail = []
+    for (const debt of installmentDebts) {
+      if (debt.status !== 'active' || !debt.startMonth) continue
+      const el = mDiff(debt.startMonth, mk)
+      if (el < 0 || el >= debt.installments) continue
+      if (isCurrent && debt.dayOfMonth != null && Number(debt.dayOfMonth) <= todayDay) continue
+      cuotasDetail.push({ item: debt, amount: debt.monthlyAmount || 0 })
+    }
+    const cuotas = cuotasDetail.reduce((s, x) => s + x.amount, 0)
+
+    // ── Projected (simulated) items ─────────────────────────────
     const projBreakdown = active.map(item => {
       const id  = new Date(item.date)
       const imk = mkKey(id.getFullYear(), id.getMonth())
@@ -98,21 +111,61 @@ function computeMonths({
       }
       return { item, amount: amt }
     }).filter(x => x.amount > 0)
+    const projOut = projBreakdown.reduce((s, x) => s + x.amount, 0)
 
-    const projOut    = projBreakdown.reduce((s, x) => s + x.amount, 0)
-    const newBalBase = balBase + income - recurring - cuotas
-    const newBalSim  = balSim  + income - recurring - cuotas - projOut
+    // ── Apply switches ──────────────────────────────────────────
+    const effRecv   = sw.receivables !== false ? recvAmt : 0
+    const effPay    = sw.payables    ?           payAmt  : 0
+    const effCuotas = sw.cuotas      !== false ? cuotas  : 0
+    const effSim    = sw.sim         !== false ? projOut : 0
+    const effOut    = recurring + effCuotas + effPay
+
+    const newBalC = balC - effOut
+    const newBalE = balE + income + effRecv - effOut
+    const newBalS = balS + income + effRecv - effOut - effSim
+
+    // ── Diagnostic logs ─────────────────────────────────────────
+    const itemsExcluidos = recurringItems.filter(r =>
+      r.kind === 'expense' && r.active !== false &&
+      !recurringDetail.some(x => x.item.id === r.id)
+    ).map(r => ({
+      name: r.name,
+      reason: (r.startDate?.slice(0, 7) > mk)
+        ? `startDate ${r.startDate.slice(0, 7)} > ${mk}`
+        : (r.endDate?.slice(0, 7) < mk)
+        ? `endDate ${r.endDate.slice(0, 7)} < ${mk}`
+        : `día ${r.dayOfMonth} ya pasó (hoy: ${todayDay})`,
+    }))
+    console.log('[projection:recurrentes]', {
+      periodo: mk, isCurrent,
+      itemsIncluidos: recurringDetail.map(x => ({ name: x.item.name, amount: x.amount })),
+      itemsExcluidos,
+      total: recurring,
+    })
+    console.log('[projection:resumen]', {
+      periodo: mk,
+      ...(offset === 0 ? { saldoBase: startBalance } : {}),
+      ingresosIncluidos: income + effRecv,
+      gastosIncluidos: effOut,
+      cuotasIncluidas: effCuotas,
+      simulacionesIncluidas: effSim,
+      saldoFinalConservador: newBalC,
+      saldoFinalEsperado: newBalE,
+    })
 
     const row = {
       key: mk, y, m, offset, isCurrent,
-      income, cuotas, recurring,
+      income, recvAmt, payAmt, recurring, cuotas,
+      incomeDetail, recvDetail, payDetail, recurringDetail, cuotasDetail,
       projOut, projBreakdown,
-      balBase: newBalBase,
-      balSim:  newBalSim,
-      hasSim:  active.length > 0,
+      balConservative: newBalC,
+      balExpected:     newBalE,
+      balSim:          newBalS,
+      hasSim:          active.length > 0,
     }
-    balBase = newBalBase
-    balSim  = newBalSim
+    balC = newBalC
+    balE = newBalE
+    balS = newBalS
     return row
   })
 }
@@ -136,18 +189,41 @@ const mkBlank = () => ({
   bank: 'bchile', installments: 1, active: true,
 })
 
-// ── Flow row ───────────────────────────────────────────────────
-function FlowRow({ label, amount, type }) {
+// ── Clickable flow row ─────────────────────────────────────────
+function FlowRow({ label, amount, type, items, open, onToggle }) {
   const isSim    = type === 'sim'
   const isIncome = type === 'income'
   const sign     = isIncome ? '+' : '−'
   const color    = isIncome ? 'var(--accent-ink)' : isSim ? 'var(--ink)' : 'var(--ink-2)'
+  const hasItems = (items?.length ?? 0) > 0
+
   return (
-    <div className="flex items-center justify-between text-[13px]">
-      <span className={isSim ? 'font-medium text-[var(--ink)]' : 'text-[var(--muted)]'}>{label}</span>
-      <span className="font-mono tabular-nums" style={{ color, fontWeight: isSim ? 600 : 400 }}>
-        {sign}{fmtCLP(amount)}
-      </span>
+    <div>
+      <button type="button" onClick={hasItems ? onToggle : undefined}
+        className={`w-full flex items-center justify-between text-[13px] text-left transition
+          ${hasItems ? 'hover:opacity-75 cursor-pointer' : 'cursor-default'}`}>
+        <span className={isSim ? 'font-medium text-[var(--ink)]' : 'text-[var(--muted)]'}>{label}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="font-mono tabular-nums" style={{ color, fontWeight: isSim ? 600 : 400 }}>
+            {sign}{fmtCLP(amount)}
+          </span>
+          {hasItems && <Icon name={open ? 'chevdown' : 'chevron'} size={11} className="text-[var(--muted)]"/>}
+        </div>
+      </button>
+      {open && hasItems && (
+        <div className="mt-1.5 pl-3 border-l-2 border-[var(--line)] flex flex-col gap-1">
+          {items.map((x, i) => (
+            <div key={i} className="flex items-center justify-between text-[11.5px]">
+              <span className="text-[var(--muted)] truncate min-w-0">
+                {x.item.name || x.item.personName || x.item.description || '—'}
+              </span>
+              <span className="font-mono tabular-nums text-[var(--ink-2)] shrink-0 ml-2">
+                {sign}{fmtCLP(x.amount)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -193,7 +269,6 @@ function ProjModal({ item, onClose, onSave }) {
         </div>
 
         <div className="p-5 flex flex-col gap-5">
-          {/* Nombre */}
           <div>
             <label className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">Nombre</label>
             <input value={f.name} onChange={e => sf('name', e.target.value)}
@@ -201,7 +276,6 @@ function ProjModal({ item, onClose, onSave }) {
               className="w-full h-10 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md focus:outline-none focus:border-[var(--ink)] text-[14px]"/>
           </div>
 
-          {/* Monto */}
           <div>
             <label className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">Monto total</label>
             <div className="flex items-center gap-2">
@@ -215,7 +289,6 @@ function ProjModal({ item, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Categoría + Fecha */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">Categoría</label>
@@ -229,7 +302,6 @@ function ProjModal({ item, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Tipo + Cuotas */}
           <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
             <div>
               <label className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">Tipo de pago</label>
@@ -252,7 +324,6 @@ function ProjModal({ item, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Banco + Medio */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">Medio de pago</label>
@@ -266,7 +337,6 @@ function ProjModal({ item, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Descripción */}
           <div>
             <label className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">Notas</label>
             <textarea value={f.description} rows={2} onChange={e => sf('description', e.target.value)}
@@ -380,22 +450,26 @@ export default function Projection({
   recurringList    = [],
   incomeList       = [],
   receivables      = [],
+  payables         = [],
   installmentDebts = [],
 }) {
   const categories = useCategories()
-  const [items,         setItems]         = useState(loadItems)
-  const [editItem,      setEditItem]      = useState(null)
-  const [activePeriod,  setActivePeriod]  = useState(1)
-  const [baseOverride,  setBaseOverride]  = useState(null)   // null = usar saldo real
-  const [editingBase,   setEditingBase]   = useState(false)
-  const [baseInput,     setBaseInput]     = useState('')
+  const [items,        setItems]        = useState(loadItems)
+  const [editItem,     setEditItem]     = useState(null)
+  const [activePeriod, setActivePeriod] = useState(1)
+  const [baseOverride, setBaseOverride] = useState(null)
+  const [editingBase,  setEditingBase]  = useState(false)
+  const [baseInput,    setBaseInput]    = useState('')
+  const [openSection,  setOpenSection]  = useState(null)
+  const [sw, setSw] = useState({ receivables: true, payables: false, cuotas: true, sim: true })
+  const toggleSw = k => setSw(p => ({ ...p, [k]: !p[k] }))
 
   const persistItems = useCallback(next => { setItems(next); saveItems(next) }, [])
 
   const usableBalance = useMemo(() => {
     const total    = (accounts ?? []).filter(a => a.active).reduce((s, a) => s + (a.balance || 0), 0)
-    const payables = (recurringList ?? []).filter(r => r.active && r.kind === 'payable').reduce((s, r) => s + (r.amount || 0), 0)
-    return total - payables
+    const payFixed = (recurringList ?? []).filter(r => r.active && r.kind === 'payable').reduce((s, r) => s + (r.amount || 0), 0)
+    return total - payFixed
   }, [accounts, recurringList])
 
   const startBalance = baseOverride != null ? baseOverride : usableBalance
@@ -405,21 +479,25 @@ export default function Projection({
       startBalance,
       incomeItems:      incomeList,
       receivables,
+      payables,
       recurringItems:   recurringList,
       installmentDebts,
       projectedItems:   items,
+      sw,
     })
-  , [startBalance, incomeList, receivables, recurringList, installmentDebts, items])
+  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, items, sw])
 
-  const period = months[activePeriod]
-  const dispBal = mo => mo.hasSim ? mo.balSim : mo.balBase
+  const period  = months[activePeriod]
+  const dispBal = mo => (mo.hasSim && sw.sim !== false) ? mo.balSim : mo.balExpected
+
   const v  = period ? verdict(dispBal(period), startBalance) : 'verde'
   const vc = VC[v]
 
   const recText = period ? (() => {
     const pName = activePeriod === 0 ? 'este mes' : activePeriod === 1 ? 'el próximo mes' : `en ${MES[period.m]}`
     const bal   = dispBal(period)
-    if (!period.hasSim)   return `Sin gastos simulados activos, proyectas terminar ${pName} con ${fmtCLP(bal)}.`
+    if (!period.hasSim || sw.sim === false)
+      return `Sin gastos simulados activos, proyectas terminar ${pName} con ${fmtCLP(bal)}.`
     if (v === 'rojo')     return `Si agregas estos gastos, terminarías ${pName} con déficit de ${fmtCLP(Math.abs(bal))}. No se recomienda.`
     if (v === 'amarillo') return `Si agregas estos gastos, terminarías ${pName} con ${fmtCLP(bal)}. El margen es ajustado.`
     return `Si agregas estos gastos, terminarías ${pName} con ${fmtCLP(bal)}. El saldo se mantiene saludable.`
@@ -437,13 +515,15 @@ export default function Projection({
     const vv = verdict(dispBal(mo), startBalance)
     return vv === 'verde' ? 'bg-[var(--accent)]' : vv === 'amarillo' ? 'bg-amber-400' : 'bg-red-500'
   }
-
   const applyBaseOverride = () => {
     const val = Number(String(baseInput).replace(/[^0-9]/g, ''))
     setBaseOverride(isNaN(val) || val === 0 ? null : val)
     setEditingBase(false)
   }
   const resetBaseOverride = () => { setBaseOverride(null); setEditingBase(false) }
+  const toggleSection = s => setOpenSection(p => p === s ? null : s)
+
+  const showRecvWarning = sw.receivables !== false && (period?.recvAmt ?? 0) > 0
 
   return (
     <div className="flex flex-col gap-5 pb-8">
@@ -461,17 +541,16 @@ export default function Projection({
         </button>
       </div>
 
-      {/* Info bar: base balance + optional override */}
+      {/* Info bar */}
       <div className="flex items-center gap-2 text-[12px] text-[var(--muted)] -mt-2 flex-wrap">
         <Icon name="info" size={13}/>
         <span>Proyección calculada desde tu saldo actual</span>
         <span>·</span>
         {editingBase ? (
           <span className="flex items-center gap-1.5">
-            <span className="text-[var(--muted)]">Saldo base:</span>
+            <span>Saldo base:</span>
             <input
-              type="text" inputMode="numeric"
-              value={baseInput}
+              type="text" inputMode="numeric" value={baseInput}
               onChange={e => setBaseInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') applyBaseOverride(); if (e.key === 'Escape') resetBaseOverride() }}
               placeholder={fmtCLP(usableBalance)}
@@ -479,16 +558,12 @@ export default function Projection({
               className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
             />
             <button onClick={applyBaseOverride} className="text-[var(--accent-ink)] font-medium hover:underline">Ok</button>
-            <button onClick={resetBaseOverride} className="text-[var(--muted)] hover:text-[var(--ink)]">
-              <Icon name="x" size={11}/>
-            </button>
+            <button onClick={resetBaseOverride}><Icon name="x" size={11}/></button>
           </span>
         ) : (
           <button onClick={() => { setBaseInput(''); setEditingBase(true) }}
             className="flex items-center gap-1 hover:text-[var(--ink)] transition">
-            <span className="font-mono font-medium text-[var(--ink-2)]">
-              Saldo base: {fmtCLP(startBalance)}
-            </span>
+            <span className="font-mono font-medium text-[var(--ink-2)]">Saldo base: {fmtCLP(startBalance)}</span>
             {baseOverride != null && (
               <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[var(--amber-soft)] text-[var(--amber-ink)]">manual</span>
             )}
@@ -497,18 +572,46 @@ export default function Projection({
         )}
       </div>
 
-      {/* KPI cards */}
+      {/* Switches */}
+      <div className="flex flex-wrap gap-2 -mt-2">
+        {[
+          { key: 'receivables', label: 'Por cobrar' },
+          { key: 'payables',    label: 'Por pagar' },
+          { key: 'cuotas',      label: 'Cuotas' },
+          { key: 'sim',         label: 'Simulaciones' },
+        ].map(s => (
+          <button key={s.key} onClick={() => toggleSw(s.key)}
+            className={`h-7 px-3 rounded-full text-[11px] font-medium border transition
+              ${sw[s.key]
+                ? 'bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]'
+                : 'bg-transparent text-[var(--muted)] border-[var(--line)] hover:border-[var(--ink-2)]'
+              }`}>
+            {sw[s.key] ? '✓ ' : ''}{s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Receivables warning */}
+      {showRecvWarning && (
+        <div className="flex items-center gap-2 -mt-2 text-[12px] rounded-lg px-3 py-2"
+          style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>
+          <Icon name="alert" size={13} className="shrink-0"/>
+          <span>Esta proyección incluye <strong>{fmtCLP(period.recvAmt)}</strong> que aún no te pagan.</span>
+        </div>
+      )}
+
+      {/* KPI cards: today + next month conservative + next month expected */}
       <div className="grid grid-cols-3 gap-2.5">
-        <KpiCard label="Saldo hoy" bal={usableBalance} sub="disponible"/>
-        <KpiCard label={MES[months[1].m]} bal={dispBal(months[1])} sub="proyectado" dotCls={getDot(months[1])}/>
-        <KpiCard label={MES[months[2].m]} bal={dispBal(months[2])} sub="proyectado" dotCls={getDot(months[2])}/>
+        <KpiCard label="Saldo hoy"           bal={startBalance}              sub="disponible"/>
+        <KpiCard label={`${MES[months[1].m]} conserv.`} bal={months[1].balConservative} sub="sin ingresos"  dotCls={(() => { const vv = verdict(months[1].balConservative, startBalance); return vv === 'verde' ? 'bg-[var(--accent)]' : vv === 'amarillo' ? 'bg-amber-400' : 'bg-red-500' })()}/>
+        <KpiCard label={`${MES[months[1].m]} esperado`} bal={dispBal(months[1])}        sub="con ingresos"  dotCls={getDot(months[1])}/>
       </div>
 
       {/* Period tabs + detail */}
       <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] overflow-hidden">
         <div className="flex border-b border-[var(--line)]">
           {months.map((mo, i) => (
-            <button key={mo.key} onClick={() => setActivePeriod(i)}
+            <button key={mo.key} onClick={() => { setActivePeriod(i); setOpenSection(null) }}
               className={`flex-1 py-2.5 text-[12px] font-medium transition border-b-2 -mb-px flex flex-col items-center gap-0.5
                 ${activePeriod === i ? 'border-[var(--ink)] text-[var(--ink)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink-2)]'}`}>
               <span>{PERIOD_LABELS[i]}</span>
@@ -520,34 +623,86 @@ export default function Projection({
 
         {period && (
           <div className="p-4 flex flex-col gap-3">
-            {/* Flow breakdown */}
-            <div className="flex flex-col gap-2">
-              <FlowRow label={period.isCurrent ? 'Ingresos pendientes del mes' : 'Ingresos esperados'} amount={period.income} type="income"/>
-              <FlowRow label="Gastos recurrentes"   amount={period.recurring} type="out"/>
-              {period.cuotas > 0 &&
-                <FlowRow label="Cuotas comprometidas" amount={period.cuotas}    type="out"/>}
-              {period.projOut > 0 && (
+            {/* Flow breakdown with clickable drill-down */}
+            <div className="flex flex-col gap-2.5">
+              <FlowRow
+                label={period.isCurrent ? 'Ingresos pendientes del mes' : 'Ingresos esperados'}
+                amount={period.income + (sw.receivables !== false ? period.recvAmt : 0)}
+                type="income"
+                items={[...period.incomeDetail, ...(sw.receivables !== false ? period.recvDetail : [])]}
+                open={openSection === 'income'}
+                onToggle={() => toggleSection('income')}
+              />
+              <FlowRow
+                label="Gastos recurrentes"
+                amount={period.recurring}
+                type="out"
+                items={period.recurringDetail}
+                open={openSection === 'recurring'}
+                onToggle={() => toggleSection('recurring')}
+              />
+              {sw.cuotas !== false && period.cuotas > 0 && (
+                <FlowRow
+                  label="Cuotas comprometidas"
+                  amount={period.cuotas}
+                  type="out"
+                  items={period.cuotasDetail}
+                  open={openSection === 'cuotas'}
+                  onToggle={() => toggleSection('cuotas')}
+                />
+              )}
+              {sw.payables && period.payAmt > 0 && (
+                <FlowRow
+                  label="Gastos por pagar"
+                  amount={period.payAmt}
+                  type="out"
+                  items={period.payDetail}
+                  open={openSection === 'pay'}
+                  onToggle={() => toggleSection('pay')}
+                />
+              )}
+              {sw.sim !== false && period.projOut > 0 && (
                 <div className="pt-1.5 border-t border-[var(--line)] mt-0.5">
-                  <FlowRow label="Gastos simulados" amount={period.projOut} type="sim"/>
+                  <FlowRow
+                    label="Gastos simulados"
+                    amount={period.projOut}
+                    type="sim"
+                    items={period.projBreakdown}
+                    open={openSection === 'sim'}
+                    onToggle={() => toggleSection('sim')}
+                  />
                 </div>
               )}
             </div>
 
             <div className="h-px bg-[var(--line)]"/>
 
-            {/* Result */}
-            <div className="flex items-end justify-between">
+            {/* Dual result: conservative vs expected */}
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <div className="text-[12px] text-[var(--muted)]">Saldo al cierre de {MES[period.m]}</div>
-                {period.hasSim && period.projOut > 0 && (
-                  <div className="text-[11px] text-[var(--muted)] mt-0.5 font-mono">
-                    sin simulados: {fmtCLPshort(period.balBase)}
+                <div className="text-[11px] text-[var(--muted)]">Conservador</div>
+                <div className={`text-[20px] font-mono font-semibold tabular-nums tracking-tight
+                  ${period.balConservative < 0 ? 'text-[#C0392B]' : 'text-[var(--ink)]'}`}>
+                  {fmtCLP(period.balConservative)}
+                </div>
+                <div className="text-[10px] text-[var(--muted)] mt-0.5">sin ingresos futuros</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-[var(--muted)]">
+                  {period.hasSim && sw.sim !== false ? 'Con simulaciones' : 'Esperado'}
+                </div>
+                <div className={`text-[20px] font-mono font-semibold tabular-nums tracking-tight
+                  ${dispBal(period) < 0 ? 'text-[#C0392B]' : 'text-[var(--ink)]'}`}>
+                  {fmtCLP(dispBal(period))}
+                </div>
+                <div className="text-[10px] text-[var(--muted)] mt-0.5">
+                  {period.hasSim && sw.sim !== false ? 'con ingresos + sim' : 'con ingresos'}
+                </div>
+                {period.hasSim && sw.sim !== false && period.balExpected !== period.balSim && (
+                  <div className="text-[10px] text-[var(--muted)] font-mono mt-0.5">
+                    sin sim: {fmtCLPshort(period.balExpected)}
                   </div>
                 )}
-              </div>
-              <div className={`text-[22px] font-mono font-semibold tabular-nums tracking-tight
-                ${dispBal(period) < 0 ? 'text-[#C0392B]' : 'text-[var(--ink)]'}`}>
-                {fmtCLP(dispBal(period))}
               </div>
             </div>
 
