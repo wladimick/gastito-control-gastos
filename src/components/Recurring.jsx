@@ -55,6 +55,13 @@ function Field({ label, children }) {
 
 const inp = "w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"
 
+const MEDIOS_LABEL = {
+  cta_corriente: 'Cta. corriente',
+  tc_credito:    'Tarjeta crédito',
+  tc_debito:     'Tarjeta débito',
+  otro:          'Otro',
+}
+
 function fmtLocalDate(s) {
   if (!s) return ''
   const [y, m, d] = s.split('-').map(Number)
@@ -87,6 +94,7 @@ const BLANK_EXPENSE = {
   method: 'tarjeta', type: 'debito', dayOfMonth: '',
   startDate: new Date().toISOString().slice(0, 10), endDate: '',
   active: true, autoRegister: false, lastChargedMonth: null, kind: 'expense',
+  comisionBancaria: false, medio: '',
 }
 const BLANK_INCOME = {
   name: '', amount: '', category: 'sueldo', bank: '',
@@ -139,6 +147,32 @@ function RecurringForm({ initial, onSave, onCancel, banks, bare = false }) {
         {!isIncome && (
           <Field label="Banco">
             <Select value={f.bank} onChange={v => set('bank', v)} options={banks.map(b => ({ value: b.id, label: b.label }))}/>
+          </Field>
+        )}
+        {!isIncome && (
+          <Field label="Tipo de gasto">
+            <div className="grid grid-cols-2 gap-1.5">
+              {[false, true].map(isCom => (
+                <button key={String(isCom)} type="button" onClick={() => set('comisionBancaria', isCom)}
+                  className={`h-9 rounded-md border text-[12.5px] transition
+                    ${f.comisionBancaria === isCom
+                      ? 'border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]'
+                      : 'border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--hover)]'}`}>
+                  {isCom ? 'Comisión' : 'Gasto fijo'}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
+        {!isIncome && f.comisionBancaria && (
+          <Field label="Medio asociado">
+            <Select value={f.medio || ''} onChange={v => set('medio', v)} options={[
+              { value: '',            label: 'Sin especificar' },
+              { value: 'cta_corriente', label: 'Cuenta corriente' },
+              { value: 'tc_credito',    label: 'Tarjeta crédito' },
+              { value: 'tc_debito',     label: 'Tarjeta débito' },
+              { value: 'otro',          label: 'Otro' },
+            ]}/>
           </Field>
         )}
         {isIncome ? (
@@ -351,6 +385,9 @@ export default function Recurring({
   const chargedThisMonth = activeRec.filter(r => r.lastChargedMonth === monthStr)
   const pendingThisMonth = activeRec.filter(r => r.lastChargedMonth !== monthStr)
 
+  const comisiones       = activeRec.filter(r => r.comisionBancaria)
+  const totalComisiones  = comisiones.reduce((s, r) => s + r.amount, 0)
+
   const totalIncomeMonth  = income_.filter(i => i.active).reduce((s, i) => s + i.amount, 0)
   const balance           = totalIncomeMonth - totalRecurMonth
 
@@ -470,7 +507,10 @@ export default function Recurring({
             <Icon name="arrowdn" size={12}/> Gastos fijos
           </div>
           <div className="mt-2 font-mono text-[22px] tracking-tight">{fmtCLP(totalRecurMonth)}</div>
-          <div className="mt-1 text-[11px] text-[var(--muted)]">{pendingThisMonth.length} pendientes</div>
+          <div className="mt-1 text-[11px] text-[var(--muted)]">
+            {pendingThisMonth.length} pendientes
+            {totalComisiones > 0 && <> · comisiones {fmtCLP(totalComisiones)}</>}
+          </div>
         </Card>
         <Card padding="p-4">
           <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] flex items-center gap-1.5">
@@ -493,6 +533,7 @@ export default function Recurring({
         <ModalShell
           title={
             tab === 'expenses'    && formState.id ? 'Editar gasto recurrente'
+            : tab === 'expenses' && formState.comisionBancaria ? 'Nueva comisión bancaria'
             : tab === 'expenses'                  ? 'Nuevo gasto recurrente'
             : tab === 'income'    && formState.id ? 'Editar ingreso recurrente'
             : tab === 'income'                    ? 'Nuevo ingreso recurrente'
@@ -550,6 +591,7 @@ export default function Recurring({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-[14px] truncate">{r.name}</span>
+                        {r.comisionBancaria && <Badge tone="warn">comisión</Badge>}
                         {!r.active && <Badge tone="muted">pausado</Badge>}
                         {r.active && charged && <Badge tone="ok">cobrado</Badge>}
                         {r.active && !charged && <Badge tone="warn">pendiente</Badge>}
@@ -561,6 +603,7 @@ export default function Recurring({
                         {r.endDate   && <> · Termina: {fmtLocalDate(r.endDate)}</>}
                         {r.active && !charged && <> · Próximo cobro: {fmtNextCharge(r, today)}</>}
                         {r.bank && ` · ${banks.find(b => b.id === r.bank)?.label ?? r.bank}`}
+                        {r.medio && ` · ${MEDIOS_LABEL[r.medio] ?? r.medio}`}
                       </div>
                     </div>
                     <div className="font-mono text-[15px] tabular-nums shrink-0">{fmtCLP(r.amount)}</div>

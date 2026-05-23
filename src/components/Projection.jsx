@@ -317,7 +317,10 @@ function CcStatementForm({ defaultMonth, banks, onSave, onCancel }) {
             placeholder="0" className={fi + ' font-mono'}/>
         </div>
         <div>
-          <label className="text-[11px] text-[var(--muted)] block mb-1.5">Cargos y comisiones</label>
+          <label className="text-[11px] text-[var(--muted)] block mb-1.5">
+            Cargos y comisiones
+            <span className="ml-1.5 text-[var(--amber-ink)]">(solo variables o puntuales)</span>
+          </label>
           <input type="text" inputMode="numeric" value={f.cargosComisiones}
             onChange={e => set('cargosComisiones', e.target.value)}
             placeholder="0" className={fi + ' font-mono'}/>
