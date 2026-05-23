@@ -5,6 +5,29 @@ import { CATEGORIES } from '../data'
 import { useBanks } from '../services/banksService'
 import { buildMonthlyProjection } from '../services/projectionService'
 
+// ─── Report period helpers ────────────────────────────────────────
+const REPORT_CC_KEY  = 'gastito_cc_v1'
+const REPORT_SIM_KEY = 'gastito_proj_v1'
+const rLoadCC  = () => { try { return JSON.parse(localStorage.getItem(REPORT_CC_KEY)  || '[]') } catch { return [] } }
+const rLoadSim = () => { try { return JSON.parse(localStorage.getItem(REPORT_SIM_KEY) || '[]') } catch { return [] } }
+function rMDiff(startMk, curMk) {
+  const [sy, sm] = startMk.split('-').map(Number)
+  const [cy, cm] = curMk.split('-').map(Number)
+  return (cy - sy) * 12 + (cm - sm)
+}
+function rIsActive(r, mk) {
+  if (r.active === false) return false
+  if (r.startDate && r.startDate.slice(0, 7) > mk) return false
+  if (r.endDate   && r.endDate.slice(0, 7) < mk)   return false
+  return true
+}
+function rDebtActive(debt, mk) {
+  if (debt.status !== 'active') return false
+  if (!debt.startMonth) return false
+  const el = rMDiff(debt.startMonth, mk)
+  return el >= 0 && el < (debt.installments || 1)
+}
+
 // ─── Shared sub-components ────────────────────────────────────────
 
 function Stat({ label, value, accent }) {
@@ -230,6 +253,60 @@ function ToggleGroup({ options, value, onChange }) {
         </button>
       ))}
     </div>
+  )
+}
+
+// ─── Report summary components ───────────────────────────────────
+
+function SwitchPill({ label, active, onChange }) {
+  return (
+    <button type="button" onClick={() => onChange(!active)}
+      className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition border ${
+        active
+          ? 'bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]'
+          : 'bg-transparent text-[var(--muted)] border-[var(--line)] hover:border-[var(--ink-2)]'
+      }`}>
+      {label}
+    </button>
+  )
+}
+
+function ReportFlowRow({ label, amount, type, onClick, hasDetail }) {
+  const sign = type === 'in' ? '+' : '−'
+  const col  = type === 'in' ? 'text-[var(--accent-ink)]' : 'text-[var(--ink-2)]'
+  return (
+    <button type="button" onClick={hasDetail ? onClick : undefined} disabled={!hasDetail}
+      className={`w-full flex items-center justify-between py-2.5 text-left border-b border-[var(--line)] last:border-0 transition rounded-sm ${
+        hasDetail ? 'hover:bg-[var(--hover)] cursor-pointer' : 'cursor-default'
+      }`}>
+      <span className="text-[13px] text-[var(--ink-2)]">{label}</span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className={`font-mono tabular-nums text-[13px] ${col}`}>{sign}{fmtCLP(amount)}</span>
+        {hasDetail && <Icon name="chevron" size={11} className="text-[var(--muted)]"/>}
+      </div>
+    </button>
+  )
+}
+
+function ReportDetailDrawer({ title, onClose, children }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose}/>
+      <div className="fixed z-50
+        inset-x-0 bottom-0 rounded-t-2xl max-h-[80vh]
+        md:inset-x-auto md:right-0 md:top-0 md:bottom-0 md:w-80 md:rounded-none md:max-h-none
+        bg-[var(--bg)] border-t md:border-t-0 md:border-l border-[var(--line)]
+        flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-[var(--line)] shrink-0">
+          <div className="font-semibold tracking-tight text-[14px]">{title}</div>
+          <button type="button" onClick={onClose}
+            className="w-8 h-8 rounded-md hover:bg-[var(--hover)] flex items-center justify-center">
+            <Icon name="close" size={14}/>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+      </div>
+    </>
   )
 }
 
@@ -825,6 +902,8 @@ export default function Reports({
   recurringList    = [],
   incomeList       = [],
   accounts         = [],
+  receivables      = [],
+  payables         = [],
   userSettings     = null,
 }) {
   const banks = useBanks()
@@ -836,15 +915,23 @@ export default function Reports({
   const [varExpensesInput, setVarExpensesInput] = useState('')
   const [includeSavings,  setIncludeSavings]  = useState(false)
 
+  // ── Resumen del periodo ────────────────────────────────────────
+  const [reportPeriod, setReportPeriod] = useState(
+    () => `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+  )
+  const [reportSw,     setReportSw]     = useState({ ingresos: true, pagos: true, cuotas: true, sim: true })
+  const [reportDetail, setReportDetail] = useState(null)
+
   // ── Histórico ─────────────────────────────────────────────────
   const monthly = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(today.getFullYear(), today.getMonth() - (5 - i), 1)
     const y = d.getFullYear(), m = d.getMonth()
+    const key = `${y}-${String(m + 1).padStart(2, '0')}`
     const monthTotal = expenses.filter(e => {
       const ed = new Date(e.date)
       return ed.getMonth() === m && ed.getFullYear() === y
     }).reduce((s, e) => s + e.amount, 0)
-    return { month: `${MES[m]} ${y}`, total: monthTotal }
+    return { month: `${MES[m]} ${y}`, key, y, m, total: monthTotal }
   })
 
   const thisMonthTotal = monthly[5]?.total ?? 0
@@ -888,6 +975,105 @@ export default function Reports({
   )
   const daysWithExpenses    = new Set(thisMonthExpenses.map(e => new Date(e.date).getDate())).size
   const daysWithoutExpenses = today.getDate() - daysWithExpenses
+
+  // ── Resumen del periodo ────────────────────────────────────────
+  const reportSummary = useMemo(() => {
+    const mk   = reportPeriod
+    const [py, pm] = mk.split('-').map(Number)
+    const mIdx = pm - 1
+    const isCurrent = today.getFullYear() === py && today.getMonth() === mIdx
+    const todayDay  = isCurrent ? today.getDate() : 31
+
+    // Income items (recurring)
+    const incomeItems = incomeList.filter(r => rIsActive(r, mk))
+    const incomeDetails = incomeItems.map(r => {
+      const dom = Number(r.dayOfMonth) || 1
+      return { label: r.name || '—', sub: `Día ${dom}`, amount: Number(r.amount) || 0, received: !isCurrent || dom <= todayDay }
+    })
+    const incomeReal    = incomeDetails.filter(d => d.received).reduce((s, d) => s + d.amount, 0)
+    const incomePending = incomeDetails.filter(d => !d.received).reduce((s, d) => s + d.amount, 0)
+    const incomeTotal   = incomeReal + (reportSw.ingresos ? incomePending : 0)
+
+    // Receivables
+    const receivableItems = receivables.filter(r => {
+      if (!r.dueDate) return isCurrent && r.status !== 'paid'
+      return r.dueDate.slice(0, 7) === mk
+    })
+    const receivablesTotal = reportSw.ingresos
+      ? receivableItems.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+      : 0
+
+    // Logged expenses
+    const periodExpenses = expenses.filter(e => {
+      const ed = new Date(e.date)
+      return ed.getFullYear() === py && ed.getMonth() === mIdx
+    })
+    const gastosTotal = periodExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0)
+
+    // Recurring expenses
+    const recurItems = recurringList.filter(r => r.kind === 'expense' && rIsActive(r, mk))
+    const recurTotal = recurItems.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+
+    // Installment debts
+    const debtItems = installmentDebts.filter(d => rDebtActive(d, mk))
+    const debtTotal = debtItems.reduce((s, d) => s + (Number(d.monthlyAmount) || 0), 0)
+
+    // CC statements
+    const stmts = rLoadCC().filter(s => {
+      const stmtMk = s.month || (s.dueDate ? s.dueDate.slice(0, 7) : null)
+      return stmtMk === mk
+    })
+    const stmtsTotal = stmts.reduce((s, stmt) => s + (Number(stmt.billedAmount) || 0), 0)
+    const cuotasTotal = reportSw.cuotas ? debtTotal + stmtsTotal : 0
+
+    // Payables
+    const payableItems = payables.filter(p => {
+      if (!p.dueDate) return isCurrent && p.status !== 'paid'
+      return p.dueDate.slice(0, 7) === mk
+    })
+    const payablesTotal = reportSw.pagos
+      ? payableItems.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+      : 0
+
+    // Simulations
+    const activeSims = rLoadSim().filter(s => s.active !== false)
+    const simTotal   = reportSw.sim
+      ? activeSims.reduce((s, x) => s + (Number(x.amount) || 0), 0)
+      : 0
+
+    // Balance real = received income + receivables - logged expenses
+    const balanceReal = incomeReal + receivablesTotal - gastosTotal
+    // Balance esperado = all income - expenses - recurrentes - cuotas - pagos - sims
+    const balanceEsperado = incomeTotal + receivablesTotal - gastosTotal - recurTotal - cuotasTotal - payablesTotal - simTotal
+
+    console.log('[reports:summary]', {
+      periodo: mk, ingresos: incomeTotal + receivablesTotal, gastos: gastosTotal,
+      recurrentes: recurTotal, cuotasCredito: cuotasTotal, simulaciones: simTotal,
+      balanceReal, balanceEsperado,
+    })
+    if (cuotasTotal > 0 || debtItems.length > 0 || stmts.length > 0) {
+      console.log('[reports:cuotas_credito]', {
+        periodo: mk,
+        itemsIncluidos: [
+          ...debtItems.map(d => ({ type: 'cuota', nombre: d.description, amount: d.monthlyAmount })),
+          ...stmts.map(s => ({ type: 'facturacion', card: s.cardName, amount: s.billedAmount })),
+        ],
+        total: cuotasTotal,
+      })
+    }
+
+    return {
+      mk, isCurrent, todayDay,
+      incomeDetails, incomeReal, incomePending, incomeTotal,
+      receivableItems, receivablesTotal,
+      periodExpenses, gastosTotal,
+      recurItems, recurTotal,
+      debtItems, stmts, debtTotal, stmtsTotal, cuotasTotal,
+      payableItems, payablesTotal,
+      activeSims, simTotal,
+      balanceReal, balanceEsperado,
+    }
+  }, [reportPeriod, reportSw, expenses, incomeList, recurringList, installmentDebts, receivables, payables])
 
   // ── Proyección ────────────────────────────────────────────────
 
@@ -995,6 +1181,105 @@ export default function Reports({
             <Icon name="info" size={13}/>
             <span>Este reporte muestra movimientos del periodo seleccionado. No reemplaza tu saldo actual.</span>
           </div>
+
+          {/* ── Resumen del periodo ── */}
+          <Card padding="p-4 md:p-5">
+            <div className="font-semibold tracking-tight mb-3">Resumen del periodo</div>
+
+            {/* Period selector */}
+            <div className="flex gap-1.5 flex-wrap mb-4">
+              {monthly.map(opt => (
+                <button key={opt.key} type="button" onClick={() => setReportPeriod(opt.key)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] transition ${
+                    reportPeriod === opt.key
+                      ? 'bg-[var(--ink)] text-[var(--bg)]'
+                      : 'bg-[var(--bg-elev)] text-[var(--muted)] hover:bg-[var(--hover)]'
+                  }`}>
+                  {opt.month}
+                </button>
+              ))}
+            </div>
+
+            {/* Switches */}
+            <div className="flex items-center gap-1.5 flex-wrap mb-3 pb-3 border-b border-[var(--line)]">
+              <span className="text-[11px] text-[var(--muted)]">Incluir:</span>
+              <SwitchPill label="Por cobrar"   active={reportSw.ingresos} onChange={v => setReportSw(s => ({...s, ingresos: v}))}/>
+              <SwitchPill label="Por pagar"    active={reportSw.pagos}    onChange={v => setReportSw(s => ({...s, pagos: v}))}/>
+              <SwitchPill label="Cuotas"       active={reportSw.cuotas}   onChange={v => setReportSw(s => ({...s, cuotas: v}))}/>
+              <SwitchPill label="Simulaciones" active={reportSw.sim}      onChange={v => setReportSw(s => ({...s, sim: v}))}/>
+            </div>
+
+            {/* Summary rows */}
+            <div className="flex flex-col">
+              <ReportFlowRow
+                label="Ingresos del periodo"
+                amount={reportSummary.incomeTotal + (reportSw.ingresos ? reportSummary.receivablesTotal : 0)}
+                type="in"
+                onClick={() => setReportDetail('ingresos')}
+                hasDetail
+              />
+              <ReportFlowRow
+                label="Gastos registrados"
+                amount={reportSummary.gastosTotal}
+                type="out"
+                onClick={() => setReportDetail('gastos')}
+                hasDetail={reportSummary.periodExpenses.length > 0}
+              />
+              <ReportFlowRow
+                label="Gastos recurrentes"
+                amount={reportSummary.recurTotal}
+                type="out"
+                onClick={() => setReportDetail('recurrentes')}
+                hasDetail={reportSummary.recurItems.length > 0}
+              />
+              {reportSw.cuotas && (
+                <ReportFlowRow
+                  label="Cuotas de crédito"
+                  amount={reportSummary.cuotasTotal}
+                  type="out"
+                  onClick={() => setReportDetail('cuotas')}
+                  hasDetail={(reportSummary.debtItems.length + reportSummary.stmts.length) > 0}
+                />
+              )}
+              {reportSw.pagos && reportSummary.payablesTotal > 0 && (
+                <ReportFlowRow
+                  label="Por pagar"
+                  amount={reportSummary.payablesTotal}
+                  type="out"
+                  onClick={() => setReportDetail('pagos')}
+                  hasDetail={reportSummary.payableItems.length > 0}
+                />
+              )}
+              {reportSw.sim && reportSummary.simTotal > 0 && (
+                <ReportFlowRow
+                  label="Simulaciones activas"
+                  amount={reportSummary.simTotal}
+                  type="out"
+                  onClick={() => setReportDetail('sim')}
+                  hasDetail={reportSummary.activeSims.length > 0}
+                />
+              )}
+            </div>
+
+            {/* Dual balance */}
+            <div className="mt-4 pt-4 border-t border-[var(--line)] grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-[var(--line)] p-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Balance real</div>
+                <div className={`mt-1.5 font-mono text-[17px] tabular-nums font-semibold ${reportSummary.balanceReal < 0 ? 'text-[#A02828]' : 'text-[var(--accent-ink)]'}`}>
+                  {fmtCLP(reportSummary.balanceReal)}
+                </div>
+                <div className="text-[11px] text-[var(--muted)] mt-1">lo que ya ocurrió</div>
+              </div>
+              <div className="rounded-lg border border-[var(--line)] p-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">Balance esperado</div>
+                <div className={`mt-1.5 font-mono text-[17px] tabular-nums font-semibold ${reportSummary.balanceEsperado < 0 ? 'text-[#A02828]' : 'text-[var(--ink-2)]'}`}>
+                  {fmtCLP(reportSummary.balanceEsperado)}
+                </div>
+                <div className="text-[11px] text-[var(--muted)] mt-1">incluye pendientes</div>
+              </div>
+            </div>
+          </Card>
+
           <Card padding="p-5 md:p-6">
             <div className="flex items-end justify-between flex-wrap gap-3">
               <div>
@@ -1115,6 +1400,231 @@ export default function Reports({
               />
             </div>
           </Card>
+
+          {/* ── Drawers de detalle ── */}
+          {reportDetail && (() => {
+            const s = reportSummary
+            const drawerTitle =
+              reportDetail === 'ingresos'    ? 'Ingresos del periodo'
+              : reportDetail === 'gastos'    ? 'Gastos registrados'
+              : reportDetail === 'recurrentes' ? 'Gastos recurrentes'
+              : reportDetail === 'cuotas'    ? 'Cuotas de crédito'
+              : reportDetail === 'pagos'     ? 'Por pagar'
+              : 'Simulaciones activas'
+            return (
+              <ReportDetailDrawer title={drawerTitle} onClose={() => setReportDetail(null)}>
+                {/* Ingresos */}
+                {reportDetail === 'ingresos' && (
+                  <div className="flex flex-col gap-4">
+                    {s.incomeDetails.length > 0 && (
+                      <div>
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-2">Ingresos recurrentes</div>
+                        {s.incomeDetails.map((item, i) => (
+                          <div key={i} className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0">
+                            <div>
+                              <div className="text-[13px]">{item.label}</div>
+                              <div className="text-[11.5px] text-[var(--muted)]">{item.sub}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono text-[13px] tabular-nums text-[var(--accent-ink)]">+{fmtCLP(item.amount)}</div>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-sm inline-block mt-0.5"
+                                style={item.received ? { color: 'var(--accent-ink)', background: 'var(--accent-soft)' } : { color: 'var(--amber-ink)', background: 'var(--amber-soft)' }}>
+                                {item.received ? 'recibido' : 'pendiente'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {s.receivableItems.length > 0 && (
+                      <div>
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-2">Por cobrar</div>
+                        {s.receivableItems.map((r, i) => (
+                          <div key={i} className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0">
+                            <div>
+                              <div className="text-[13px]">{r.personName || r.description || 'Por cobrar'}</div>
+                              {r.dueDate && <div className="text-[11.5px] text-[var(--muted)]">Vence {new Date(r.dueDate + 'T00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })}</div>}
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono text-[13px] tabular-nums text-[var(--accent-ink)]">+{fmtCLP(r.amount)}</div>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-sm inline-block mt-0.5"
+                                style={r.status === 'paid' ? { color: 'var(--accent-ink)', background: 'var(--accent-soft)' } : { color: 'var(--amber-ink)', background: 'var(--amber-soft)' }}>
+                                {r.status === 'paid' ? 'cobrado' : 'pendiente'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {s.incomeDetails.length === 0 && s.receivableItems.length === 0 && (
+                      <div className="text-center py-6 text-[13px] text-[var(--muted)]">Sin ingresos para este periodo</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Gastos registrados */}
+                {reportDetail === 'gastos' && (
+                  <div>
+                    {[...s.periodExpenses].sort((a, b) => b.amount - a.amount).map((e, i) => {
+                      const cat  = CATEGORIES.find(c => c.id === e.category)
+                      const bank = banks.find(b => b.id === e.bank)
+                      const dateStr = new Date(e.date).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })
+                      return (
+                        <div key={i} className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0">
+                          <div>
+                            <div className="text-[13px]">{e.description}</div>
+                            <div className="text-[11.5px] text-[var(--muted)]">
+                              {dateStr}{cat ? ` · ${cat.icon} ${cat.label}` : ''}{bank ? ` · ${bank.label}` : ''}
+                            </div>
+                          </div>
+                          <div className="font-mono text-[13px] tabular-nums">−{fmtCLP(e.amount)}</div>
+                        </div>
+                      )
+                    })}
+                    {s.periodExpenses.length === 0 && (
+                      <div className="text-center py-6 text-[13px] text-[var(--muted)]">Sin gastos registrados</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Recurrentes */}
+                {reportDetail === 'recurrentes' && (
+                  <div>
+                    {s.recurItems.map((r, i) => {
+                      const bank = banks.find(b => b.id === r.bank)
+                      const dom  = Number(r.dayOfMonth) || 1
+                      const charged = !s.isCurrent || dom <= s.todayDay
+                      return (
+                        <div key={i} className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0">
+                          <div>
+                            <div className="text-[13px]">{r.name}</div>
+                            <div className="text-[11.5px] text-[var(--muted)]">Día {dom}{bank ? ` · ${bank.label}` : ''}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-mono text-[13px] tabular-nums">−{fmtCLP(r.amount)}</div>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-sm inline-block mt-0.5"
+                              style={charged ? { color: 'var(--accent-ink)', background: 'var(--accent-soft)' } : { color: 'var(--amber-ink)', background: 'var(--amber-soft)' }}>
+                              {charged ? 'cobrado' : 'pendiente'}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {s.recurItems.length === 0 && (
+                      <div className="text-center py-6 text-[13px] text-[var(--muted)]">Sin gastos recurrentes</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Cuotas */}
+                {reportDetail === 'cuotas' && (
+                  <div className="flex flex-col gap-4">
+                    {s.debtItems.length > 0 && (
+                      <div>
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-2">Compras en cuotas</div>
+                        {s.debtItems.map((debt, i) => {
+                          const bank = banks.find(b => b.id === debt.bank)
+                          const cuotaNum = rMDiff(debt.startMonth, s.mk) + 1
+                          return (
+                            <div key={i} className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0">
+                              <div>
+                                <div className="text-[13px]">{debt.description}</div>
+                                <div className="text-[11.5px] text-[var(--muted)]">
+                                  Cuota {cuotaNum}/{debt.installments}{bank ? ` · ${bank.label}` : ''}{debt.dayOfMonth ? ` · Día ${debt.dayOfMonth}` : ''}
+                                </div>
+                              </div>
+                              <div className="font-mono text-[13px] tabular-nums">−{fmtCLP(debt.monthlyAmount)}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {s.stmts.length > 0 && (
+                      <div>
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-2">Facturaciones TC</div>
+                        {s.stmts.map((stmt, i) => {
+                          const stStatus = stmt.status === 'paid'
+                            ? { label: 'pagado',   color: 'var(--accent-ink)', bg: 'var(--accent-soft)' }
+                            : stmt.dueDate && new Date(stmt.dueDate + 'T00:00') < today
+                            ? { label: 'vencido',  color: '#C0392B', bg: '#FFF0EE' }
+                            : { label: 'pendiente', color: 'var(--amber-ink)', bg: 'var(--amber-soft)' }
+                          return (
+                            <div key={i} className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0">
+                              <div>
+                                <div className="text-[13px]">{stmt.cardName}</div>
+                                <div className="text-[11.5px] text-[var(--muted)]">
+                                  {stmt.dueDate ? `Vence ${new Date(stmt.dueDate + 'T00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })}` : ''}
+                                  {stmt.minimumPayment ? ` · Mín: ${fmtCLPshort(stmt.minimumPayment)}` : ''}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-mono text-[13px] tabular-nums">−{fmtCLP(stmt.billedAmount)}</div>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-sm inline-block mt-0.5"
+                                  style={{ color: stStatus.color, background: stStatus.bg }}>
+                                  {stStatus.label}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {s.debtItems.length === 0 && s.stmts.length === 0 && (
+                      <div className="text-center py-6 text-[13px] text-[var(--muted)]">Sin cuotas para este periodo</div>
+                    )}
+                    <div className="text-[11px] text-[var(--muted)] bg-[var(--bg-elev)] p-3 rounded-md">
+                      Las compras en cuotas vienen de tus registros en Cuotas. Evita registrar también como gasto para no duplicar.
+                    </div>
+                  </div>
+                )}
+
+                {/* Por pagar */}
+                {reportDetail === 'pagos' && (
+                  <div>
+                    {s.payableItems.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0">
+                        <div>
+                          <div className="text-[13px]">{p.personName || p.description || 'Por pagar'}</div>
+                          {p.dueDate && <div className="text-[11.5px] text-[var(--muted)]">Vence {new Date(p.dueDate + 'T00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })}</div>}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-mono text-[13px] tabular-nums">−{fmtCLP(p.amount)}</div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-sm inline-block mt-0.5"
+                            style={p.status === 'paid' ? { color: 'var(--accent-ink)', background: 'var(--accent-soft)' } : { color: 'var(--amber-ink)', background: 'var(--amber-soft)' }}>
+                            {p.status === 'paid' ? 'pagado' : 'pendiente'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {s.payableItems.length === 0 && (
+                      <div className="text-center py-6 text-[13px] text-[var(--muted)]">Sin pagos pendientes</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Simulaciones */}
+                {reportDetail === 'sim' && (
+                  <div>
+                    {s.activeSims.map((sim, i) => (
+                      <div key={i} className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0">
+                        <div>
+                          <div className="text-[13px]">{sim.description || sim.name || 'Simulación'}</div>
+                          {sim.notes && <div className="text-[11.5px] text-[var(--muted)]">{sim.notes}</div>}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-mono text-[13px] tabular-nums">−{fmtCLP(sim.amount)}</div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-sm inline-block mt-0.5 bg-[var(--accent-soft)] text-[var(--accent-ink)]">activa</span>
+                        </div>
+                      </div>
+                    ))}
+                    {s.activeSims.length === 0 && (
+                      <div className="text-center py-6 text-[13px] text-[var(--muted)]">Sin simulaciones activas</div>
+                    )}
+                  </div>
+                )}
+              </ReportDetailDrawer>
+            )
+          })()}
         </>
       )}
 
