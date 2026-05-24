@@ -176,10 +176,14 @@ export default function Dashboard({
   const pausedRecurring = (recurring ?? []).filter(r => !r.active && r.kind === 'expense')
   const incomeRatio     = recurringIncomeTotal > 0 ? Math.min(recurringTotal / recurringIncomeTotal, 1) : 0
 
-  // ── Proyección ─────────────────────────────────────────────
-  const totalOutflow    = recurringTotal + cuotasThisMonth + totalNextCardPayment
-  const expectedBalance = usableBalance + monthlyIncome - totalOutflow
-  const outflowRatio    = monthlyIncome > 0 ? totalOutflow / monthlyIncome : 0
+  // ── Próximo ciclo ──────────────────────────────────────────
+  const _nextCycleDate     = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+  const nextCycleLabel     = `${MES[_nextCycleDate.getMonth()]} ${_nextCycleDate.getFullYear()}`
+  const nextCycleCardTotal = totalNextCardPayment + totalComisionesRecurrentes
+  const nextCycleRecurring = Math.max(0, recurringTotal - totalComisionesRecurrentes)
+  const nextCycleOutflow   = nextCycleCardTotal + nextCycleRecurring
+  const nextCycleBalance   = usableBalance + monthlyIncome - nextCycleOutflow
+  const nextCycleRatio     = monthlyIncome > 0 ? nextCycleOutflow / monthlyIncome : 0
 
   return (
     <div className="-mx-4 md:-mx-7 -mt-5 md:-mt-7">
@@ -495,16 +499,18 @@ export default function Dashboard({
         </>
       )}
 
-      {/* ── BLOQUE 5: PROYECCIÓN ──────────────────────────── */}
-      <SecHeader label={`Proyección ${MES[today.getMonth()]}`} action="Ver detalle" onAction={() => setView('projection')}/>
+      {/* ── BLOQUE 5: PRÓXIMO CICLO ───────────────────────── */}
+      <SecHeader label="Próximo ciclo de pago" action="Ver detalle" onAction={() => setView('projection')}/>
       <div className="px-4 pb-8">
         <div className="bg-white border border-[#e8e6df] rounded-2xl p-4" style={{ boxShadow: '0 1px 3px rgba(30,37,53,0.05)' }}>
+
+          <div className="text-[11px] font-semibold mb-3" style={{ color: '#9ba5c2' }}>{nextCycleLabel}</div>
+
           {[
-            { dot: '#c8c5bc', label: 'Saldo base',         amt: fmtCLP(usableBalance),         color: '#9ba5c2' },
-            { dot: '#3dd68c', label: 'Ingresos esperados', amt: '+' + fmtCLP(monthlyIncome),    color: '#1a9e60' },
-            { dot: '#f87171', label: 'Recurrentes fijos',  amt: '−' + fmtCLP(recurringTotal),  color: '#dc2626' },
-            { dot: '#fb923c', label: 'Cuotas de crédito',  amt: '−' + fmtCLP(cuotasThisMonth), color: '#dc2626' },
-            { dot: '#fbbf24', label: 'Pago tarjetas',      amt: '−' + fmtCLP(totalNextCardPayment), color: '#dc2626' },
+            { dot: '#c8c5bc', label: 'Saldo base actual',     amt: '+' + fmtCLP(usableBalance),      color: '#9ba5c2' },
+            { dot: '#3dd68c', label: 'Ingresos esperados',    amt: '+' + fmtCLP(monthlyIncome),       color: '#1a9e60' },
+            { dot: '#f87171', label: 'Pago real de tarjetas', amt: '−' + fmtCLP(nextCycleCardTotal),  color: '#dc2626' },
+            { dot: '#fb923c', label: 'Recurrentes fijos',     amt: '−' + fmtCLP(nextCycleRecurring),  color: '#dc2626' },
           ].map((row, i) => (
             <div key={i} className="flex justify-between items-center py-[5px]">
               <span className="flex items-center gap-1.5 text-[13px]" style={{ color: '#4a5370' }}>
@@ -515,12 +521,12 @@ export default function Dashboard({
             </div>
           ))}
 
-          {/* Progress bar: green=income (100%), red=outflow overlay */}
+          {/* Progress bar */}
           <div className="relative h-1.5 rounded-full overflow-hidden mt-4 mb-1.5" style={{ background: '#e8e6df' }}>
             <div className="absolute inset-0 rounded-full" style={{ background: '#3dd68c', opacity: 0.85 }}/>
             {monthlyIncome > 0 && (
               <div className="absolute left-0 top-0 h-full rounded-full transition-all"
-                style={{ width: `${Math.min(outflowRatio * 100, 200)}%`, background: '#f87171', opacity: 0.8 }}/>
+                style={{ width: `${Math.min(nextCycleRatio * 100, 200)}%`, background: '#f87171', opacity: 0.8 }}/>
             )}
           </div>
           <div className="flex justify-between">
@@ -532,12 +538,12 @@ export default function Dashboard({
           <div className="mt-3 p-3.5 rounded-[10px] flex justify-between items-center" style={{ background: '#1e2535' }}>
             <div>
               <div className="text-[12.5px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                Saldo esperado {MES[today.getMonth()]}
+                Saldo esperado después de pagos
               </div>
-              <div className="text-[10.5px] mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>después de ingresos</div>
+              <div className="text-[10.5px] mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>{nextCycleLabel} · aprox.</div>
             </div>
-            <div className="text-[20px] font-extrabold tabular-nums" style={{ color: expectedBalance >= 0 ? '#3dd68c' : '#f87171', letterSpacing: '-0.02em' }}>
-              {expectedBalance >= 0 ? '+' : ''}{fmtCLP(expectedBalance)}
+            <div className="text-[20px] font-extrabold tabular-nums" style={{ color: nextCycleBalance >= 0 ? '#3dd68c' : '#f87171', letterSpacing: '-0.02em' }}>
+              {nextCycleBalance >= 0 ? '+' : ''}{fmtCLP(nextCycleBalance)}
             </div>
           </div>
         </div>
