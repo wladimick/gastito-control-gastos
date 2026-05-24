@@ -18,18 +18,53 @@ async function catMap() {
   return _catMapP
 }
 
+// ── Notes-based metadata (no SQL column needed) ───────────────
+// Format appended to notes: ||__gc__:{"comisionBancaria":true,"medio":"tc_credito"}
+
+const META_SEP   = '||__gc__:'
+const META_REGEX = /\|\|__gc__:.*$/
+
+function parseMeta(notes) {
+  if (!notes) return {}
+  const idx = notes.indexOf(META_SEP)
+  if (idx === -1) return {}
+  try { return JSON.parse(notes.slice(idx + META_SEP.length)) } catch { return {} }
+}
+
+function buildNotes(rawNotes, meta) {
+  const clean = rawNotes ? rawNotes.replace(META_REGEX, '').trim() : ''
+  const payload = {}
+  if (meta.comisionBancaria) payload.comisionBancaria = true
+  if (meta.medio)            payload.medio            = meta.medio
+  if (!Object.keys(payload).length) return clean || null
+  return (clean ? clean : '') + META_SEP + JSON.stringify(payload)
+}
+
+// Auto-detect commission records by name (backfill for old records without metadata)
+function detectComision(name) {
+  return /comisi[oó]n|mantenci[oó]n|mantenimiento|mantenci[oó]n\s+tarjeta|administraci[oó]n|seguro\s+(tarjeta|cuenta)/i.test(name ?? '')
+}
+
 const FIELDS = `id, name, amount, bank_id, payment_method_id, card_type,
   day_of_month, active, auto_register, last_charged_month, categories(label),
   kind, person_name, description, due_date, status, paid_at, notes`
 
 function mapRow(row) {
-  const cat = CATEGORIES.find(c => c.label?.toLowerCase() === row.categories?.label?.toLowerCase())
+  const meta            = parseMeta(row.notes)
+  const comisionBancaria = meta.comisionBancaria ?? detectComision(row.name)
+  const medio           = meta.medio ?? ''
+  const cleanNotes      = row.notes ? row.notes.replace(META_REGEX, '').trim() || null : null
+
+  const catByLabel = CATEGORIES.find(c => c.label?.toLowerCase() === row.categories?.label?.toLowerCase())
+  // When record is a commission, always resolve to comision_bancaria regardless of saved category_id
+  const category = comisionBancaria ? 'comision_bancaria' : (catByLabel?.id ?? 'otros')
+
   return {
     id:               row.id,
     kind:             row.kind ?? 'expense',
     name:             row.name,
     amount:           row.amount,
-    category:         cat?.id ?? 'otros',
+    category,
     bank:             row.bank_id ?? null,
     method:           row.payment_method_id ?? 'tarjeta',
     type:             row.card_type ?? 'debito',
@@ -42,7 +77,9 @@ function mapRow(row) {
     dueDate:          row.due_date ?? null,
     status:           row.status ?? null,
     paidAt:           row.paid_at ?? null,
-    notes:            row.notes ?? null,
+    notes:            cleanNotes,
+    comisionBancaria,
+    medio,
   }
 }
 
@@ -67,10 +104,12 @@ async function toRow(r, kind) {
     due_date:           r.dueDate || null,
     status:             r.status || (kind === 'receivable' || kind === 'payable' ? 'pending' : null),
     paid_at:            r.paidAt || null,
-    notes:              r.notes || null,
+    // metadata stored in notes (comisionBancaria, medio)
+    notes:              buildNotes(r.notes, { comisionBancaria: r.comisionBancaria, medio: r.medio }),
   }
   return base
 }
+
 
 // ── Fetch by kind ─────────────────────────────────────────────
 
