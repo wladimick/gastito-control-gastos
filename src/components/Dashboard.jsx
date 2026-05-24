@@ -153,11 +153,10 @@ export default function Dashboard({
     )
     const cargosComisiones = cardStatements.reduce((s, st) => s + (st.cargosComisiones || 0), 0)
 
-    // Comisiones recurrentes asociadas a esta tarjeta (informativo — ya están en recurringTotal)
+    // Comisiones recurrentes asociadas a este banco/tarjeta (informativo — ya están en recurringTotal)
+    // Se muestran todas las comisiones del banco (cualquier medio) para que el usuario vea el costo total
     const comisionesRec = recurring.filter(r =>
-      r.comisionBancaria && r.active !== false &&
-      r.bank === card.bank &&
-      (r.medio === 'tc_credito' || !r.medio)
+      r.comisionBancaria && r.active !== false && r.bank === card.bank
     )
     const comisionesRecurrentes = comisionesRec.reduce((s, r) => s + (r.amount || 0), 0)
 
