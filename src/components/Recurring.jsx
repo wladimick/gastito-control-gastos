@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState } from 'react'
 import { Card, Badge, IconBtn, Select } from './ui'
 import { Icon, fmtCLP, MES } from '../lib/helpers'
 import { useBanks } from '../services/banksService'
 import { useCategories } from '../services/categoriesService'
+import { CATEGORIES } from '../data'
 
-const CAT_COMISION = { id: 'comision_bancaria', label: 'Comisión bancaria', icon: '🏦', color: '#546E7A' }
 
 function ModalShell({ title, onClose, children }) {
   return (
@@ -106,13 +106,9 @@ const BLANK_INCOME = {
 }
 
 function RecurringForm({ initial, onSave, onCancel, banks, bare = false }) {
-  const rawCategories = useCategories()
-  // Ensure comision_bancaria always appears, even if Supabase doesn't have it
-  const categories = useMemo(() => (
-    rawCategories.some(c => c.id === 'comision_bancaria')
-      ? rawCategories
-      : [...rawCategories, CAT_COMISION]
-  ), [rawCategories])
+  // Use static CATEGORIES so the select always works with local string IDs
+  // (useCategories() async-replaces them with Supabase DB IDs, causing mismatch)
+  const categories = CATEGORIES
 
   // Merge defaults so old records without comisionBancaria/medio still render correctly
   const [f, setF] = useState({ comisionBancaria: false, medio: '', ...initial })
@@ -389,10 +385,7 @@ export default function Recurring({
   salaryPaymentDay,
 }) {
   const banks           = useBanks()
-  const rawCats         = useCategories()
-  const categories      = useMemo(() => (
-    rawCats.some(c => c.id === 'comision_bancaria') ? rawCats : [...rawCats, CAT_COMISION]
-  ), [rawCats])
+  const categories      = CATEGORIES
   const today     = new Date()
   const monthLabel = `${MES[today.getMonth()]} ${today.getFullYear()}`
   const monthStr   = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
