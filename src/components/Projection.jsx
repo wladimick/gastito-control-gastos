@@ -655,11 +655,11 @@ function ProjModal({ item, onClose, onSave }) {
   const canSave = f.name.trim() && f.amount
 
   return (
-    <div className="fixed inset-0 z-50 flex md:items-stretch items-end justify-end">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" onClick={onClose}/>
-      <div className="relative w-full md:max-w-[460px] md:h-screen bg-[var(--bg-elev)] border-l border-[var(--line)]
-                      rounded-t-2xl md:rounded-none overflow-y-auto"
-           style={{ animation: 'slideUp .2s ease-out' }}>
+      <div className="relative w-full max-w-[460px] max-h-[90vh] bg-[var(--bg-elev)] border border-[var(--line)]
+                      rounded-2xl overflow-y-auto"
+           style={{ animation: 'fadeScale .2s ease-out' }}>
 
         <div className="sticky top-0 bg-[var(--bg-elev)] border-b border-[var(--line)] px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
@@ -762,7 +762,7 @@ function ProjModal({ item, onClose, onSave }) {
           </button>
         </div>
 
-        <style>{`@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+        <style>{`@keyframes fadeScale{from{transform:scale(.97);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
       </div>
     </div>
   )
