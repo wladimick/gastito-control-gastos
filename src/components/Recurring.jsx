@@ -10,10 +10,10 @@ function ModalShell({ title, onClose, children }) {
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}/>
-      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center pointer-events-none">
-        <div className="pointer-events-auto w-full md:max-w-xl
-                        max-h-[90vh] md:max-h-[85vh]
-                        rounded-t-2xl md:rounded-xl
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-xl
+                        max-h-[88vh]
+                        rounded-2xl
                         bg-[var(--bg)] flex flex-col overflow-hidden shadow-2xl"
              style={{ animation: 'slideUpR .22s ease-out' }}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--line)] shrink-0">
@@ -554,9 +554,10 @@ export default function Recurring({
       {formState !== null && (
         <ModalShell
           title={
-            tab === 'expenses'    && formState.id ? 'Editar gasto recurrente'
+            tab === 'expenses' && formState.id && formState.comisionBancaria ? 'Editar comisión bancaria'
+            : tab === 'expenses' && formState.id ? 'Editar gasto recurrente'
             : tab === 'expenses' && formState.comisionBancaria ? 'Nueva comisión bancaria'
-            : tab === 'expenses'                  ? 'Nuevo gasto recurrente'
+            : tab === 'expenses' ? 'Nuevo gasto recurrente'
             : tab === 'income'    && formState.id ? 'Editar ingreso recurrente'
             : tab === 'income'                    ? 'Nuevo ingreso recurrente'
             : tab === 'receivables' && formState.id ? 'Editar por cobrar'
@@ -603,45 +604,61 @@ export default function Recurring({
               </button>
             </div>
           ) : (
-            <ul className="divide-y divide-[var(--line)]">
+            <ul className="">
               {recurring.map(r => {
                 const cat     = categories.find(c => c.id === r.category) ?? categories[0]
                 const charged = r.lastChargedMonth === monthStr
                 return (
-                  <li key={r.id} className={`px-5 py-3.5 flex items-center gap-3 ${!r.active ? 'opacity-55' : ''}`}>
-                    <div className="w-9 h-9 rounded-md grid place-items-center text-[15px] shrink-0" style={{ background: (cat.color ?? '#888') + '20' }}>{cat.icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-[14px] truncate">{r.name}</span>
-                        {r.comisionBancaria && <Badge tone="warn">comisión</Badge>}
-                        {!r.active && <Badge tone="muted">pausado</Badge>}
-                        {r.active && charged && <Badge tone="ok">cobrado</Badge>}
-                        {r.active && !charged && <Badge tone="warn">pendiente</Badge>}
-                        {r.autoRegister && <Badge tone="info">auto</Badge>}
+                  <li key={r.id} className={`px-4 py-4 border-b border-[var(--line)] last:border-b-0 ${!r.active ? 'opacity-60' : ''}`}>
+                    {/* ── Row 1: icon + name + amount ── */}
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-md grid place-items-center text-[15px] shrink-0 mt-0.5" style={{ background: (cat.color ?? '#888') + '20' }}>{cat.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-[14px] leading-snug line-clamp-2 pr-2">{r.name}</div>
                       </div>
-                      <div className="mt-1 text-[11.5px] text-[var(--muted)] leading-snug">
-                        Cobra el día {r.dayOfMonth}
-                        {r.startDate && <> · Inicia: {fmtLocalDate(r.startDate)}</>}
-                        {r.endDate   && <> · Termina: {fmtLocalDate(r.endDate)}</>}
-                        {r.active && !charged && <> · Próximo cobro: {fmtNextCharge(r, today)}</>}
-                        {r.bank && ` · ${banks.find(b => b.id === r.bank)?.label ?? r.bank}`}
-                        {r.medio && ` · ${MEDIOS_LABEL[r.medio] ?? r.medio}`}
-                      </div>
+                      <div className="font-mono text-[15px] tabular-nums shrink-0 font-semibold">{fmtCLP(r.amount)}</div>
                     </div>
-                    <div className="font-mono text-[15px] tabular-nums shrink-0">{fmtCLP(r.amount)}</div>
-                    <div className="flex items-center gap-0.5 shrink-0">
+                    {/* ── Row 2: badges ── */}
+                    <div className="mt-2 ml-12 flex items-center gap-1.5 flex-wrap">
+                      {r.comisionBancaria && <Badge tone="warn">comisión</Badge>}
+                      {!r.active && <Badge tone="muted">pausado</Badge>}
+                      {r.active && charged && <Badge tone="ok">cobrado</Badge>}
+                      {r.active && !charged && <Badge tone="warn">pendiente</Badge>}
+                      {r.autoRegister && <Badge tone="info">auto</Badge>}
+                    </div>
+                    {/* ── Row 3: detail ── */}
+                    <div className="mt-1.5 ml-12 text-[11.5px] text-[var(--muted)] leading-relaxed">
+                      {r.dayOfMonth ? `Cobra el día ${r.dayOfMonth}` : 'Sin día de cobro'}
+                      {r.active && !charged && <> · Próximo: {fmtNextCharge(r, today)}</>}
+                      {r.bank && ` · ${banks.find(b => b.id === r.bank)?.label ?? r.bank}`}
+                      {r.medio && ` · ${MEDIOS_LABEL[r.medio] ?? r.medio}`}
+                      {r.endDate && <> · Termina: {fmtLocalDate(r.endDate)}</>}
+                    </div>
+                    {/* ── Row 4: actions ── */}
+                    <div className="mt-2.5 ml-12 flex items-center gap-1.5 flex-wrap">
                       {r.active && !charged && (
                         <button onClick={() => runNow(r.id)}
-                          className="text-[11px] px-2 h-7 rounded-md border border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--hover)]">
+                          className="h-8 px-3 rounded-md border border-[var(--line)] text-[12px] text-[var(--ink-2)] hover:bg-[var(--hover)] font-medium">
                           Cobrar
                         </button>
                       )}
-                      {isSupabaseExp && <IconBtn name="pencil" label="Editar" tone="outline" onClick={() => openForm('expenses', { ...r })}/>}
-                      <IconBtn name="power" label={r.active ? 'Pausar' : 'Activar'}
-                               tone={r.active ? 'outline' : 'ok'} onClick={() => toggleActive(r.id)}/>
-                      {isSupabaseExp && <IconBtn name="trash" label="Eliminar" tone="danger" onClick={() => {
-                        if (window.confirm('¿Eliminar gasto recurrente?')) onDeleteRecurring?.(r.id)
-                      }}/>}
+                      {isSupabaseExp && (
+                        <button onClick={() => openForm('expenses', { ...r })}
+                          className="h-8 px-3 rounded-md border border-[var(--line)] text-[12px] text-[var(--ink-2)] hover:bg-[var(--hover)] inline-flex items-center gap-1.5">
+                          <Icon name="pencil" size={12}/> Editar
+                        </button>
+                      )}
+                      <button onClick={() => toggleActive(r.id)}
+                        className={`h-8 px-3 rounded-md border text-[12px] hover:bg-[var(--hover)] inline-flex items-center gap-1.5
+                          ${r.active ? 'border-[var(--line)] text-[var(--ink-2)]' : 'border-[var(--accent)] text-[var(--accent-ink)]'}`}>
+                        <Icon name="power" size={12}/> {r.active ? 'Pausar' : 'Activar'}
+                      </button>
+                      {isSupabaseExp && (
+                        <button onClick={() => { if (window.confirm('¿Eliminar gasto recurrente?')) onDeleteRecurring?.(r.id) }}
+                          className="h-8 w-8 rounded-md border border-[var(--line)] text-[var(--muted)] hover:text-red-500 hover:bg-[var(--hover)] grid place-items-center">
+                          <Icon name="trash" size={13}/>
+                        </button>
+                      )}
                     </div>
                   </li>
                 )
