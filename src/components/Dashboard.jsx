@@ -209,34 +209,47 @@ export default function Dashboard({
               Próx. pago tarjetas
             </div>
             <div className="font-extrabold leading-none tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.02em', fontSize: cardNextPayments.length > 0 ? '20px' : '22px' }}>
-              {fmtCLP(totalNextCardPayment)}
+              {fmtCLP(totalComisionesRecurrentes > 0 ? totalNextCardPayment + totalComisionesRecurrentes : totalNextCardPayment)}
             </div>
-            <div className="text-[10.5px] mt-1.5" style={{ color: '#5d6888' }}>
-              {cardNextPayments.length} tarjeta{cardNextPayments.length !== 1 ? 's' : ''} · incl. cargos estado
+            {totalComisionesRecurrentes > 0 && (
+              <div className="text-[10px] mt-0.5 tabular-nums" style={{ color: '#9ba5c2' }}>base {fmtCLP(totalNextCardPayment)}</div>
+            )}
+            <div className="text-[10.5px] mt-1" style={{ color: '#5d6888' }}>
+              {cardNextPayments.length} tarjeta{cardNextPayments.length !== 1 ? 's' : ''} · {totalComisionesRecurrentes > 0 ? 'est. incl. comisiones' : 'incl. cargos estado'}
             </div>
           </div>
         </div>
 
-        {/* Barra sin / con comisiones */}
+        {/* Barra resumen tarjetas */}
         {totalNextCardPayment > 0 && (
           <div className="mt-2.5 flex bg-white border border-[#e8e6df] rounded-[10px] overflow-hidden"
             style={{ boxShadow: '0 1px 3px rgba(30,37,53,0.04)' }}>
-            <div className="flex-1 px-3.5 py-2.5">
-              <div className="text-[9.5px] font-bold tracking-[0.07em] uppercase mb-1" style={{ color: '#5d6888' }}>Total tarjetas</div>
-              <div className="text-[15px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
-                {fmtCLP(totalNextCardPayment)}
-              </div>
-              <div className="text-[10px] mt-0.5" style={{ color: '#5d6888' }}>contado + cuotas + cargos</div>
-            </div>
-            {totalComisionesRecurrentes > 0 && (
-              <div className="flex-1 px-3.5 py-2.5 border-l border-[#e8e6df]">
-                <div className="text-[9.5px] font-bold tracking-[0.07em] uppercase mb-1" style={{ color: '#5d6888' }}>Estimado incl. comisiones</div>
-                <div className="text-[14px] font-semibold tabular-nums" style={{ color: '#9ba5c2', letterSpacing: '-0.01em' }}>
-                  {fmtCLP(totalNextCardPayment + totalComisionesRecurrentes)}
+            {totalComisionesRecurrentes > 0 ? (
+              <>
+                <div className="flex-1 px-3.5 py-2.5">
+                  <div className="text-[9.5px] font-bold tracking-[0.07em] uppercase mb-1" style={{ color: '#5d6888' }}>Estimado real a pagar</div>
+                  <div className="text-[15px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
+                    {fmtCLP(totalNextCardPayment + totalComisionesRecurrentes)}
+                  </div>
+                  <div className="text-[10px] mt-0.5" style={{ color: '#5d6888' }}>
+                    +<span style={{ color: '#fbbf24', fontWeight: 600 }}>{fmtCLP(totalComisionesRecurrentes)}</span> comisiones fijas
+                  </div>
                 </div>
-                <div className="text-[10px] mt-0.5" style={{ color: '#5d6888' }}>
-                  +<span style={{ color: '#fbbf24', fontWeight: 600 }}>{fmtCLP(totalComisionesRecurrentes)}</span> comisiones fijas
+                <div className="flex-1 px-3.5 py-2.5 border-l border-[#e8e6df]">
+                  <div className="text-[9.5px] font-bold tracking-[0.07em] uppercase mb-1" style={{ color: '#9ba5c2' }}>Base s/ comisiones</div>
+                  <div className="text-[14px] font-semibold tabular-nums" style={{ color: '#9ba5c2', letterSpacing: '-0.01em' }}>
+                    {fmtCLP(totalNextCardPayment)}
+                  </div>
+                  <div className="text-[10px] mt-0.5" style={{ color: '#9ba5c2' }}>contado + cuotas + cargos</div>
                 </div>
+              </>
+            ) : (
+              <div className="flex-1 px-3.5 py-2.5">
+                <div className="text-[9.5px] font-bold tracking-[0.07em] uppercase mb-1" style={{ color: '#5d6888' }}>Total tarjetas</div>
+                <div className="text-[15px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
+                  {fmtCLP(totalNextCardPayment)}
+                </div>
+                <div className="text-[10px] mt-0.5" style={{ color: '#5d6888' }}>contado + cuotas + cargos</div>
               </div>
             )}
           </div>
@@ -276,10 +289,13 @@ export default function Dashboard({
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="text-right">
                         <div className="text-[17px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
-                          {fmtCLP(totalAmount)}
+                          {fmtCLP(comisionesRecurrentes > 0 ? totalAmount + comisionesRecurrentes : totalAmount)}
                         </div>
-                        <div className="text-[10px] mt-[2px]" style={{ color: '#5d6888' }}>
-                          {cargosTotal > 0 ? 'incl. cargos del estado' : comisionesRecurrentes > 0 ? 'base · sin comisión fija' : 'Total a pagar'}
+                        {comisionesRecurrentes > 0 && (
+                          <div className="text-[10px] tabular-nums" style={{ color: '#9ba5c2' }}>base {fmtCLP(totalAmount)}</div>
+                        )}
+                        <div className="text-[10px] mt-[1px]" style={{ color: '#5d6888' }}>
+                          {comisionesRecurrentes > 0 ? 'est. incl. comisión fija' : cargosTotal > 0 ? 'incl. cargos del estado' : 'Total a pagar'}
                         </div>
                       </div>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -353,10 +369,12 @@ export default function Dashboard({
                       <div className="h-px mt-2 mb-1" style={{ background: '#e8e6df' }}/>
                       <div className="flex justify-between items-center py-2">
                         <div>
-                          <div className="text-[12px] font-bold" style={{ color: '#1e2535' }}>Total a pagar tarjeta</div>
+                          <div className="text-[12px] font-bold" style={{ color: comisionesRec.length > 0 ? '#9ba5c2' : '#1e2535' }}>
+                            {comisionesRec.length > 0 ? 'Subtotal s/ comisión' : 'Total a pagar tarjeta'}
+                          </div>
                           <div className="text-[11px] mt-[1px]" style={{ color: '#9ba5c2' }}>Vence {payDateStr}</div>
                         </div>
-                        <div className="text-[17px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
+                        <div className="text-[17px] font-extrabold tabular-nums" style={{ color: comisionesRec.length > 0 ? '#9ba5c2' : '#1e2535', letterSpacing: '-0.01em' }}>
                           {fmtCLP(totalAmount)}
                         </div>
                       </div>
@@ -377,10 +395,10 @@ export default function Dashboard({
                             </div>
                           ))}
                           <div className="flex justify-between items-center mt-2 pt-2 border-t border-[#dddbd3]">
-                            <span className="text-[12.5px] font-medium" style={{ color: '#4a5370' }}>
-                              Estimado incl. comisión fija
+                            <span className="text-[13px] font-bold" style={{ color: '#1e2535' }}>
+                              Total a pagar tarjeta
                             </span>
-                            <span className="text-[14px] font-bold tabular-nums" style={{ color: '#1e2535' }}>
+                            <span className="text-[16px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
                               {fmtCLP(totalAmount + comisionesRecurrentes)}
                             </span>
                           </div>
