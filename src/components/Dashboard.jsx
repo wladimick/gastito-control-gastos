@@ -177,7 +177,8 @@ export default function Dashboard({
     return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, comisionesRecurrentes, cardStatements, totalAmount, cycleStart, cycleEnd }
   })
 
-  const totalNextCardPayment = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
+  const totalNextCardPayment       = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
+  const totalComisionesRecurrentes = cardNextPayments.reduce((s, c) => s + c.comisionesRecurrentes, 0)
   const freeBalance = usableBalance - totalNextCardPayment - recurringTotal
   const afterExpectedIncome = usableBalance + monthlyIncome - totalNextCardPayment - recurringTotal
   const afterSalary = afterExpectedIncome
@@ -571,9 +572,17 @@ export default function Dashboard({
             })}
           </ul>
           {cardNextPayments.length > 1 && (
-            <div className="px-5 py-3 border-t border-[var(--line)] flex items-center justify-between">
-              <span className="text-[12.5px] text-[var(--muted)] font-medium">Total tarjetas</span>
-              <span className="font-mono text-[15px] font-semibold tabular-nums">{fmtCLP(totalNextCardPayment)}</span>
+            <div className="px-5 py-3 border-t border-[var(--line)] flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[12.5px] text-[var(--muted)] font-medium">Total tarjetas</span>
+                <span className="font-mono text-[15px] font-semibold tabular-nums">{fmtCLP(totalNextCardPayment)}</span>
+              </div>
+              {totalComisionesRecurrentes > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-[var(--muted)]">Total estimado incl. comisiones</span>
+                  <span className="font-mono text-[13px] text-[var(--muted)] tabular-nums">{fmtCLP(totalNextCardPayment + totalComisionesRecurrentes)}</span>
+                </div>
+              )}
             </div>
           )}
         </Card>
