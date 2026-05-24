@@ -59,6 +59,21 @@ export default function Dashboard({
   const AUTO_PAY_DAY = 5
   const ccStatements = useMemo(() => loadCCStatements(), [])
 
+  const CHARGE_LABEL = {
+    cargo_internacional: 'Cargo internacional',
+    impuesto:            'Impuesto',
+    interes:             'Interés',
+    comision:            'Comisión',
+    otro:                'Otro cargo',
+  }
+  const CHARGE_COLOR = {
+    cargo_internacional: '#C9A227',
+    impuesto:            '#8E44AD',
+    interes:             '#C0392B',
+    comision:            '#546E7A',
+    otro:                '#607D8B',
+  }
+
   // ── Monthly ──────────────────────────────────────────────────────────────
   const thisMonth = expenses.filter(e => {
     const d = new Date(e.date)
@@ -151,7 +166,14 @@ export default function Dashboard({
       (s.bankId === card.bank) &&
       ((s.month || s.dueDate?.slice(0, 7)) === nextPayMonthStr)
     )
-    const cargosComisiones = cardStatements.reduce((s, st) => s + (st.cargosComisiones || 0), 0)
+    const cardCharges = cardStatements.flatMap(st =>
+      (st.charges?.length > 0)
+        ? st.charges
+        : st.cargosComisiones > 0
+        ? [{ tipo: 'otro', descripcion: 'Cargos y comisiones', monto: st.cargosComisiones }]
+        : []
+    )
+    const cargosComisiones = cardCharges.reduce((s, c) => s + (Number(c.monto) || 0), 0)
 
     // Comisiones recurrentes asociadas a este banco/tarjeta (informativo — ya están en recurringTotal)
     // Se muestran todas las comisiones del banco (cualquier medio) para que el usuario vea el costo total
@@ -174,7 +196,7 @@ export default function Dashboard({
     })
     comisionesRec.forEach(r => console.log('[recurringCommission]', { id: r.id, name: r.name, bank: r.bank, medio: r.medio, amount: r.amount }))
 
-    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, comisionesRecurrentes, cardStatements, totalAmount, cycleStart, cycleEnd }
+    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, cardCharges, comisionesRecurrentes, cardStatements, totalAmount, cycleStart, cycleEnd }
   })
 
   const totalNextCardPayment       = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
@@ -501,7 +523,7 @@ export default function Dashboard({
             onAction={() => setView('accounts')}
           />
           <ul className="divide-y divide-[var(--line)]">
-            {cardNextPayments.map(({ card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, comisionesRecurrentes, cardStatements, totalAmount, cycleStart, cycleEnd }) => {
+            {cardNextPayments.map(({ card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, cardCharges, comisionesRecurrentes, cardStatements, totalAmount, cycleStart, cycleEnd }) => {
               const lim       = card.creditLimit ? Number(card.creditLimit) : null
               const util      = lim && lim > 0 ? (totalAmount / lim) * 100 : null
               const utilColor = util === null ? 'var(--accent)' : util > 80 ? '#A02828' : util > 60 ? 'var(--amber-ink)' : 'var(--accent)'

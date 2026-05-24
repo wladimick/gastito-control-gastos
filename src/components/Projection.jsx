@@ -217,14 +217,31 @@ const blankStatement = (month = '') => ({
   cardName: '', bankId: 'bchile',
   comprasUnaC: '',
   cuotasMes: '',
-  cargosComisiones: '',
+  charges: [],
   billedAmount: '', minimumPayment: '',
   dueDate: '', month, description: '', status: 'pending',
 })
 
+const CHARGE_TIPOS = [
+  { id: 'cargo_internacional', label: 'Cargo internacional' },
+  { id: 'impuesto',            label: 'Impuesto' },
+  { id: 'interes',             label: 'Interés' },
+  { id: 'comision',            label: 'Comisión' },
+  { id: 'otro',                label: 'Otro cargo' },
+]
+const CHARGE_COLORS = {
+  cargo_internacional: '#C9A227',
+  impuesto:            '#8E44AD',
+  interes:             '#C0392B',
+  comision:            '#546E7A',
+  otro:                '#607D8B',
+}
+
 const parseAmt = v => Number(String(v || 0).replace(/[^0-9]/g, '')) || 0
+const chargesSum = stmt => (stmt.charges ?? []).reduce((s, c) => s + (Number(c.monto) || 0), 0)
 const stmtTotal = stmt => {
-  const breakdown = parseAmt(stmt.comprasUnaC) + parseAmt(stmt.cuotasMes) + parseAmt(stmt.cargosComisiones)
+  const variable  = chargesSum(stmt) || parseAmt(stmt.cargosComisiones)
+  const breakdown = parseAmt(stmt.comprasUnaC) + parseAmt(stmt.cuotasMes) + variable
   return breakdown > 0 ? breakdown : parseAmt(stmt.billedAmount)
 }
 
@@ -271,18 +288,23 @@ function CcStatementForm({ defaultMonth, banks, onSave, onCancel }) {
   const [f, setF] = useState(blankStatement(defaultMonth))
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
 
-  const totalAPagar = parseAmt(f.comprasUnaC) + parseAmt(f.cuotasMes) + parseAmt(f.cargosComisiones)
+  const addCharge    = () => setF(p => ({ ...p, charges: [...(p.charges ?? []), { tipo: 'otro', descripcion: '', monto: '' }] }))
+  const removeCharge = i  => setF(p => ({ ...p, charges: p.charges.filter((_, j) => j !== i) }))
+  const setCharge    = (i, k, v) => setF(p => ({ ...p, charges: p.charges.map((c, j) => j === i ? { ...c, [k]: v } : c) }))
+
+  const chargesTotal = (f.charges ?? []).reduce((s, c) => s + parseAmt(c.monto), 0)
+  const totalAPagar  = parseAmt(f.comprasUnaC) + parseAmt(f.cuotasMes) + chargesTotal
   const valid = f.cardName.trim() && totalAPagar > 0 && f.dueDate
 
   const handleSave = () => {
     const month = f.dueDate ? f.dueDate.slice(0, 7) : f.month
     onSave({
       ...f,
-      comprasUnaC:      parseAmt(f.comprasUnaC),
-      cuotasMes:        parseAmt(f.cuotasMes),
-      cargosComisiones: parseAmt(f.cargosComisiones),
-      billedAmount:     totalAPagar,
-      minimumPayment:   parseAmt(f.minimumPayment),
+      comprasUnaC:    parseAmt(f.comprasUnaC),
+      cuotasMes:      parseAmt(f.cuotasMes),
+      charges:        (f.charges ?? []).map(c => ({ tipo: c.tipo, descripcion: c.descripcion, monto: parseAmt(c.monto) })).filter(c => c.monto > 0),
+      billedAmount:   totalAPagar,
+      minimumPayment: parseAmt(f.minimumPayment),
       month,
       id: 'cc' + Date.now(),
     })
@@ -311,19 +333,17 @@ function CcStatementForm({ defaultMonth, banks, onSave, onCancel }) {
             placeholder="0" className={fi + ' font-mono'}/>
         </div>
         <div>
-          <label className="text-[11px] text-[var(--muted)] block mb-1.5">Cuotas del mes</label>
+          <label className="text-[11px] text-[var(--muted)] block mb-1.5">
+            Cuotas del mes
+            <span className="ml-1 text-[10px] text-[var(--muted)]">(referencia)</span>
+          </label>
           <input type="text" inputMode="numeric" value={f.cuotasMes}
             onChange={e => set('cuotasMes', e.target.value)}
             placeholder="0" className={fi + ' font-mono'}/>
         </div>
         <div>
-          <label className="text-[11px] text-[var(--muted)] block mb-1.5">
-            Cargos y comisiones
-            <span className="ml-1.5 text-[var(--amber-ink)]">(solo variables o puntuales)</span>
-          </label>
-          <input type="text" inputMode="numeric" value={f.cargosComisiones}
-            onChange={e => set('cargosComisiones', e.target.value)}
-            placeholder="0" className={fi + ' font-mono'}/>
+          <label className="text-[11px] text-[var(--muted)] block mb-1.5">Fecha vencimiento</label>
+          <input type="date" value={f.dueDate} onChange={e => set('dueDate', e.target.value)} className={fi}/>
         </div>
         <div>
           <label className="text-[11px] text-[var(--muted)] block mb-1.5">Pago mínimo</label>
@@ -331,16 +351,54 @@ function CcStatementForm({ defaultMonth, banks, onSave, onCancel }) {
             onChange={e => set('minimumPayment', e.target.value)}
             placeholder="Opcional" className={fi + ' font-mono'}/>
         </div>
-        <div>
-          <label className="text-[11px] text-[var(--muted)] block mb-1.5">Fecha vencimiento</label>
-          <input type="date" value={f.dueDate} onChange={e => set('dueDate', e.target.value)} className={fi}/>
-        </div>
-        <div>
+        <div className="col-span-2">
           <label className="text-[11px] text-[var(--muted)] block mb-1.5">Notas</label>
           <input value={f.description} onChange={e => set('description', e.target.value)}
             placeholder="Opcional" className={fi}/>
         </div>
       </div>
+
+      {/* ── Otros cargos del estado ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
+            Otros cargos del estado
+          </span>
+          <button type="button" onClick={addCharge}
+            className="text-[11px] text-[var(--ink-2)] hover:text-[var(--ink)] flex items-center gap-1 transition">
+            <Icon name="plus" size={11}/> Agregar
+          </button>
+        </div>
+        {(f.charges ?? []).length === 0 ? (
+          <div className="rounded-lg border border-dashed border-[var(--line)] py-3 text-center text-[11px] text-[var(--muted)]">
+            Sin cargos adicionales ·{' '}
+            <button type="button" onClick={addCharge} className="underline">Agregar cargo</button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {(f.charges ?? []).map((c, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <select value={c.tipo} onChange={e => setCharge(i, 'tipo', e.target.value)}
+                  className="h-9 px-2 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[12px] focus:outline-none focus:border-[var(--ink)] shrink-0"
+                  style={{ color: CHARGE_COLORS[c.tipo] ?? CHARGE_COLORS.otro }}>
+                  {CHARGE_TIPOS.map(t => <option key={t.id} value={t.id} style={{ color: CHARGE_COLORS[t.id] }}>{t.label}</option>)}
+                </select>
+                <input value={c.descripcion} onChange={e => setCharge(i, 'descripcion', e.target.value)}
+                  placeholder="Descripción opcional"
+                  className="flex-1 h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[12px] focus:outline-none focus:border-[var(--ink)] min-w-0"/>
+                <input type="text" inputMode="numeric" value={c.monto} onChange={e => setCharge(i, 'monto', e.target.value)}
+                  placeholder="0"
+                  className="w-28 h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[12px] font-mono focus:outline-none focus:border-[var(--ink)] shrink-0"/>
+                <button type="button" onClick={() => removeCharge(i)}
+                  className="w-8 h-8 shrink-0 grid place-items-center rounded-md border border-[var(--line)] text-[var(--muted)] hover:text-red-500 hover:bg-[var(--hover)] transition">
+                  <Icon name="trash" size={12}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {totalAPagar > 0 && (
         <div className="rounded-lg bg-[var(--bg-elev)] border border-[var(--line)] px-3 py-2 flex items-center justify-between">
           <span className="text-[11.5px] text-[var(--muted)]">Total a pagar</span>
@@ -479,7 +537,7 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
                 const st      = stmtStatus(stmt)
                 const bank    = banks.find(b => b.id === stmt.bankId)
                 const total   = stmtTotal(stmt)
-                const hasBreakdown = stmt.comprasUnaC > 0 || stmt.cuotasMes > 0 || stmt.cargosComisiones > 0
+                const hasBreakdown = stmt.comprasUnaC > 0 || stmt.cuotasMes > 0 || (stmt.charges?.length > 0) || stmt.cargosComisiones > 0
                 return (
                   <div key={stmt.id} className={`rounded-lg border border-[var(--line)] px-4 py-3 flex flex-col gap-2 ${stmt.status === 'paid' ? 'opacity-55' : ''}`}>
                     <div className="flex items-start gap-3">
@@ -526,7 +584,16 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
                             <span className="font-mono tabular-nums text-[var(--ink-2)]">{fmtCLP(stmt.cuotasMes)}</span>
                           </div>
                         )}
-                        {stmt.cargosComisiones > 0 && (
+                        {(stmt.charges?.length > 0) && stmt.charges.map((c, ci) => (
+                          <div key={ci} className="flex items-center justify-between text-[11px] font-medium">
+                            <span style={{ color: CHARGE_COLORS[c.tipo] ?? CHARGE_COLORS.otro }}>
+                              {CHARGE_TIPOS.find(t => t.id === c.tipo)?.label ?? c.tipo}
+                              {c.descripcion ? ` · ${c.descripcion}` : ''}
+                            </span>
+                            <span className="font-mono tabular-nums" style={{ color: CHARGE_COLORS[c.tipo] ?? CHARGE_COLORS.otro }}>{fmtCLP(c.monto)}</span>
+                          </div>
+                        ))}
+                        {(!stmt.charges?.length && stmt.cargosComisiones > 0) && (
                           <div className="flex items-center justify-between text-[11px] font-medium">
                             <span className="text-[var(--amber-ink)]">Cargos y comisiones</span>
                             <span className="font-mono tabular-nums text-[var(--amber-ink)]">{fmtCLP(stmt.cargosComisiones)}</span>
@@ -560,7 +627,7 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
           {/* ── Aviso doble descuento ─────────────────────────── */}
           <div className="rounded-lg bg-[var(--bg)] border border-[var(--line)] px-3.5 py-3 text-[11.5px] text-[var(--muted)] leading-snug flex items-start gap-2">
             <Icon name="info" size={13} className="mt-px shrink-0"/>
-            <span>Ingresa los montos tal como aparecen en tu estado de cuenta. Los <strong className="text-[var(--ink)]">cargos y comisiones</strong> se suman al dashboard automáticamente. Si ya registraste las cuotas en la sección Cuotas de la app, no las dobles en "Cuotas del mes".</span>
+            <span>Ingresa los montos del estado de cuenta. Los <strong className="text-[var(--ink)]">otros cargos</strong> (intereses, impuestos, cargos internacionales) se suman al dashboard. Las cuotas del mes son solo referencia — no se duplican si ya están en Cuotas de la app.</span>
           </div>
         </div>
 
