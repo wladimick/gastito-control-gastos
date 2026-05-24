@@ -21,6 +21,7 @@ export const CATEGORIES = [
   { id: "por_pagar",    label: "Por pagar",     icon: "💸", color: "#FF9800" },
   { id: "regalo",       label: "Regalo",        icon: "🎁", color: "#E91E63" },
   { id: "imprevistos",  label: "Imprevistos",   icon: "⚠️", color: "#9E9E9E" },
+  { id: "comision_bancaria", label: "Comisión bancaria", icon: "🏦", color: "#546E7A" },
   { id: "otros",        label: "Otros",         icon: "•",   color: "#888880" },
 ];
 

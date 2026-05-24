@@ -145,7 +145,7 @@ export default function Dashboard({
     const cuotasAmount = cardCuotas.reduce((s, d) => s + (d.monthlyAmount || 0), 0)
     const cuotasCount  = cardCuotas.length
 
-    // Cargos y comisiones from CC statements for this card's next payment month
+    // Cargos variables from CC statements (facturaciones tarjeta)
     const cardStatements = ccStatements.filter(s =>
       s.status !== 'paid' &&
       (s.bankId === card.bank) &&
@@ -153,7 +153,29 @@ export default function Dashboard({
     )
     const cargosComisiones = cardStatements.reduce((s, st) => s + (st.cargosComisiones || 0), 0)
 
-    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, cardStatements, totalAmount: contadoAmount + cuotasAmount + cargosComisiones, cycleStart, cycleEnd }
+    // Comisiones recurrentes asociadas a esta tarjeta (informativo — ya están en recurringTotal)
+    const comisionesRec = recurring.filter(r =>
+      r.comisionBancaria && r.active !== false &&
+      r.bank === card.bank &&
+      (r.medio === 'tc_credito' || !r.medio)
+    )
+    const comisionesRecurrentes = comisionesRec.reduce((s, r) => s + (r.amount || 0), 0)
+
+    const totalAmount = contadoAmount + cuotasAmount + cargosComisiones
+
+    console.log('[cardTotals]', {
+      bank:                 card.bank,
+      tarjeta:              card.name,
+      contado:              contadoAmount,
+      cuotasMes:            cuotasAmount,
+      cargosVariables:      cargosComisiones,
+      comisionesRecurrentes,
+      totalParaSaldo:       totalAmount,
+      totalVisual:          totalAmount + comisionesRecurrentes,
+    })
+    comisionesRec.forEach(r => console.log('[recurringCommission]', { id: r.id, name: r.name, bank: r.bank, medio: r.medio, amount: r.amount }))
+
+    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, comisionesRecurrentes, cardStatements, totalAmount, cycleStart, cycleEnd }
   })
 
   const totalNextCardPayment = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)
@@ -479,7 +501,7 @@ export default function Dashboard({
             onAction={() => setView('accounts')}
           />
           <ul className="divide-y divide-[var(--line)]">
-            {cardNextPayments.map(({ card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, cardStatements, totalAmount, cycleStart, cycleEnd }) => {
+            {cardNextPayments.map(({ card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cargosComisiones, comisionesRecurrentes, cardStatements, totalAmount, cycleStart, cycleEnd }) => {
               const lim       = card.creditLimit ? Number(card.creditLimit) : null
               const util      = lim && lim > 0 ? (totalAmount / lim) * 100 : null
               const utilColor = util === null ? 'var(--accent)' : util > 80 ? '#A02828' : util > 60 ? 'var(--amber-ink)' : 'var(--accent)'
@@ -512,16 +534,30 @@ export default function Dashboard({
                         )}
                         {cargosComisiones > 0 && (
                           <div className="flex items-center justify-between text-[11.5px]">
-                            <span className="text-[var(--amber-ink)]">Cargos y comisiones{bankLabel ? ` · ${bankLabel}` : ''}</span>
+                            <span className="text-[var(--amber-ink)]">Cargos variables del estado de cuenta</span>
                             <span className="font-mono tabular-nums text-[var(--amber-ink)]">{fmtCLP(cargosComisiones)}</span>
                           </div>
                         )}
-                        {contadoAmount === 0 && cuotasAmount === 0 && cargosComisiones === 0 && (
+                        {comisionesRecurrentes > 0 && (
+                          <div className="flex items-center justify-between text-[11.5px]">
+                            <span className="text-[var(--muted)]">Comisiones fijas · <span className="italic">en gastos fijos</span></span>
+                            <span className="font-mono tabular-nums text-[var(--muted)]">{fmtCLP(comisionesRecurrentes)}</span>
+                          </div>
+                        )}
+                        {contadoAmount === 0 && cuotasAmount === 0 && cargosComisiones === 0 && comisionesRecurrentes === 0 && (
                           <div className="text-[11.5px] text-[var(--muted)]">Sin movimientos en el ciclo</div>
                         )}
-                        <div className="flex items-center justify-between text-[12px] font-semibold text-[var(--ink-2)] pt-0.5 border-t border-[var(--line)] mt-0.5">
-                          <span>Pagar el {payLabel}</span>
-                          <span className="font-mono tabular-nums">{fmtCLP(totalAmount)}</span>
+                        <div className="flex flex-col gap-0.5 pt-0.5 border-t border-[var(--line)] mt-0.5">
+                          <div className="flex items-center justify-between text-[12px] font-semibold text-[var(--ink-2)]">
+                            <span>Pagar el {payLabel}</span>
+                            <span className="font-mono tabular-nums">{fmtCLP(totalAmount)}</span>
+                          </div>
+                          {comisionesRecurrentes > 0 && (
+                            <div className="flex items-center justify-between text-[11px] text-[var(--muted)]">
+                              <span>Total estimado (incl. comisiones)</span>
+                              <span className="font-mono tabular-nums">{fmtCLP(totalAmount + comisionesRecurrentes)}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
