@@ -655,11 +655,11 @@ function ProjModal({ item, onClose, onSave }) {
   const canSave = f.name.trim() && f.amount
 
   return (
-    <div className="fixed inset-0 z-50 flex md:items-stretch items-end justify-end">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" onClick={onClose}/>
-      <div className="relative w-full md:max-w-[460px] md:h-screen bg-[var(--bg-elev)] border-l border-[var(--line)]
-                      rounded-t-2xl md:rounded-none overflow-y-auto"
-           style={{ animation: 'slideUp .2s ease-out' }}>
+      <div className="relative w-full max-w-[460px] max-h-[90vh] bg-[var(--bg-elev)] border border-[var(--line)]
+                      rounded-2xl overflow-y-auto"
+           style={{ animation: 'fadeScale .2s ease-out' }}>
 
         <div className="sticky top-0 bg-[var(--bg-elev)] border-b border-[var(--line)] px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
@@ -762,7 +762,7 @@ function ProjModal({ item, onClose, onSave }) {
           </button>
         </div>
 
-        <style>{`@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+        <style>{`@keyframes fadeScale{from{transform:scale(.97);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
       </div>
     </div>
   )
@@ -775,62 +775,44 @@ function ProjItem({ item, cat, impact, activePeriod, period, onToggle, onDelete,
   const pName    = activePeriod === 0 ? 'este mes' : activePeriod === 1 ? 'el próx. mes' : `en ${MES[period?.m]}`
 
   return (
-    <div className={`rounded-xl border bg-[var(--bg-elev)] p-4 transition ${!item.active ? 'opacity-55' : ''}`}
-      style={{ borderColor: 'var(--line)' }}>
-      <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-md grid place-items-center text-[16px] shrink-0"
-          style={{ background: (cat?.color || '#888') + '20' }}>{cat?.icon}</div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="font-medium text-[14px] tracking-tight truncate">{item.name}</div>
-              <div className="text-[12px] text-[var(--muted)] mt-0.5 flex flex-wrap gap-x-1.5">
-                <span>{MES[itemDate.getMonth()]} {itemDate.getFullYear()}</span>
-                {item.installments > 1 && <><span>·</span><span>{item.installments} cuotas</span></>}
-                {item.description && <><span>·</span><span className="truncate">{item.description}</span></>}
-              </div>
-            </div>
-            <div className="text-right shrink-0">
-              <div className="font-mono text-[14px] font-semibold tabular-nums">{fmtCLPshort(item.amount)}</div>
-              {monthly && <div className="text-[11px] text-[var(--muted)] font-mono">{fmtCLPshort(monthly)}/mes</div>}
-            </div>
+    <div className={`flex items-start gap-[11px] px-4 py-[13px] ${!item.active ? 'opacity-55' : ''}`}>
+      <div className="w-[38px] h-[38px] rounded-[10px] grid place-items-center text-[18px] shrink-0 border border-[var(--line)]"
+        style={{ background: (cat?.color || '#888') + '20' }}>{cat?.icon}</div>
+      <div className="flex-1 min-w-0">
+        <div className="font-bold text-[13.5px] text-[var(--ink)] truncate">{item.name}</div>
+        <div className="text-[11.5px] text-[var(--muted)] mt-[2px]">
+          {MES[itemDate.getMonth()]} {itemDate.getFullYear()}
+          {item.installments > 1 && ` · ${item.installments} cuotas`}
+          {' · '}{item.active ? 'activo' : 'inactivo'}
+        </div>
+        {item.active && impact > 0 && (
+          <div className="mt-1 flex items-center gap-1 text-[11px] text-[var(--muted)]">
+            <Icon name="arrowdn" size={10}/>Impacto {pName}: −{fmtCLPshort(impact)}
           </div>
-          {item.active && (
-            <div className="mt-2">
-              {impact > 0
-                ? <span className="inline-flex items-center gap-1 text-[11px] text-[var(--muted)] bg-[var(--bg)] rounded-md px-2 py-1">
-                    <Icon name="arrowdn" size={11}/>
-                    Impacto {pName}: −{fmtCLPshort(impact)}
-                  </span>
-                : <span className="text-[11px] text-[var(--muted)]">Sin impacto en {pName}</span>
-              }
-            </div>
-          )}
-        </div>
+        )}
       </div>
-
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--line)]">
-        <label className="flex items-center gap-2 cursor-pointer select-none min-w-0">
-          <button type="button" onClick={() => onToggle(item.id)}
-            className="relative rounded-full shrink-0 transition-colors"
-            style={{ width: 40, height: 22, background: item.active ? 'var(--accent)' : 'var(--line)' }}>
-            <span className="absolute rounded-full bg-white shadow transition-transform"
-              style={{ top: 2, left: 2, width: 18, height: 18, transform: item.active ? 'translateX(18px)' : 'none' }}/>
-          </button>
-          <span className="text-[12px] text-[var(--muted)] truncate">
-            {item.active ? 'Incluida en proyección' : 'Excluida de proyección'}
-          </span>
-        </label>
-        <div className="flex gap-1 shrink-0">
-          <button onClick={onEdit}
-            className="w-7 h-7 grid place-items-center rounded-md border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--ink)] transition">
-            <Icon name="pencil" size={13}/>
-          </button>
-          <button onClick={() => onDelete(item.id)}
-            className="w-7 h-7 grid place-items-center rounded-md border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-red-500 transition">
-            <Icon name="trash" size={13}/>
-          </button>
+      <div className="flex items-center gap-1.5 shrink-0 mt-px">
+        <div className="text-right mr-1">
+          <div className="font-extrabold text-[14px] tabular-nums" style={{ color: '#C0392B' }}>
+            −{fmtCLPshort(item.amount)}
+          </div>
+          {monthly && <div className="text-[10px] text-[var(--muted)] font-mono">{fmtCLPshort(monthly)}/mes</div>}
         </div>
+        <button type="button" onClick={() => onToggle(item.id)}
+          className="relative rounded-full shrink-0 transition-colors"
+          style={{ width: 34, height: 18, background: item.active ? 'var(--accent)' : 'var(--line)' }}>
+          <span className="absolute rounded-full bg-white shadow transition-transform"
+            style={{ top: 2, left: 2, width: 14, height: 14, transform: item.active ? 'translateX(16px)' : 'none' }}/>
+        </button>
+        <button onClick={onEdit}
+          className="w-[26px] h-[26px] grid place-items-center rounded-[7px] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--ink)] transition">
+          <Icon name="pencil" size={11}/>
+        </button>
+        <button onClick={() => onDelete(item.id)}
+          className="w-[26px] h-[26px] grid place-items-center rounded-[7px] text-[#C0392B] transition hover:opacity-80"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <Icon name="trash" size={11}/>
+        </button>
       </div>
     </div>
   )
@@ -942,56 +924,57 @@ export default function Projection({
   const resetBaseOverride = () => { setBaseOverride(null); setEditingBase(false) }
   const toggleSection     = s => setOpenSection(p => p === s ? null : s)
 
-  const showRecvWarning = sw.receivables !== false && (period?.recvAmt ?? 0) > 0
+  const showRecvWarning = sw.receivables !== false && (months[0]?.recvAmt ?? 0) > 0
 
   return (
     <div className="flex flex-col gap-5 pb-8">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-[22px] font-semibold tracking-tight">Proyección</h2>
-          <p className="text-[13px] text-[var(--muted)] mt-0.5 leading-snug max-w-sm">
-            Simula gastos futuros e hipotéticos para ver cómo afectarían tu saldo.
-          </p>
-        </div>
-        <button onClick={() => setEditItem(mkBlank())}
-          className="shrink-0 h-9 px-4 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium hover:opacity-90">
-          <Icon name="plus" size={14}/> Agregar
-        </button>
-      </div>
 
-      {/* Info bar */}
-      <div className="flex items-center gap-2 text-[12px] text-[var(--muted)] -mt-2 flex-wrap">
-        <Icon name="info" size={13}/>
-        <span>Proyección calculada desde tu saldo actual</span>
-        <span>·</span>
-        {editingBase ? (
-          <span className="flex items-center gap-1.5">
-            <span>Saldo base:</span>
-            <input
-              type="text" inputMode="numeric" value={baseInput}
-              onChange={e => setBaseInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') applyBaseOverride(); if (e.key === 'Escape') resetBaseOverride() }}
-              placeholder={fmtCLP(usableBalance)} autoFocus
-              className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
-            />
-            <button onClick={applyBaseOverride} className="text-[var(--accent-ink)] font-medium hover:underline">Ok</button>
-            <button onClick={resetBaseOverride}><Icon name="x" size={11}/></button>
-          </span>
-        ) : (
-          <button onClick={() => { setBaseInput(''); setEditingBase(true) }}
-            className="flex items-center gap-1 hover:text-[var(--ink)] transition">
-            <span className="font-mono font-medium text-[var(--ink-2)]">Saldo base: {fmtCLP(startBalance)}</span>
-            {baseOverride != null && (
-              <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[var(--amber-soft)] text-[var(--amber-ink)]">manual</span>
-            )}
-            <Icon name="pencil" size={11}/>
+      {/* ── Page header ── */}
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[22px] font-extrabold tracking-tight">Proyección</h2>
+            <p className="text-[13px] text-[var(--muted)] mt-1 leading-snug">
+              Simula gastos futuros para ver cómo afectan tu saldo.
+            </p>
+          </div>
+          <button onClick={() => setEditItem(mkBlank())}
+            className="shrink-0 inline-flex items-center gap-1.5 bg-[var(--ink)] text-[var(--bg)] text-[13px] font-bold h-9 px-4 rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+            <Icon name="plus" size={14}/> Agregar
           </button>
-        )}
+        </div>
+
+        {/* Saldo base editable */}
+        <div className="mt-3 inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
+          <Icon name="info" size={13}/>
+          <span>Saldo base:</span>
+          {editingBase ? (
+            <span className="flex items-center gap-1.5">
+              <input type="text" inputMode="numeric" value={baseInput}
+                onChange={e => setBaseInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') applyBaseOverride(); if (e.key === 'Escape') resetBaseOverride() }}
+                placeholder={fmtCLP(usableBalance)} autoFocus
+                className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+              />
+              <button onClick={applyBaseOverride} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+              <button onClick={resetBaseOverride}><Icon name="x" size={11}/></button>
+            </span>
+          ) : (
+            <button onClick={() => { setBaseInput(''); setEditingBase(true) }}
+              className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
+              <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(startBalance)}</strong>
+              {baseOverride != null && (
+                <span className="text-[10px] px-1 py-0.5 rounded"
+                  style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
+              )}
+              <Icon name="pencil" size={11}/>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Switches */}
-      <div className="flex flex-wrap gap-2 -mt-2">
+      {/* ── Switches ── */}
+      <div className="flex flex-wrap gap-2">
         {[
           { key: 'receivables', label: 'Por cobrar' },
           { key: 'payables',    label: 'Por pagar' },
@@ -999,207 +982,223 @@ export default function Projection({
           { key: 'sim',         label: 'Simulaciones' },
         ].map(s => (
           <button key={s.key} onClick={() => toggleSw(s.key)}
-            className={`h-7 px-3 rounded-full text-[11px] font-medium border transition
+            className={`inline-flex items-center gap-[5px] h-8 px-[13px] rounded-full text-[12.5px] font-semibold border-[1.5px] transition select-none
               ${sw[s.key]
                 ? 'bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]'
-                : 'bg-transparent text-[var(--muted)] border-[var(--line)] hover:border-[var(--ink-2)]'
+                : 'bg-[var(--bg-elev)] text-[var(--muted)] border-[var(--line)]'
               }`}>
-            {sw[s.key] ? '✓ ' : ''}{s.label}
+            <span className={`w-[6px] h-[6px] rounded-full shrink-0 ${sw[s.key] ? 'bg-[var(--accent)]' : 'bg-[var(--line)]'}`}/>
+            {s.label}
           </button>
         ))}
       </div>
 
-      {/* Receivables warning */}
+      {/* ── Receivables warning ── */}
       {showRecvWarning && (
-        <div className="flex items-center gap-2 -mt-2 text-[12px] rounded-lg px-3 py-2"
-          style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>
-          <Icon name="alert" size={13} className="shrink-0"/>
-          <span>Esta proyección incluye <strong>{fmtCLP(period.recvAmt)}</strong> que aún no te pagan.</span>
+        <div className="flex items-start gap-2 rounded-[10px] px-3.5 py-[10px] text-[12.5px] leading-snug"
+          style={{ background: 'var(--amber-soft)', border: '1px solid #fde68a', color: 'var(--amber-ink)' }}>
+          <span className="text-sm shrink-0 mt-px">⚠️</span>
+          <span>Esta proyección incluye <strong>{fmtCLP(months[0].recvAmt)}</strong> que aún no te han pagado.</span>
         </div>
       )}
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-3 gap-2.5">
-        <KpiCard label="Saldo hoy"
-          bal={startBalance} sub="disponible"/>
-        <KpiCard label={`${MES[months[1].m]} conserv.`}
-          bal={months[1].balConservative} sub="sin ingresos"
-          dotCls={(() => { const vv = verdict(months[1].balConservative, startBalance); return vv === 'verde' ? 'bg-[var(--accent)]' : vv === 'amarillo' ? 'bg-amber-400' : 'bg-red-500' })()}/>
-        <KpiCard label={`${MES[months[1].m]} esperado`}
-          bal={dispBal(months[1])} sub="con ingresos"
-          dotCls={getDot(months[1])}/>
+      {/* ── Hero 2-col: saldo base + mes esperado ── */}
+      <div className="grid grid-cols-2 gap-[10px]">
+        <div className="relative rounded-2xl overflow-hidden bg-[var(--ink)] p-[15px] shadow-[0_4px_14px_rgba(0,0,0,0.2)]">
+          <div className="absolute -top-[18px] -right-[18px] w-[70px] h-[70px] rounded-full pointer-events-none"
+            style={{ background: 'radial-gradient(circle, rgba(61,214,140,0.22) 0%, transparent 70%)' }}/>
+          <div className="text-[9.5px] font-bold tracking-[0.09em] uppercase mb-2"
+            style={{ color: 'rgba(255,255,255,0.4)' }}>Saldo base</div>
+          <div className="text-[24px] font-extrabold tabular-nums tracking-tight leading-none"
+            style={{ color: 'var(--accent)' }}>{fmtCLP(startBalance)}</div>
+          <div className="text-[10.5px] mt-[5px]" style={{ color: 'rgba(255,255,255,0.35)' }}>disponible hoy</div>
+        </div>
+        <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-[15px]">
+          <div className="text-[9.5px] font-bold tracking-[0.09em] uppercase text-[var(--muted)] mb-1.5 flex items-center gap-[5px]">
+            <span className="w-[6px] h-[6px] rounded-full bg-[var(--accent)] shrink-0"/>
+            {MES[months[1].m]} esperado
+          </div>
+          <div className="text-[24px] font-extrabold text-[var(--ink)] tabular-nums tracking-tight leading-none">
+            {fmtCLP(dispBal(months[1]))}
+          </div>
+          <div className="text-[10.5px] text-[var(--muted)] mt-[5px]">después de pagos</div>
+        </div>
       </div>
 
-      {/* Period tabs + detail */}
-      <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] overflow-hidden">
-        <div className="flex border-b border-[var(--line)]">
-          {months.map((mo, i) => (
-            <button key={mo.key} onClick={() => { setActivePeriod(i); setOpenSection(null) }}
-              className={`flex-1 py-2.5 text-[12px] font-medium transition border-b-2 -mb-px flex flex-col items-center gap-0.5
-                ${activePeriod === i ? 'border-[var(--ink)] text-[var(--ink)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink-2)]'}`}>
-              <span>{PERIOD_LABELS[i]}</span>
-              <span className="font-normal text-[11px]">{MES[mo.m]}</span>
-              {mo.isCurrent && <span className="font-normal text-[10px] opacity-60">desde hoy</span>}
-            </button>
-          ))}
+      {/* ── Cascada mensual ── */}
+      <div>
+        <div className="flex items-center justify-between mb-3 px-0.5">
+          <span className="text-[11px] font-bold text-[var(--muted)] uppercase tracking-[0.08em]">Próximo ciclo de pago</span>
         </div>
+        <div className="flex flex-col gap-[10px]">
+          {months.map((mo, i) => {
+            const totalIn  = mo.income + (sw.receivables !== false ? mo.recvAmt : 0)
+            const totalEg  = mo.recurring
+                           + (sw.cuotas !== false ? mo.cuotasTotal : 0)
+                           + (sw.payables         ? mo.payAmt      : 0)
+                           + (sw.sim !== false     ? mo.projOut     : 0)
+            const saldoFinal = dispBal(mo)
+            const vv = verdict(saldoFinal, startBalance)
+            const badge = {
+              verde:    { label: 'Viable',   bg: 'var(--accent-soft)', color: 'var(--accent-ink)' },
+              amarillo: { label: 'Ajustado', bg: 'var(--amber-soft)',  color: 'var(--amber-ink)'  },
+              rojo:     { label: 'Déficit',  bg: '#FFF0EE',            color: '#C0392B'            },
+            }[vv]
+            const refIn = i === 0 ? totalIn + startBalance : totalIn
+            const ratio = refIn > 0 ? Math.min(totalEg / refIn, 1) : 1
 
-        {period && (
-          <div className="p-4 flex flex-col gap-3">
-            {/* Flow breakdown */}
-            <div className="flex flex-col gap-2.5">
-              <FlowRow
-                label={period.isCurrent ? 'Ingresos pendientes del mes' : 'Ingresos esperados'}
-                amount={period.income + (sw.receivables !== false ? period.recvAmt : 0)}
-                type="income"
-                items={[...period.incomeDetail, ...(sw.receivables !== false ? period.recvDetail : [])]}
-                open={openSection === 'income'}
-                onToggle={() => toggleSection('income')}
-              />
-              <FlowRow
-                label="Gastos recurrentes"
-                amount={period.recurring}
-                type="out"
-                items={period.recurringDetail}
-                open={openSection === 'recurring'}
-                onToggle={() => toggleSection('recurring')}
-              />
+            return (
+              <div key={mo.key} className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] overflow-hidden shadow-sm">
 
-              {/* Cuotas de crédito — opens drawer */}
-              {sw.cuotas !== false && (
-                period.cuotasTotal > 0 ? (
-                  <FlowRow
-                    label="Cuotas de crédito"
-                    amount={period.cuotasTotal}
-                    type="out"
-                    open={false}
-                    onToggle={() => setCuotasModal(true)}
-                    modal
-                  />
-                ) : (
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="text-[var(--muted)]">Cuotas de crédito</span>
-                    <button onClick={() => setCuotasModal(true)}
-                      className="flex items-center gap-1 text-[11px] text-[var(--muted)] hover:text-[var(--ink)] transition">
-                      <Icon name="plus" size={11}/> Agregar facturación
-                    </button>
-                  </div>
-                )
-              )}
+                {/* Month label + badge */}
+                <div className="flex items-center justify-between px-4 pt-[14px] pb-[6px]">
+                  <span className="text-[14px] font-extrabold text-[var(--ink)]">{MES[mo.m]} {mo.y}</span>
+                  <span className="text-[11px] font-bold px-[9px] py-[3px] rounded-full uppercase tracking-[0.06em]"
+                    style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+                </div>
 
-              {sw.payables && period.payAmt > 0 && (
-                <FlowRow
-                  label="Gastos por pagar"
-                  amount={period.payAmt}
-                  type="out"
-                  items={period.payDetail}
-                  open={openSection === 'pay'}
-                  onToggle={() => toggleSection('pay')}
-                />
-              )}
-              {sw.sim !== false && period.projOut > 0 && (
-                <div className="pt-1.5 border-t border-[var(--line)] mt-0.5">
-                  <FlowRow
-                    label="Gastos simulados"
-                    amount={period.projOut}
-                    type="sim"
-                    items={period.projBreakdown}
-                    open={openSection === 'sim'}
-                    onToggle={() => toggleSection('sim')}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="h-px bg-[var(--line)]"/>
-
-            {/* Dual result */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-[11px] text-[var(--muted)]">Conservador</div>
-                <div className={`text-[20px] font-mono font-semibold tabular-nums tracking-tight
-                  ${period.balConservative < 0 ? 'text-[#C0392B]' : 'text-[var(--ink)]'}`}>
-                  {fmtCLP(period.balConservative)}
-                </div>
-                <div className="text-[10px] text-[var(--muted)] mt-0.5">sin ingresos futuros</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-[var(--muted)]">
-                  {period.hasSim && sw.sim !== false ? 'Con simulaciones' : 'Esperado'}
-                </div>
-                <div className={`text-[20px] font-mono font-semibold tabular-nums tracking-tight
-                  ${dispBal(period) < 0 ? 'text-[#C0392B]' : 'text-[var(--ink)]'}`}>
-                  {fmtCLP(dispBal(period))}
-                </div>
-                <div className="text-[10px] text-[var(--muted)] mt-0.5">
-                  {period.hasSim && sw.sim !== false ? 'con ingresos + sim' : 'con ingresos'}
-                </div>
-                {period.hasSim && sw.sim !== false && period.balExpected !== period.balSim && (
-                  <div className="text-[10px] text-[var(--muted)] font-mono mt-0.5">
-                    sin sim: {fmtCLPshort(period.balExpected)}
+                {/* Flow rows */}
+                {i === 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-[#9ba5c2]"/>Saldo base actual
+                    </span>
+                    <span className="text-[14px] font-bold tabular-nums text-[var(--muted)]">+{fmtCLP(startBalance)}</span>
                   </div>
                 )}
-              </div>
-            </div>
+                {totalIn > 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-[var(--accent)]"/>Ingresos esperados
+                    </span>
+                    <span className="text-[14px] font-bold tabular-nums text-[var(--accent-ink)]">+{fmtCLP(totalIn)}</span>
+                  </div>
+                )}
+                {sw.cuotas !== false && mo.cuotasTotal > 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <button onClick={() => { setActivePeriod(i); setCuotasModal(true) }}
+                      className="flex items-center gap-2 text-[13.5px] text-[var(--muted)] hover:text-[var(--ink)] transition">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-[#C0392B]"/>Cuotas de crédito
+                      <Icon name="chevron" size={10}/>
+                    </button>
+                    <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.cuotasTotal)}</span>
+                  </div>
+                )}
+                {sw.cuotas !== false && mo.cuotasTotal === 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <span className="text-[13.5px] text-[var(--muted)]">Cuotas de crédito</span>
+                    <button onClick={() => { setActivePeriod(i); setCuotasModal(true) }}
+                      className="flex items-center gap-1 text-[11px] text-[var(--muted)] hover:text-[var(--ink)] transition">
+                      <Icon name="plus" size={11}/> Agregar
+                    </button>
+                  </div>
+                )}
+                {mo.recurring > 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#f97316' }}/>Recurrentes fijos
+                    </span>
+                    <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.recurring)}</span>
+                  </div>
+                )}
+                {sw.payables && mo.payAmt > 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-[#C0392B]"/>Por pagar
+                    </span>
+                    <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.payAmt)}</span>
+                  </div>
+                )}
+                {sw.sim !== false && mo.projOut > 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-[var(--ink)]"/>Gastos simulados
+                    </span>
+                    <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.projOut)}</span>
+                  </div>
+                )}
 
-            {/* Recommendation */}
-            <div className="rounded-lg px-3 py-2.5 flex items-start gap-2"
-              style={{ background: vc.bg, color: vc.color }}>
-              <Icon name={vc.icon} size={14} className="mt-px shrink-0"/>
-              <div className="min-w-0">
-                <div className="text-[12px] font-semibold">{vc.label}</div>
-                <div className="text-[12px] mt-0.5 leading-snug opacity-90">{recText}</div>
+                {/* Progress bar */}
+                <div className="mx-4 mt-[10px] mb-[6px]">
+                  <div className="relative h-[7px] rounded-full overflow-hidden bg-[var(--line)]">
+                    <div className="absolute left-0 top-0 h-full rounded-full"
+                      style={{ background: '#C0392B', opacity: 0.65, width: `${Math.min(ratio * 100, 100).toFixed(1)}%` }}/>
+                    <div className="absolute right-0 top-0 h-full rounded-full"
+                      style={{ background: 'var(--accent)', opacity: 0.9, width: `${Math.max(0, (1 - ratio) * 100).toFixed(1)}%` }}/>
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-[var(--muted)]">Egresos estimados</span>
+                    <span className="text-[10px] text-[var(--muted)]">Ingresos {fmtCLPshort(refIn)}</span>
+                  </div>
+                </div>
+
+                {/* Result row */}
+                <div className="bg-[var(--ink)] px-4 py-[13px] flex items-center justify-between">
+                  <div>
+                    <div className="text-[12.5px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      Saldo esperado después de pagos
+                    </div>
+                    <div className="text-[10.5px] mt-[2px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                      {MES[mo.m]} {mo.y} · aprox.
+                    </div>
+                  </div>
+                  <div className="text-[22px] font-extrabold tabular-nums tracking-tight leading-none"
+                    style={{ color: saldoFinal >= 0 ? 'var(--accent)' : '#f87171' }}>
+                    {saldoFinal >= 0 ? '+' : '−'}{fmtCLP(Math.abs(saldoFinal))}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )
+          })}
+        </div>
       </div>
 
-      {/* Gastos simulados list */}
+      {/* ── Gastos simulados ── */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-[13px] font-medium">
-            Gastos simulados{' '}
-            <span className="text-[var(--muted)] font-normal">
-              ({items.filter(i => i.active).length}/{items.length} activos)
-            </span>
-          </div>
-          {items.length > 0 && (
-            <button onClick={() => setEditItem(mkBlank())}
-              className="text-[12px] text-[var(--muted)] hover:text-[var(--ink)] underline transition">
-              + Agregar
-            </button>
+        <div className="flex items-center justify-between mb-3 px-0.5">
+          <span className="text-[11px] font-bold text-[var(--muted)] uppercase tracking-[0.08em]">Gastos simulados</span>
+          <span className="text-[12px] text-[var(--muted)]">
+            ({items.filter(i => i.active).length}/{items.length} activos)
+          </span>
+        </div>
+        <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] overflow-hidden shadow-sm">
+          {items.length === 0 ? (
+            <div className="py-8 px-5 text-center">
+              <div className="text-[48px] mb-3.5">🔮</div>
+              <div className="text-[16px] font-extrabold text-[var(--ink)] mb-2">Sin gastos simulados</div>
+              <div className="text-[13px] text-[var(--muted)] leading-relaxed max-w-[280px] mx-auto">
+                Agrega gastos futuros o hipotéticos. Por ejemplo: arreglo del auto en junio, iPhone en 6 cuotas, supermercado extra próximo mes.
+              </div>
+              <button onClick={() => setEditItem(mkBlank())}
+                className="mt-5 inline-flex items-center gap-2 bg-[var(--ink)] text-[var(--bg)] text-[14px] font-bold h-11 px-7 rounded-[10px] shadow-sm">
+                <Icon name="plus" size={14}/> Agregar primer gasto
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="divide-y divide-[var(--line)]">
+                {items.map(item => {
+                  const cat    = categories.find(c => c.id === item.category) ?? categories.find(c => c.id === 'otros') ?? categories[0]
+                  const impact = item.active ? (period?.projBreakdown?.find(x => x.item.id === item.id)?.amount ?? 0) : 0
+                  return (
+                    <ProjItem key={item.id}
+                      item={item} cat={cat} impact={impact}
+                      activePeriod={activePeriod} period={period}
+                      onToggle={onToggle} onDelete={onDelete}
+                      onEdit={() => setEditItem({ ...item })}
+                    />
+                  )
+                })}
+              </div>
+              <div className="px-4 py-3 border-t border-[var(--line)] bg-[var(--bg)]">
+                <button onClick={() => setEditItem(mkBlank())}
+                  className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--accent-ink)]">
+                  <Icon name="plus" size={14}/> Agregar simulación
+                </button>
+              </div>
+            </>
           )}
         </div>
-
-        {items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[var(--line)] py-14 text-center">
-            <div className="text-[36px] mb-3">🔮</div>
-            <div className="font-medium text-[15px] tracking-tight mb-1.5">Sin gastos simulados</div>
-            <div className="text-[13px] text-[var(--muted)] mb-5 leading-snug max-w-xs mx-auto">
-              Agrega gastos futuros o hipotéticos. Por ejemplo: arreglo del auto en junio, iPhone en 6 cuotas, supermercado extra próximo mes.
-            </div>
-            <button onClick={() => setEditItem(mkBlank())}
-              className="h-9 px-4 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium">
-              <Icon name="plus" size={14}/> Agregar primer gasto
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {items.map(item => {
-              const cat    = categories.find(c => c.id === item.category) ?? categories.find(c => c.id === 'otros') ?? categories[0]
-              const impact = item.active ? (period?.projBreakdown?.find(x => x.item.id === item.id)?.amount ?? 0) : 0
-              return (
-                <ProjItem key={item.id}
-                  item={item} cat={cat} impact={impact}
-                  activePeriod={activePeriod} period={period}
-                  onToggle={onToggle} onDelete={onDelete}
-                  onEdit={() => setEditItem({ ...item })}
-                />
-              )
-            })}
-          </div>
-        )}
       </div>
 
       {editItem && <ProjModal item={editItem} onClose={() => setEditItem(null)} onSave={onSave}/>}
