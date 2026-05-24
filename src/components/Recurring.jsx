@@ -1,8 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Card, Badge, IconBtn, Select } from './ui'
 import { Icon, fmtCLP, MES } from '../lib/helpers'
 import { useBanks } from '../services/banksService'
 import { useCategories } from '../services/categoriesService'
+
+const CAT_COMISION = { id: 'comision_bancaria', label: 'Comisión bancaria', icon: '🏦', color: '#546E7A' }
 
 function ModalShell({ title, onClose, children }) {
   return (
@@ -104,11 +106,28 @@ const BLANK_INCOME = {
 }
 
 function RecurringForm({ initial, onSave, onCancel, banks, bare = false }) {
-  const categories = useCategories()
-  const [f, setF] = useState(initial)
+  const rawCategories = useCategories()
+  // Ensure comision_bancaria always appears, even if Supabase doesn't have it
+  const categories = useMemo(() => (
+    rawCategories.some(c => c.id === 'comision_bancaria')
+      ? rawCategories
+      : [...rawCategories, CAT_COMISION]
+  ), [rawCategories])
+
+  // Merge defaults so old records without comisionBancaria/medio still render correctly
+  const [f, setF] = useState({ comisionBancaria: false, medio: '', ...initial })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const isIncome = f.kind === 'income'
   const valid = f.name.trim() && Number(f.amount) > 0
+
+  const toggleComision = (isCom) => {
+    setF(p => ({
+      ...p,
+      comisionBancaria: isCom,
+      // Auto-set category when switching to comision, restore to hogar when switching back
+      category: isCom ? 'comision_bancaria' : (p.category === 'comision_bancaria' ? 'hogar' : p.category),
+    }))
+  }
 
   const inner = (
     <>
@@ -153,9 +172,9 @@ function RecurringForm({ initial, onSave, onCancel, banks, bare = false }) {
           <Field label="Tipo de gasto">
             <div className="grid grid-cols-2 gap-1.5">
               {[false, true].map(isCom => (
-                <button key={String(isCom)} type="button" onClick={() => set('comisionBancaria', isCom)}
+                <button key={String(isCom)} type="button" onClick={() => toggleComision(isCom)}
                   className={`h-9 rounded-md border text-[12.5px] transition
-                    ${f.comisionBancaria === isCom
+                    ${!!f.comisionBancaria === isCom
                       ? 'border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]'
                       : 'border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--hover)]'}`}>
                   {isCom ? 'Comisión' : 'Gasto fijo'}
@@ -201,7 +220,7 @@ function RecurringForm({ initial, onSave, onCancel, banks, bare = false }) {
             {[true, false].map(auto => (
               <button key={String(auto)} type="button" onClick={() => set('autoRegister', auto)}
                 className={`h-9 rounded-md border text-[12.5px] transition
-                  ${f.autoRegister === auto ? 'border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]' : 'border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--hover)]'}`}>
+                  ${!!f.autoRegister === auto ? 'border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]' : 'border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--hover)]'}`}>
                 {auto ? 'Automático' : 'Manual'}
               </button>
             ))}
@@ -368,8 +387,11 @@ export default function Recurring({
   // Settings
   salaryPaymentDay,
 }) {
-  const banks      = useBanks()
-  const categories = useCategories()
+  const banks           = useBanks()
+  const rawCats         = useCategories()
+  const categories      = useMemo(() => (
+    rawCats.some(c => c.id === 'comision_bancaria') ? rawCats : [...rawCats, CAT_COMISION]
+  ), [rawCats])
   const today     = new Date()
   const monthLabel = `${MES[today.getMonth()]} ${today.getFullYear()}`
   const monthStr   = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
