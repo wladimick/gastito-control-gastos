@@ -9,24 +9,23 @@ const AUTO_PAY_DAY = 5
 function ModalShell({ title, onClose, children }) {
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}/>
-      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center pointer-events-none">
-        <div className="pointer-events-auto w-full md:max-w-xl
-                        max-h-[90vh] md:max-h-[85vh]
-                        rounded-t-2xl md:rounded-xl
-                        bg-[var(--bg)] flex flex-col overflow-hidden shadow-2xl"
-             style={{ animation: 'slideUpM .22s ease-out' }}>
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--line)] shrink-0">
-            <div className="font-semibold tracking-tight">{title}</div>
+      <div className="fixed inset-0 z-50" style={{ background: 'rgba(20,24,36,.5)', backdropFilter: 'blur(4px)' }} onClick={onClose}/>
+      <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-[430px]
+                        max-h-[90vh] rounded-t-[20px]
+                        bg-[var(--bg-elev)] flex flex-col overflow-hidden"
+             style={{ animation: 'slideUpM .28s cubic-bezier(.34,1.12,.64,1)' }}>
+          <div className="flex items-center justify-between px-[18px] pt-[18px] pb-[14px] border-b border-[var(--line)] shrink-0 sticky top-0 bg-[var(--bg-elev)] z-10">
+            <div className="text-[16px] font-extrabold text-[var(--ink)]">{title}</div>
             <button type="button" onClick={onClose}
-              className="w-8 h-8 rounded-md hover:bg-[var(--hover)] grid place-items-center">
-              <Icon name="x" size={15}/>
+              className="w-[30px] h-[30px] rounded-[8px] bg-[var(--bg)] border border-[var(--line)] grid place-items-center text-[var(--muted)]">
+              <Icon name="x" size={14}/>
             </button>
           </div>
           <div className="flex-1 overflow-y-auto">{children}</div>
         </div>
       </div>
-      <style>{`@keyframes slideUpM{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+      <style>{`@keyframes slideUpM{from{transform:translateY(50px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </>
   )
 }
@@ -81,7 +80,7 @@ function KPI({ label, value, sub, icon }) {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] block mb-1.5">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-[.09em] text-[var(--muted)] block mb-[5px]">{label}</span>
       {children}
     </label>
   )
@@ -141,31 +140,31 @@ function InstallmentForm({ initial, onSave, onCancel, banks, bare = false }) {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Field label="Descripción">
           <input value={f.description} onChange={e => set('description', e.target.value)} placeholder="MacBook Air…"
-            className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
+            className="w-full h-[42px] px-[13px] bg-[var(--bg)] border border-[var(--line)] rounded-[10px] text-[13.5px] focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Monto original (ref.)">
           <input type="text" inputMode="numeric" value={f.purchaseAmount} onChange={e => set('purchaseAmount', e.target.value)}
-            placeholder="precio de compra" className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            placeholder="precio de compra" className="w-full h-[42px] px-[13px] bg-[var(--bg)] border border-[var(--line)] rounded-[10px] text-[13.5px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Total a pagar">
           <input type="text" inputMode="numeric" value={f.total} onChange={e => onTotalChange(e.target.value)}
-            placeholder="0" className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            placeholder="0" className="w-full h-[42px] px-[13px] bg-[var(--bg)] border border-[var(--line)] rounded-[10px] text-[13.5px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Nº cuotas">
           <input type="number" min="1" max="60" value={f.installments} onChange={e => onInstallmentsChange(Number(e.target.value))}
-            className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            className="w-full h-[42px] px-[13px] bg-[var(--bg)] border border-[var(--line)] rounded-[10px] text-[13.5px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Valor cuota">
           <input type="text" inputMode="numeric" value={f.monthlyAmount} onChange={e => onMonthlyChange(e.target.value)}
-            placeholder="0" className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            placeholder="0" className="w-full h-[42px] px-[13px] bg-[var(--bg)] border border-[var(--line)] rounded-[10px] text-[13.5px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Cuotas pagadas">
           <input type="number" min="0" max={f.installments} value={f.paid} onChange={e => set('paid', Number(e.target.value))}
-            className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            className="w-full h-[42px] px-[13px] bg-[var(--bg)] border border-[var(--line)] rounded-[10px] text-[13.5px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Día de cobro">
           <input type="number" min="1" max="31" value={f.dayOfMonth} onChange={e => set('dayOfMonth', Number(e.target.value))}
-            className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            className="w-full h-[42px] px-[13px] bg-[var(--bg)] border border-[var(--line)] rounded-[10px] text-[13.5px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
         <Field label="Categoría">
           <Select value={f.category} onChange={v => set('category', v)} options={categories.map(c => ({ value: c.id, label: c.label }))}/>
@@ -175,7 +174,7 @@ function InstallmentForm({ initial, onSave, onCancel, banks, bare = false }) {
         </Field>
         <Field label="Mes de inicio">
           <input type="month" value={f.startMonth} onChange={e => set('startMonth', e.target.value)}
-            className="w-full h-9 px-3 bg-[var(--bg)] border border-[var(--line)] rounded-md text-[13px] focus:outline-none focus:border-[var(--ink)]"/>
+            className="w-full h-[42px] px-[13px] bg-[var(--bg)] border border-[var(--line)] rounded-[10px] text-[13.5px] focus:outline-none focus:border-[var(--ink)]"/>
         </Field>
       </div>
       {hasInterest && (
@@ -209,6 +208,7 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
   const [formState,    setFormState]    = useState(null)
   const [expandedDebt, setExpandedDebt] = useState(null)
   const [filterBank,   setFilterBank]   = useState(null)
+  const [openMonths,   setOpenMonths]   = useState(new Set([0, 1]))
 
   useEffect(() => {
     let needsUpdate = false
@@ -288,6 +288,12 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
     setDebts(updated)
   }
 
+  const toggleMonth = (i) => setOpenMonths(prev => {
+    const next = new Set(prev)
+    next.has(i) ? next.delete(i) : next.add(i)
+    return next
+  })
+
   const isSupabase = Boolean(onCreateInstallment)
 
   const handleSave = async (form) => {
@@ -310,43 +316,48 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
 
   if (debts.length === 0 && isSupabase && formState === null) {
     return (
-      <div className="flex flex-col gap-5">
-        <Card padding="p-12" className="text-center">
-          <div className="text-[32px] mb-3">💳</div>
-          <div className="font-semibold text-[15px] tracking-tight">Sin deudas en cuotas</div>
-          <div className="text-[13px] text-[var(--muted)] mt-1 mb-4">Registra compras en cuotas para hacer seguimiento mes a mes.</div>
+      <div className="flex flex-col gap-3">
+        <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-[16px] px-5 py-14 text-center">
+          <div className="text-[36px] mb-3">💳</div>
+          <div className="text-[15px] font-extrabold text-[var(--ink)] tracking-tight">Sin deudas en cuotas</div>
+          <div className="text-[13px] text-[var(--muted)] mt-1.5 mb-5">Registra compras en cuotas para hacer seguimiento mes a mes.</div>
           <button onClick={() => setFormState({ ...BLANK, startMonth: new Date().toISOString().slice(0, 7) })}
-            className="h-9 px-4 inline-flex items-center gap-2 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[13px] font-medium">
+            className="inline-flex items-center gap-[6px] bg-[var(--ink)] text-[var(--bg)] text-[13px] font-bold px-[18px] py-[10px] rounded-[10px]">
             <Icon name="plus" size={13}/> Registrar cuota
           </button>
-        </Card>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-[var(--accent-soft)] text-[var(--accent-ink)] border border-[var(--accent-soft)]">
-        <div className="w-8 h-8 rounded-md bg-[var(--accent)] text-white grid place-items-center shrink-0">
-          <Icon name="repeat" size={14}/>
-        </div>
-        <div className="flex-1 min-w-0 text-[12.5px] leading-snug">
-          <span className="font-semibold">Auto-pago activo</span> · Las cuotas se cobran el{' '}
-          <span className="font-mono font-semibold">día {AUTO_PAY_DAY}</span> de cada mes.
+    <div className="flex flex-col gap-3">
+
+      {/* Banner autopago */}
+      <div className="flex items-center justify-between gap-3 bg-[var(--accent-soft)] border border-[var(--accent-soft)] rounded-[16px] px-[14px] py-[12px]">
+        <div className="flex items-center gap-[10px]">
+          <div className="w-[36px] h-[36px] rounded-[10px] bg-[var(--accent-ink)] grid place-items-center shrink-0">
+            <Icon name="repeat" size={18}/>
+          </div>
+          <div className="text-[12.5px] text-[var(--ink)] leading-snug">
+            <strong className="font-extrabold">Auto-pago activo</strong> · Las cuotas se cobran el{' '}
+            <strong className="font-extrabold">día {AUTO_PAY_DAY}</strong> de cada mes.
+          </div>
         </div>
         {isSupabase && (
           <button onClick={() => setFormState({ ...BLANK, startMonth: new Date().toISOString().slice(0, 7) })}
-            className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[12px] font-medium shrink-0">
+            className="inline-flex items-center gap-[6px] bg-[var(--ink)] text-[var(--bg)] text-[12px] font-bold px-[13px] py-[8px] rounded-[10px] whitespace-nowrap shrink-0">
             <Icon name="plus" size={12}/> Nueva cuota
           </button>
         )}
       </div>
 
+      {/* Modal */}
       {formState !== null && (
         <ModalShell
           title={formState.id ? 'Editar cuota' : 'Nueva cuota de crédito'}
           onClose={() => setFormState(null)}>
-          <div className="p-5">
+          <div className="p-[16px]">
             <InstallmentForm
               initial={formState}
               onSave={handleSave}
@@ -358,249 +369,258 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
         </ModalShell>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <KPI label="Deuda restante"       value={fmtCLP(totalRemaining)}  sub={`de ${fmtCLP(totalCommitted)} comprometidos`} icon="layers"/>
-        <KPI label="Cuotas este mes"      value={fmtCLP(monthlyNow)}      sub={`${MES[curM]} ${curY}`}                      icon="calendar"/>
-        <KPI label="Promedio próximos 6m" value={fmtCLP(monthlyAvg6)}     sub="solo cuotas"                                 icon="trend"/>
-        <KPI label="Cuotas pendientes"    value={activeCuotasCount}       sub={`en ${active.length} deudas`}                icon="card"/>
+      {/* Hero 2×2 */}
+      <div className="grid grid-cols-2 gap-[10px]">
+        <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-[16px] p-[15px]">
+          <div className="text-[9.5px] font-bold tracking-[.09em] uppercase text-[var(--muted)] mb-[8px] flex items-center justify-between">
+            Deuda restante <Icon name="layers" size={13}/>
+          </div>
+          <div className="text-[22px] font-extrabold leading-none tabular-nums tracking-tight text-[var(--ink)]">{fmtCLP(totalRemaining)}</div>
+          <div className="text-[10.5px] text-[var(--muted)] mt-[5px]">de {fmtCLP(totalCommitted)} comprometidos</div>
+        </div>
+        <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-[16px] p-[15px]">
+          <div className="text-[9.5px] font-bold tracking-[.09em] uppercase text-[var(--muted)] mb-[8px] flex items-center justify-between">
+            Cuotas este mes <Icon name="calendar" size={13}/>
+          </div>
+          <div className="text-[28px] font-extrabold leading-none tabular-nums tracking-tight text-[var(--ink)]">{fmtCLP(monthlyNow)}</div>
+          <div className="text-[10.5px] text-[var(--muted)] mt-[5px]">{MES[curM]} {curY}</div>
+        </div>
+        <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-[16px] p-[15px]">
+          <div className="text-[9.5px] font-bold tracking-[.09em] uppercase text-[var(--muted)] mb-[8px] flex items-center justify-between">
+            Promedio próximos 6M <Icon name="trend" size={13}/>
+          </div>
+          <div className="text-[22px] font-extrabold leading-none tabular-nums tracking-tight text-[var(--ink)]">{fmtCLP(monthlyAvg6)}</div>
+          <div className="text-[10.5px] text-[var(--muted)] mt-[5px]">solo cuotas</div>
+        </div>
+        <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-[16px] p-[15px]">
+          <div className="text-[9.5px] font-bold tracking-[.09em] uppercase text-[var(--muted)] mb-[8px] flex items-center justify-between">
+            Cuotas pendientes <Icon name="card" size={13}/>
+          </div>
+          <div className="text-[28px] font-extrabold leading-none tabular-nums tracking-tight text-[var(--accent-ink)]">{activeCuotasCount}</div>
+          <div className="text-[10.5px] text-[var(--muted)] mt-[5px]">en {active.length} deudas</div>
+        </div>
       </div>
 
-      {/* ── Bank filter ── */}
+      {/* Bank filter */}
       {availableBanksInDebts.length > 1 && (
-        <div className="flex gap-1.5 flex-wrap items-center">
-          <span className="text-[11.5px] text-[var(--muted)]">Banco:</span>
+        <div className="flex gap-[7px] overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           <button type="button" onClick={() => setFilterBank(null)}
-            className={`px-2.5 py-1 rounded-full text-[11.5px] transition ${
+            className={`inline-flex items-center px-[13px] py-[6px] rounded-[20px] text-[12.5px] font-semibold border-[1.5px] whitespace-nowrap shrink-0 transition-all ${
               filterBank === null
-                ? 'bg-[var(--ink)] text-[var(--bg)]'
-                : 'bg-[var(--bg-elev)] text-[var(--muted)] hover:bg-[var(--hover)]'
+                ? 'bg-[var(--ink)] border-[var(--ink)] text-[var(--bg)]'
+                : 'bg-[var(--bg-elev)] border-[var(--line)] text-[var(--muted)]'
             }`}>
             Todos
           </button>
           {availableBanksInDebts.map(b => (
             <button key={b.id} type="button" onClick={() => setFilterBank(filterBank === b.id ? null : b.id)}
-              className={`px-2.5 py-1 rounded-full text-[11.5px] transition border ${
-                filterBank === b.id
-                  ? 'text-white border-transparent'
-                  : 'bg-[var(--bg-elev)] text-[var(--muted)] border-[var(--line)] hover:bg-[var(--hover)]'
+              className={`inline-flex items-center px-[13px] py-[6px] rounded-[20px] text-[12.5px] font-semibold border-[1.5px] whitespace-nowrap shrink-0 transition-all ${
+                filterBank === b.id ? 'text-white border-transparent' : 'bg-[var(--bg-elev)] border-[var(--line)] text-[var(--muted)]'
               }`}
-              style={filterBank === b.id ? { background: b.color || 'var(--ink)' } : {}}>
+              style={filterBank === b.id ? { background: b.color || 'var(--ink)', borderColor: b.color || 'var(--ink)' } : {}}>
               {b.label}
             </button>
           ))}
-          {filterBank && (
-            <button type="button" onClick={() => setFilterBank(null)}
-              className="text-[11px] text-[var(--muted)] hover:text-[var(--ink)] underline ml-1">
-              Limpiar filtro
-            </button>
-          )}
         </div>
       )}
 
-      <Card padding="p-0">
-        <div className="px-5 py-4 border-b border-[var(--line)] flex items-center justify-between">
-          <div>
-            <div className="font-semibold tracking-tight">Deudas en cuotas</div>
-            <div className="text-[12px] text-[var(--muted)] mt-0.5">
-              {active.length} activas
-              {filterBank && <span className="text-[var(--amber-ink)]"> · filtrado por {banks.find(b => b.id === filterBank)?.label}</span>}
-              {' · '}{debts.filter(d => d.status === 'paid').length} pagadas
-            </div>
+      {/* Deudas card */}
+      <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-[16px] overflow-hidden">
+        <div className="px-[16px] pt-[14px] pb-[10px] border-b border-[var(--line)]">
+          <div className="text-[15px] font-extrabold text-[var(--ink)]">Deudas en cuotas</div>
+          <div className="text-[11.5px] text-[var(--muted)] mt-[2px]">
+            {active.length} activas
+            {filterBank && <span className="text-[var(--amber-ink)]"> · filtrado por {banks.find(b => b.id === filterBank)?.label}</span>}
+            {' · '}{debts.filter(d => d.status === 'paid').length} pagadas
           </div>
         </div>
-        <ul className="divide-y divide-[var(--line)]">
-          {filteredDebts.map(d => {
-            const cat       = categories.find(c => c.id === d.category) ?? categories.find(c => c.id === 'otros') ?? categories[0]
-            const bank      = banks.find(b => b.id ===d.bank)
-            const remaining = d.monthlyAmount * (d.installments - d.paid)
-            const isExpanded = expandedDebt === d.id
-            const schedule   = expandSchedule(d)
-            const nextPending = schedule.find(c => !c.paid)
-            const isPaid      = d.status === 'paid'
-            return (
-              <li key={d.id} className={isPaid ? 'opacity-60' : ''}>
-                <div className="px-5 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-md grid place-items-center text-[15px] shrink-0" style={{ background: (cat.color ?? '#888') + '20' }}>{cat.icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-[14px]">{d.description}</span>
-                        {isPaid                                   && <Badge tone="ok">pagada</Badge>}
-                        {!isPaid && nextPending?.monthKey === curKey && <Badge tone="warn">cae este mes</Badge>}
-                      </div>
-                      <div className="mt-1 text-[11.5px] text-[var(--muted)] flex items-center gap-1.5 flex-wrap">
-                        <span>{bank?.label}</span><span>·</span>
-                        <span>día {d.dayOfMonth} de cada mes</span>
-                        {nextPending && <><span>·</span><span>próxima: {MES[nextPending.m]} {nextPending.y}</span></>}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0 flex items-center gap-2">
-                      <div>
-                        <div className="font-mono text-[14px] tabular-nums">{fmtCLP(d.monthlyAmount)}</div>
-                        <div className="text-[11px] text-[var(--muted)] font-mono">/cuota</div>
-                      </div>
-                      {isSupabase && (
-                        <>
-                          <button onClick={() => setFormState({ ...d })}
-                            className="w-7 h-7 grid place-items-center rounded-md hover:bg-[var(--hover)] text-[var(--muted)]">
-                            <Icon name="pencil" size={12}/>
-                          </button>
-                          <button onClick={() => handleDelete(d.id)}
-                            className="w-7 h-7 grid place-items-center rounded-md hover:bg-[var(--hover)] text-[#A02828]">
-                            <Icon name="trash" size={12}/>
-                          </button>
-                        </>
-                      )}
-                    </div>
+        {filteredDebts.map((d, di) => {
+          const cat         = categories.find(c => c.id === d.category) ?? categories.find(c => c.id === 'otros') ?? categories[0]
+          const bank        = banks.find(b => b.id === d.bank)
+          const remaining   = d.monthlyAmount * (d.installments - d.paid)
+          const isExpanded  = expandedDebt === d.id
+          const schedule    = expandSchedule(d)
+          const nextPending = schedule.find(c => !c.paid)
+          const isPaid      = d.status === 'paid'
+          return (
+            <div key={d.id} className={`px-[16px] py-[14px]${di > 0 ? ' border-t border-[var(--line)]' : ''}${isPaid ? ' opacity-60' : ''}`}>
+              <div className="flex items-start gap-[11px]">
+                <div className="w-[40px] h-[40px] rounded-[11px] grid place-items-center text-[18px] shrink-0 border border-[var(--line)] bg-[var(--bg)]">{cat.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[14px] font-bold text-[var(--ink)]">{d.description}</div>
+                  <div className="text-[11.5px] text-[var(--muted)] mt-[2px] leading-snug">
+                    {bank?.label} · día {d.dayOfMonth} de cada mes
+                    {nextPending && <><br/>próxima: {MES[nextPending.m]} {nextPending.y}</>}
                   </div>
-
-                  <div className="mt-3 grid grid-cols-[1fr_auto] gap-3 items-center">
-                    <div>
-                      <div className="flex items-center gap-[3px] mb-1.5">
-                        {Array.from({ length: d.installments }).map((_, i) => (
-                          <div key={i} className="flex-1 h-1.5 rounded-sm"
-                               style={{ background: i < d.paid ? 'var(--ink)' : 'var(--line)' }}/>
-                        ))}
-                      </div>
-                      <div className="text-[11px] text-[var(--muted)] font-mono flex items-center gap-2">
-                        <span>{d.paid}/{d.installments} cuotas</span>
-                        <span>·</span>
-                        <span>quedan {fmtCLP(remaining)} de {fmtCLP(d.total)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {!isPaid && (
-                        <button onClick={() => markCuotaPaid(d.id)}
-                          className="text-[11px] px-2 h-7 rounded-md border border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--hover)] inline-flex items-center gap-1">
-                          <Icon name="check" size={11}/> Marcar pagada
-                        </button>
-                      )}
-                      <button onClick={() => setExpandedDebt(isExpanded ? null : d.id)}
-                              className="w-7 h-7 grid place-items-center rounded-md hover:bg-[var(--hover)] text-[var(--muted)]">
-                        <Icon name={isExpanded ? 'x' : 'chevdown'} size={13}/>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[15px] font-extrabold text-[var(--ink)] tabular-nums whitespace-nowrap">{fmtCLP(d.monthlyAmount)}</div>
+                  <div className="text-[10px] text-[var(--muted)] mt-[1px]">/cuota</div>
+                  {isSupabase && (
+                    <div className="flex gap-[5px] mt-[6px] justify-end">
+                      <button onClick={() => setFormState({ ...d })}
+                        className="w-[30px] h-[30px] rounded-[8px] border border-[var(--line)] bg-[var(--bg)] text-[var(--muted)] grid place-items-center">
+                        <Icon name="pencil" size={13}/>
                       </button>
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="mt-4 pt-3 border-t border-[var(--line)] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {schedule.map(c => (
-                        <div key={c.n}
-                             className={`rounded-md border px-2.5 py-2 text-[12px] flex flex-col gap-0.5
-                               ${c.paid          ? 'bg-[var(--bg)] border-[var(--line)] text-[var(--muted)]'
-                               : c.monthKey === curKey ? 'bg-[var(--amber-soft)] border-[var(--amber-soft)] text-[var(--amber-ink)]'
-                                                 : 'bg-[var(--bg-elev)] border-[var(--line)] text-[var(--ink-2)]'}`}>
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono text-[10px]">#{c.n}/{c.total}</span>
-                            {c.paid && <Icon name="check" size={10}/>}
-                          </div>
-                          <div className="font-mono text-[12px] tabular-nums">{fmtCLP(c.amount)}</div>
-                          <div className="text-[10.5px]">{MES[c.m]} {c.y}</div>
-                        </div>
-                      ))}
+                      <button onClick={() => handleDelete(d.id)}
+                        className="w-[30px] h-[30px] rounded-[8px] grid place-items-center"
+                        style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#ef4444' }}>
+                        <Icon name="trash" size={13}/>
+                      </button>
                     </div>
                   )}
                 </div>
-              </li>
+              </div>
+              <div className="mt-[10px]">
+                <div className="flex gap-[3px] flex-wrap mb-[6px]">
+                  {Array.from({ length: d.installments }).map((_, i) => (
+                    <div key={i} className="w-[10px] h-[10px] rounded-[3px] shrink-0"
+                         style={{ background: i < d.paid ? 'var(--ink)' : 'var(--line)' }}/>
+                  ))}
+                </div>
+                <div className="text-[11px] text-[var(--muted)]">
+                  {d.paid}/{d.installments} cuotas · quedan {fmtCLP(remaining)} de {fmtCLP(d.total)}
+                </div>
+                <div className="flex items-center gap-[8px] mt-[8px]">
+                  {!isPaid && (
+                    <button onClick={() => markCuotaPaid(d.id)}
+                      className="inline-flex items-center gap-[5px] text-[11.5px] font-semibold px-[12px] py-[6px] rounded-[8px] border-[1.5px] border-[var(--line)] bg-[var(--bg-elev)] text-[var(--muted)]">
+                      <Icon name="check" size={12}/> Marcar pagada
+                    </button>
+                  )}
+                  <button onClick={() => setExpandedDebt(isExpanded ? null : d.id)}
+                    className="w-[26px] h-[26px] grid place-items-center rounded-[7px] border border-[var(--line)] bg-[var(--bg)] text-[var(--muted)]">
+                    <Icon name={isExpanded ? 'x' : 'chevdown'} size={12}/>
+                  </button>
+                </div>
+              </div>
+              {isExpanded && (
+                <div className="mt-4 pt-3 border-t border-[var(--line)] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {schedule.map(c => (
+                    <div key={c.n}
+                         className={`rounded-md border px-2.5 py-2 text-[12px] flex flex-col gap-0.5 ${
+                           c.paid          ? 'bg-[var(--bg)] border-[var(--line)] text-[var(--muted)]'
+                           : c.monthKey === curKey ? 'bg-[var(--amber-soft)] border-[var(--amber-soft)] text-[var(--amber-ink)]'
+                                             : 'bg-[var(--bg-elev)] border-[var(--line)]'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-[10px]">#{c.n}/{c.total}</span>
+                        {c.paid && <Icon name="check" size={10}/>}
+                      </div>
+                      <div className="font-mono text-[12px] tabular-nums">{fmtCLP(c.amount)}</div>
+                      <div className="text-[10.5px]">{MES[c.m]} {c.y}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {filteredDebts.length === 0 && (
+          <div className="px-5 py-8 text-center text-[13px] text-[var(--muted)]">
+            Sin cuotas para {banks.find(b => b.id === filterBank)?.label || 'este banco'}
+          </div>
+        )}
+      </div>
+
+      {/* Próximos meses */}
+      <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-[16px] overflow-hidden">
+        <div className="px-[16px] pt-[14px] pb-[10px] flex justify-between items-start">
+          <div>
+            <div className="text-[15px] font-extrabold text-[var(--ink)]">Próximos meses</div>
+            <div className="text-[11.5px] text-[var(--muted)] mt-[2px]">Cuotas y cargos recurrentes</div>
+          </div>
+          <div className="flex gap-[10px] items-center shrink-0">
+            <div className="flex items-center gap-[4px] text-[10.5px] text-[var(--muted)]">
+              <span className="w-[8px] h-[8px] rounded-[2px] bg-[var(--ink)] shrink-0 inline-block"/>Cuotas
+            </div>
+            <div className="flex items-center gap-[4px] text-[10.5px] text-[var(--muted)]">
+              <span className="w-[8px] h-[8px] rounded-[2px] bg-[var(--accent)] shrink-0 inline-block"/>Recurrentes
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-[10px] px-[14px] pb-[14px]">
+          {upcomingMonths.map((mo, i) => {
+            const isCurrent  = i === 0
+            const cuotaFlex  = mo.total > 0 ? (mo.cuotaTotal / mo.total) * 5 : 0
+            const recFlex    = mo.total > 0 ? (mo.recTotal   / mo.total) * 5 : 0
+            const emptyFlex  = Math.max(0, 5 - cuotaFlex - recFlex)
+            return (
+              <div key={mo.key} onClick={() => toggleMonth(i)}
+                className={`rounded-[10px] border-[1.5px] px-[10px] py-[11px] cursor-pointer transition-all ${
+                  isCurrent ? 'border-[var(--ink)]' : 'border-[var(--line)]'
+                }`}>
+                <div className="text-[9px] font-bold tracking-[.07em] uppercase text-[var(--muted)] mb-[4px] flex items-center gap-[5px]">
+                  {MES[mo.m].toUpperCase()} {mo.y}
+                  {isCurrent && <span className="bg-[var(--ink)] text-[var(--bg)] text-[8.5px] font-extrabold px-[5px] py-[1px] rounded-[6px]">actual</span>}
+                </div>
+                <div className="text-[17px] font-extrabold text-[var(--ink)] tabular-nums tracking-tight mb-[7px]">{fmtCLPshort(mo.total)}</div>
+                <div className="flex gap-[3px] mb-[6px]">
+                  {cuotaFlex > 0 && <div className="h-[5px] rounded-[3px] bg-[var(--ink)]"    style={{ flex: cuotaFlex }}/>}
+                  {recFlex   > 0 && <div className="h-[5px] rounded-[3px] bg-[var(--accent)]" style={{ flex: recFlex }}/>}
+                  <div className="h-[5px] rounded-[3px] bg-[var(--line)]" style={{ flex: mo.total === 0 ? 1 : emptyFlex }}/>
+                </div>
+                <div className="flex gap-[10px]">
+                  <span className="text-[10px] text-[var(--muted)]"><strong className="text-[var(--ink)] font-bold">{mo.cuotas.length}</strong> cuotas</span>
+                  <span className="text-[10px] text-[var(--muted)]"><strong className="text-[var(--ink)] font-bold">{mo.recCharges.length}</strong> rec.</span>
+                </div>
+              </div>
             )
           })}
-          {filteredDebts.length === 0 && (
-            <li className="px-5 py-8 text-center text-[13px] text-[var(--muted)]">
-              Sin cuotas para {banks.find(b => b.id === filterBank)?.label || 'este banco'}
-            </li>
-          )}
-        </ul>
-      </Card>
-
-      <Card padding="p-0">
-        <div className="px-5 py-4 border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <div className="font-semibold tracking-tight">Próximos meses</div>
-            <div className="text-[12px] text-[var(--muted)] mt-0.5">Cuotas y cargos recurrentes</div>
-          </div>
-          <div className="flex items-center gap-3 text-[11px] text-[var(--muted)]">
-            <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--ink)]"/> Cuotas</span>
-            <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--accent)]"/> Recurrentes</span>
-          </div>
         </div>
 
-        <div className="px-5 py-4">
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2.5">
-            {upcomingMonths.map((mo, i) => {
-              const isCurrent = i === 0
-              const totalH  = maxMonthTotal > 0 ? (mo.total / maxMonthTotal) * 100 : 0
-              const cuotaH  = mo.total > 0 ? (mo.cuotaTotal / mo.total) * totalH : 0
-              const recH    = mo.total > 0 ? (mo.recTotal   / mo.total) * totalH : 0
-              return (
-                <div key={mo.key} className={`rounded-lg border p-3 flex flex-col gap-2 ${isCurrent ? 'border-[var(--ink)] bg-[var(--bg)]' : 'border-[var(--line)] bg-[var(--bg-elev)]'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--muted)]">{MES[mo.m]} {mo.y}</div>
-                    {isCurrent && <Badge tone="dark" className="!text-[9px]">actual</Badge>}
+        <div className="border-t border-[var(--line)]">
+          {upcomingMonths.map((mo, i) => {
+            const isOpen  = openMonths.has(i)
+            const allItems = [
+              ...mo.cuotas.map(c => ({ ...c, kind: 'cuota' })),
+              ...mo.recCharges.map(c => ({ ...c, kind: 'rec' })),
+            ].sort((a, b) => a.day - b.day)
+            return (
+              <div key={mo.key} className="border-b border-[var(--line)] last:border-b-0">
+                <div className="flex justify-between items-center px-[16px] py-[10px] cursor-pointer bg-[var(--bg)]" onClick={() => toggleMonth(i)}>
+                  <div className="flex items-center gap-[8px]">
+                    <svg className={`transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-[var(--muted)]"/>
+                    </svg>
+                    <span className="text-[13.5px] font-bold text-[var(--ink)]">{MES[mo.m]} {mo.y}</span>
+                    {i === 0 && <span className="bg-[var(--ink)] text-[var(--bg)] text-[10px] font-bold px-[8px] py-[2px] rounded-[20px]">este mes</span>}
+                    <span className="text-[12px] text-[var(--muted)] font-normal">{allItems.length} cargos</span>
                   </div>
-                  <div className="font-mono text-[16px] tracking-tight">{fmtCLPshort(mo.total)}</div>
-                  <div className="h-2 rounded-full bg-[var(--line)] overflow-hidden flex">
-                    <div className="h-full bg-[var(--ink)]"    style={{ width: cuotaH + '%' }}/>
-                    <div className="h-full bg-[var(--accent)]" style={{ width: recH   + '%' }}/>
-                  </div>
-                  <div className="text-[10.5px] text-[var(--muted)] font-mono flex items-center justify-between">
-                    <span>{mo.cuotas.length} cuotas</span>
-                    <span>{mo.recCharges.length} rec.</span>
-                  </div>
+                  <div className="text-[14px] font-extrabold tabular-nums text-[var(--ink)]">{fmtCLP(mo.total)}</div>
                 </div>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="border-t border-[var(--line)] divide-y divide-[var(--line)]">
-          {upcomingMonths.map((mo, i) => (
-            <details key={mo.key} className="group" open={i < 2}>
-              <summary className="px-5 py-3 cursor-pointer flex items-center justify-between hover:bg-[var(--hover)]">
-                <div className="flex items-center gap-3">
-                  <Icon name="chevron" size={14} className="group-open:rotate-90 transition"/>
-                  <span className="font-medium text-[13.5px]">{MES[mo.m]} {mo.y}</span>
-                  {i === 0 && <Badge tone="dark" className="!text-[10px]">este mes</Badge>}
-                  <span className="text-[12px] text-[var(--muted)]">{mo.cuotas.length + mo.recCharges.length} cargos</span>
-                </div>
-                <span className="font-mono text-[14px] tabular-nums">{fmtCLP(mo.total)}</span>
-              </summary>
-
-              {(mo.cuotas.length > 0 || mo.recCharges.length > 0) && (
-                <div className="bg-[var(--bg)] px-5 py-1">
-                  <ul className="divide-y divide-[var(--line)]">
-                    {[
-                      ...mo.cuotas.map(c => ({ ...c, kind: 'cuota' })),
-                      ...mo.recCharges.map(c => ({ ...c, kind: 'rec' })),
-                    ].sort((a, b) => a.day - b.day).map((it, idx) => {
-                      const cat  = categories.find(c => c.id === it.category) ?? categories[0]
-                      const bank = banks.find(b => b.id ===it.bank)
+                {isOpen && allItems.length > 0 && (
+                  <div>
+                    {allItems.map((it, idx) => {
+                      const bank = banks.find(b => b.id === it.bank)
                       return (
-                        <li key={idx} className="py-2.5 flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-md grid place-items-center text-[var(--muted)] font-mono text-[11px] shrink-0 bg-[var(--bg-elev)] border border-[var(--line)]">
+                        <div key={idx} className="flex items-center gap-[12px] px-[16px] py-[10px] border-t border-[var(--line)] bg-[var(--bg-elev)]">
+                          <div className="w-[30px] h-[30px] rounded-[8px] bg-[var(--bg-elev)] border border-[var(--line)] grid place-items-center text-[11.5px] font-extrabold text-[var(--ink)] shrink-0">
                             {String(it.day).padStart(2, '0')}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[13px] font-medium">{it.description}</span>
-                              {it.kind === 'cuota'
-                                ? <Badge tone="muted" className="!text-[10px] font-mono">#{it.n}/{it.total}</Badge>
-                                : <Badge tone="ok" className="!text-[10px]">recurrente</Badge>}
+                            <div className="flex items-center gap-[6px] flex-wrap text-[13px] font-semibold text-[var(--ink)]">
+                              {it.description}
+                              {it.kind === 'rec'
+                                ? <span className="text-[10px] font-bold bg-[var(--accent-soft)] border border-[var(--accent-soft)] text-[var(--accent-ink)] px-[7px] py-[1px] rounded-[20px]">recurrente</span>
+                                : <span className="text-[10px] font-mono bg-[var(--bg)] border border-[var(--line)] text-[var(--muted)] px-[7px] py-[1px] rounded-[20px]">#{it.n}/{it.total}</span>
+                              }
                             </div>
-                            <div className="text-[11px] text-[var(--muted)] mt-0.5 flex items-center gap-1.5">
-                              <span>{cat?.label}</span><span>·</span><span>{bank?.label}</span>
+                            <div className="text-[11px] text-[var(--muted)] mt-[1px]">
+                              {it.kind === 'cuota' ? `${bank?.label} · cuota ${it.n}/${it.total}` : bank?.label}
                             </div>
                           </div>
-                          <div className="font-mono text-[13px] tabular-nums shrink-0">{fmtCLP(it.amount)}</div>
-                        </li>
+                          <div className="text-[13px] font-bold tabular-nums text-[var(--ink)] whitespace-nowrap">{fmtCLP(it.amount)}</div>
+                        </div>
                       )
                     })}
-                  </ul>
-                </div>
-              )}
-            </details>
-          ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
-      </Card>
+      </div>
     </div>
   )
 }
