@@ -124,6 +124,7 @@ function RecurringForm({ initial, onSave, onCancel, banks, bare = false }) {
     setF(p => ({
       ...p,
       comisionBancaria: isCom,
+      medio: isCom ? p.medio : '',
       // Auto-set category when switching to comision, restore to hogar when switching back
       category: isCom ? 'comision_bancaria' : (p.category === 'comision_bancaria' ? 'hogar' : p.category),
     }))
