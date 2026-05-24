@@ -212,7 +212,7 @@ export default function Dashboard({
               {fmtCLP(totalNextCardPayment)}
             </div>
             <div className="text-[10.5px] mt-1.5" style={{ color: '#5d6888' }}>
-              {cardNextPayments.length} tarjeta{cardNextPayments.length !== 1 ? 's' : ''} · contado + cuotas
+              {cardNextPayments.length} tarjeta{cardNextPayments.length !== 1 ? 's' : ''} · incl. cargos estado
             </div>
           </div>
         </div>
@@ -226,7 +226,7 @@ export default function Dashboard({
               <div className="text-[15px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
                 {fmtCLP(totalNextCardPayment)}
               </div>
-              <div className="text-[10px] mt-0.5" style={{ color: '#5d6888' }}>sin comisiones fijas</div>
+              <div className="text-[10px] mt-0.5" style={{ color: '#5d6888' }}>contado + cuotas + cargos</div>
             </div>
             {totalComisionesRecurrentes > 0 && (
               <div className="flex-1 px-3.5 py-2.5 border-l border-[#e8e6df]">
@@ -278,9 +278,9 @@ export default function Dashboard({
                         <div className="text-[17px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
                           {fmtCLP(totalAmount)}
                         </div>
-                        {comisionesRecurrentes > 0 && (
-                          <div className="text-[10px]" style={{ color: '#5d6888' }}>sin comisión</div>
-                        )}
+                        <div className="text-[10px] mt-[2px]" style={{ color: '#5d6888' }}>
+                          {cargosTotal > 0 ? 'incl. cargos del estado' : comisionesRecurrentes > 0 ? 'base · sin comisión fija' : 'Total a pagar'}
+                        </div>
                       </div>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                         style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.22s ease', flexShrink: 0 }}>
@@ -324,7 +324,8 @@ export default function Dashboard({
                       {cardCharges.length > 0 && (
                         <>
                           <div className="h-px my-2" style={{ background: '#e8e6df' }}/>
-                          <div className="text-[10px] font-bold tracking-[0.08em] uppercase pb-1.5" style={{ color: '#5d6888' }}>
+                          <div className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-[0.05em] uppercase px-2 py-[3px] rounded-[6px] mb-2" style={{ background: '#fff7e6', color: '#b45309' }}>
+                            <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ background: '#f59e0b' }}/>
                             Cargos del estado de cuenta
                           </div>
                           {cardCharges.map((c, ci) => (
@@ -351,7 +352,10 @@ export default function Dashboard({
                       {/* Subtotal */}
                       <div className="h-px mt-2 mb-1" style={{ background: '#e8e6df' }}/>
                       <div className="flex justify-between items-center py-2">
-                        <div className="text-[14px] font-bold" style={{ color: '#1e2535' }}>Pagar el {payDateStr}</div>
+                        <div>
+                          <div className="text-[12px] font-bold" style={{ color: '#1e2535' }}>Total a pagar tarjeta</div>
+                          <div className="text-[11px] mt-[1px]" style={{ color: '#9ba5c2' }}>Vence {payDateStr}</div>
+                        </div>
                         <div className="text-[17px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
                           {fmtCLP(totalAmount)}
                         </div>
@@ -374,7 +378,7 @@ export default function Dashboard({
                           ))}
                           <div className="flex justify-between items-center mt-2 pt-2 border-t border-[#dddbd3]">
                             <span className="text-[12.5px] font-medium" style={{ color: '#4a5370' }}>
-                              Total estimado incl. comisión
+                              Estimado incl. comisión fija
                             </span>
                             <span className="text-[14px] font-bold tabular-nums" style={{ color: '#1e2535' }}>
                               {fmtCLP(totalAmount + comisionesRecurrentes)}
