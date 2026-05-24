@@ -554,12 +554,14 @@ export default function Dashboard({
                             <span className="font-mono tabular-nums">{fmtCLP(cuotasAmount)}</span>
                           </div>
                         )}
-                        {cargosComisiones > 0 && (
-                          <div className="flex items-center justify-between text-[11.5px]">
-                            <span className="text-[var(--amber-ink)]">Cargos variables del estado de cuenta</span>
-                            <span className="font-mono tabular-nums text-[var(--amber-ink)]">{fmtCLP(cargosComisiones)}</span>
+                        {cardCharges.map((c, ci) => (
+                          <div key={ci} className="flex items-center justify-between text-[11.5px]">
+                            <span style={{ color: CHARGE_COLOR[c.tipo] ?? CHARGE_COLOR.otro }}>
+                              {c.descripcion || CHARGE_LABEL[c.tipo] || 'Cargo'}
+                            </span>
+                            <span className="font-mono tabular-nums" style={{ color: CHARGE_COLOR[c.tipo] ?? CHARGE_COLOR.otro }}>{fmtCLP(c.monto)}</span>
                           </div>
-                        )}
+                        ))}
                         {comisionesRecurrentes > 0 && (
                           <div className="flex items-center justify-between text-[11.5px]">
                             <span className="text-[var(--muted)]">Comisiones fijas · <span className="italic">en gastos fijos</span></span>
