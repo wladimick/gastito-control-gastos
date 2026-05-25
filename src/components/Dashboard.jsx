@@ -123,7 +123,7 @@ export default function Dashboard({
   const totalAvailable      = activeAccounts.reduce((s, a) => s + (a.balance || 0), 0)
   const pendingPayableTotal = (recurring ?? []).filter(r => r.active && r.kind === 'payable' && r.status !== 'paid').reduce((s, r) => s + (r.amount || 0), 0)
   const usableBalance       = totalAvailable - pendingPayableTotal
-  const recurringTotal      = (recurring ?? []).filter(r => r.active && r.kind === 'expense').reduce((s, r) => s + (r.amount || 0), 0)
+  const recurringTotal      = (recurring ?? []).filter(r => r.active && r.kind === 'expense' && !r.comisionBancaria && r.type !== 'credito').reduce((s, r) => s + (r.amount || 0), 0)
   const recurringIncomeTotal = (income ?? []).filter(r => r.active !== false).reduce((s, r) => s + (r.amount || 0), 0)
   const punctualIncomeTotal = (receivables ?? []).filter(r => r.status !== 'paid').reduce((s, r) => s + (r.amount || 0), 0)
   const monthlyIncome       = recurringIncomeTotal + punctualIncomeTotal
@@ -172,15 +172,16 @@ export default function Dashboard({
   const totalComisionesRecurrentes = cardNextPayments.reduce((s, c) => s + c.comisionesRecurrentes, 0)
 
   // ── Recurrentes stats ──────────────────────────────────────
-  const activeRecurring = (recurring ?? []).filter(r => r.active && r.kind === 'expense')
-  const pausedRecurring = (recurring ?? []).filter(r => !r.active && r.kind === 'expense')
+  // Excluir comisionBancaria y type=credito (misma regla que proyección)
+  const activeRecurring = (recurring ?? []).filter(r => r.active && r.kind === 'expense' && !r.comisionBancaria && r.type !== 'credito')
+  const pausedRecurring = (recurring ?? []).filter(r => !r.active && r.kind === 'expense' && !r.comisionBancaria && r.type !== 'credito')
   const incomeRatio     = recurringIncomeTotal > 0 ? Math.min(recurringTotal / recurringIncomeTotal, 1) : 0
 
   // ── Próximo ciclo ──────────────────────────────────────────
   const _nextCycleDate     = new Date(today.getFullYear(), today.getMonth() + 1, 1)
   const nextCycleLabel     = `${MES[_nextCycleDate.getMonth()]} ${_nextCycleDate.getFullYear()}`
   const nextCycleCardTotal = totalNextCardPayment + totalComisionesRecurrentes
-  const nextCycleRecurring = Math.max(0, recurringTotal - totalComisionesRecurrentes)
+  const nextCycleRecurring = recurringTotal
   const nextCycleOutflow   = nextCycleCardTotal + nextCycleRecurring
   const nextCycleBalance   = usableBalance + monthlyIncome - nextCycleOutflow
   const nextCycleRatio     = monthlyIncome > 0 ? nextCycleOutflow / monthlyIncome : 0

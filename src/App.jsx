@@ -742,6 +742,7 @@ export default function App() {
             receivables={receivablesList}
             payables={payablesList}
             installmentDebts={installmentDebts}
+            expenses={expenses}
           />
         )}
         {view === 'comparison' && <Comparison expenses={expenses}/>}

@@ -43,18 +43,19 @@ function mkKey(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}` }
 // debitoMP    = estimado débito/efectivo misceláneos
 function computeMonths({
   startBalance,
-  incomeItems         = [],
-  receivables         = [],
-  payables            = [],
-  recurringItems      = [],
-  installmentDebts    = [],
-  creditStatements    = [],
-  projectedItems      = [],
-  defaultCyclicSpend  = 370000,
+  incomeItems          = [],
+  receivables          = [],
+  payables             = [],
+  recurringItems       = [],
+  installmentDebts     = [],
+  creditStatements     = [],
+  projectedItems       = [],
+  expenses             = [],
+  defaultCyclicSpend   = 370000,
   cyclicSpendOverrides = {},
-  defaultDebitoMP     = 50000,
-  debitoOverrides     = {},
-  sw                  = {},
+  defaultDebitoMP      = 50000,
+  debitoOverrides      = {},
+  sw                   = {},
 }) {
   const today  = new Date()
   const active = projectedItems.filter(i => i.active)
@@ -69,8 +70,15 @@ function computeMonths({
     const m  = d.getMonth()
     const mk = mkKey(y, m)
 
-    const cyclicSpend = cyclicSpendOverrides[mk] ?? defaultCyclicSpend
-    const debitoMP    = debitoOverrides[mk]     ?? defaultDebitoMP
+    // Contado ciclo: mes proyectado N usa el contado real de Falabella del mes N-1
+    const prevD           = new Date(y, m - 1, 1)
+    const autoContado     = calcContadoFalabella(expenses, prevD.getFullYear(), prevD.getMonth())
+    const cyclicSpendAuto = autoContado > 0 ? autoContado : defaultCyclicSpend
+    const cyclicSpend     = cyclicSpendOverrides[mk] ?? cyclicSpendAuto
+    const cyclicSource    = cyclicSpendOverrides[mk] != null ? 'manual'
+                          : autoContado > 0             ? 'calculado'
+                          :                               'estimado'
+    const debitoMP        = debitoOverrides[mk] ?? defaultDebitoMP
 
     // ── Recurring expenses (startDate/endDate aware) ────────────
     // comisionBancaria=true → solo visual, excluido del cálculo (doble conteo con facturación)
@@ -172,7 +180,7 @@ function computeMonths({
       key: mk, y, m, offset,
       income, recvAmt, payAmt, recurring,
       recurringDetail, recurringCommissions, recurringCommissionDetail,
-      cyclicSpend, debitoMP,
+      cyclicSpend, cyclicSource, debitoMP,
       cuotas, cuotasDetail,
       ccTotal, ccDetail, cuotasTotal,
       incomeDetail, recvDetail, payDetail,
@@ -825,6 +833,20 @@ function KpiCard({ label, bal, sub, dotCls }) {
 }
 
 // ── Main ───────────────────────────────────────────────────────
+// Calcula el contado real de crédito Falabella (1 cuota) en un mes dado
+function calcContadoFalabella(expenses, year, month) {
+  return expenses
+    .filter(e => {
+      const d = new Date(e.date)
+      return d.getFullYear() === year
+          && d.getMonth()    === month
+          && e.type          === 'credito'
+          && (e.installments ?? 1) <= 1
+          && e.bank          === 'falabella'
+    })
+    .reduce((s, e) => s + (e.amount || 0), 0)
+}
+
 export default function Projection({
   accounts         = [],
   recurringList    = [],
@@ -832,6 +854,7 @@ export default function Projection({
   receivables      = [],
   payables         = [],
   installmentDebts = [],
+  expenses         = [],
 }) {
   const categories = useCategories()
   const banks      = useBanks()
@@ -879,13 +902,14 @@ export default function Projection({
       installmentDebts,
       creditStatements:     statements,
       projectedItems:       items,
+      expenses,
       defaultCyclicSpend,
       cyclicSpendOverrides,
       defaultDebitoMP,
       debitoOverrides,
       sw,
     })
-  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, statements, items, defaultCyclicSpend, cyclicSpendOverrides, defaultDebitoMP, debitoOverrides, sw])
+  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, statements, items, expenses, defaultCyclicSpend, cyclicSpendOverrides, defaultDebitoMP, debitoOverrides, sw])
 
   const period  = months[activePeriod]
   const dispBal = mo => (mo.hasSim && sw.sim !== false) ? mo.balSim : mo.balExpected
@@ -1182,14 +1206,17 @@ export default function Projection({
                     </button>
                   </div>
                 )}
-                {mo.cyclicSpend > 0 && (
-                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
-                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#e67e22' }}/>Contado ciclo ant.
+                <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                  <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#e67e22' }}/>Contado ciclo ant.
+                    <span className="text-[10px] px-1 py-0.5 rounded"
+                      style={{ background: mo.cyclicSource === 'calculado' ? 'var(--accent-soft)' : 'var(--amber-soft)',
+                               color:      mo.cyclicSource === 'calculado' ? 'var(--accent-ink)'  : 'var(--amber-ink)' }}>
+                      {mo.cyclicSource}
                     </span>
-                    <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.cyclicSpend)}</span>
-                  </div>
-                )}
+                  </span>
+                  <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.cyclicSpend)}</span>
+                </div>
                 {mo.recurring > 0 && (
                   <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
                     <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
