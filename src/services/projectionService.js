@@ -14,6 +14,7 @@ export function buildMonthlyProjection({
   includeSavingsBalance = false,
   varExpensesAmount     = 0,       // gasto variable manual mensual
   useHistoricalVar      = false,   // calcula promedio histórico de gastos variables
+  contadoCMR            = 0,       // pago contado CMR mensual (tarjeta crédito, no cuotas)
 } = {}) {
   const today = new Date()
 
@@ -29,14 +30,19 @@ export function buildMonthlyProjection({
     .filter(r => r.active !== false)
     .reduce((s, r) => s + (r.amount || 0), 0)
 
+  // Excluye recurrentes pagados con tarjeta de crédito (ya incluidos en contado CMR)
+  // y comisiones bancarias (solo referencia visual, nunca suma al egreso)
   const monthlyRecurring = recurringList
-    .filter(r => r.kind === 'expense' && r.active !== false)
+    .filter(r => r.kind === 'expense' && r.active !== false && r.type !== 'credito' && !r.comisionBancaria)
     .reduce((s, r) => s + (r.amount || 0), 0)
 
   // Legacy: promedio de crédito contado (no cuotas)
   const avgCreditContado = withHistoricalAvg
     ? _avgCreditContado(expenses, today)
     : 0
+
+  // CMR efectivo: usa el explícito si se pasó, si no cae al promedio histórico
+  const effectiveCMR = contadoCMR > 0 ? contadoCMR : avgCreditContado
 
   // Nuevo: promedio de todos los gastos variables (excluye cuotas)
   const monthlyVar = useHistoricalVar
@@ -58,7 +64,7 @@ export function buildMonthlyProjection({
 
     const byBank             = _monthInstallmentsByBank(activeDebts, key)
     const cuotas             = Object.values(byBank).reduce((s, v) => s + v, 0)
-    const totalOutCommitted  = monthlyRecurring + cuotas + avgCreditContado
+    const totalOutCommitted  = monthlyRecurring + cuotas + effectiveCMR
     const totalOut           = totalOutCommitted + monthlyVar
     const netCommitted       = monthlyIncome - totalOutCommitted
     const net                = monthlyIncome - totalOut
@@ -70,7 +76,8 @@ export function buildMonthlyProjection({
       installments:        cuotas,
       byBank,
       recurring:           monthlyRecurring,
-      creditContado:       avgCreditContado,
+      creditContado:       effectiveCMR,
+      contadoCMR:          effectiveCMR,
       varExpenses:         monthlyVar,
       totalOutCommitted,
       totalOut,
@@ -98,6 +105,7 @@ export function buildMonthlyProjection({
     savingsBalance,
     monthlyIncome,
     monthlyRecurring,
+    monthlyCMR:            effectiveCMR,
     monthlyVarExpenses:   monthlyVar,
     totalCommitted,
     heaviestMonth,
