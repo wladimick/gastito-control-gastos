@@ -64,7 +64,7 @@ function computeMonths({
   let balS = startBalance
 
   // Proyección arranca siempre en el mes siguiente al actual
-  return [1, 2, 3].map(offset => {
+  return [1, 2, 3, 4, 5, 6].map(offset => {
     const d  = new Date(today.getFullYear(), today.getMonth() + offset, 1)
     const y  = d.getFullYear()
     const m  = d.getMonth()
@@ -1367,7 +1367,7 @@ export default function Projection({
         <div className="flex items-center justify-between mb-3 px-0.5">
           <span className="text-[11px] font-bold text-[var(--muted)] uppercase tracking-[0.08em]">Próximo ciclo de pago</span>
         </div>
-        <div className="flex flex-col gap-[10px]">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-[10px]">
           {months.map((mo, i) => {
             const totalIn  = mo.income + (sw.receivables !== false ? mo.recvAmt : 0)
             const totalEg  = mo.recurring
