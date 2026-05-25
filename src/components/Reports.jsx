@@ -424,12 +424,15 @@ function SimPaymentRow({ label, installments, monthlyAdd, balAfter, verdict, isS
   )
 }
 
-function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, expenses }) {
+function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, expenses, contadoCMRDefault = 370000 }) {
   const [planVarInput, setPlanVarInput] = useState(
     () => localStorage.getItem('g_plan_var') ?? ''
   )
   const [planMinBal, setPlanMinBal] = useState(
-    () => localStorage.getItem('g_plan_minbal') ?? ''
+    () => localStorage.getItem('g_plan_minbal') ?? '300000'
+  )
+  const [planCMRInput, setPlanCMRInput] = useState(
+    () => localStorage.getItem('g_plan_cmr') ?? String(contadoCMRDefault)
   )
   const [sim, setSim_] = useState(() => {
     try { return JSON.parse(localStorage.getItem('g_plan_sim') ?? '{}') } catch { return {} }
@@ -445,12 +448,14 @@ function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, exp
 
   const varAmount  = Math.round(Number(planVarInput) || 0)
   const minBalance = Math.round(Number(planMinBal)  || 0)
+  const planCMR    = Math.round(Number(planCMRInput) || 0)
 
   const plan = useMemo(() => buildMonthlyProjection({
     accounts, installmentDebts, recurringList, incomeList, expenses,
     horizonMonths: 12,
     varExpensesAmount: varAmount,
-  }), [accounts, installmentDebts, recurringList, incomeList, expenses, varAmount])
+    contadoCMR: planCMR,
+  }), [accounts, installmentDebts, recurringList, incomeList, expenses, varAmount, planCMR])
 
   const months = plan.months
 
@@ -460,22 +465,29 @@ function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, exp
 
   const readingText = useMemo(() => {
     if (!months.length || !plan.monthlyIncome) return null
-    const intro = varAmount > 0
-      ? `Con un gasto variable de ${fmtCLPshort(varAmount)}/mes`
-      : 'Proyectando solo compromisos'
-    const heavy = plan.heaviestMonth?.key
-      ? `, tu mes más pesado es ${MES[plan.heaviestMonth.m]} ${plan.heaviestMonth.y}`
-      : ''
-    const light = lightest
-      ? `. El mes más cómodo es ${MES[lightest.m]} ${lightest.y} (${fmtCLPshort(lightest.balanceEnd)} al final)`
-      : ''
-    const milestone = firstOver15M
-      ? `. Superás $1.500.000 en ${MES[firstOver15M.m]} ${firstOver15M.y}`
-      : firstOver1M
-        ? `. Superás $1.000.000 en ${MES[firstOver1M.m]} ${firstOver1M.y}`
-        : '. No alcanzás $1.000.000 disponibles en los próximos 12 meses'
-    return intro + heavy + light + milestone + '.'
-  }, [months, plan.monthlyIncome, plan.heaviestMonth, varAmount, lightest, firstOver1M, firstOver15M])
+    const lines = []
+    lines.push(`Proyectando tus compromisos reales (cuotas + contado CMR ${planCMR > 0 ? fmtCLPshort(planCMR) : ''} + recurrentes ${fmtCLPshort(plan.monthlyRecurring)}):`)
+    if (plan.heaviestMonth?.key) {
+      lines.push(`• Mes más pesado: ${MES[plan.heaviestMonth.m]} ${plan.heaviestMonth.y} — pagas ${fmtCLPshort(plan.heaviestMonth.totalOut)} en compromisos`)
+    }
+    if (firstOver1M) {
+      const nextMo = months.find((mo, i) => i > 0 && mo.balanceEnd > months[i - 1].balanceEnd)
+      lines.push(`• Desde ${nextMo ? `${MES[nextMo.m]} ${nextMo.y}` : 'los próximos meses'} el flujo mejora`)
+      lines.push(`• Superás $1.000.000 acumulado en: ${MES[firstOver1M.m]} ${firstOver1M.y}`)
+    } else {
+      lines.push('• No alcanzás $1.000.000 disponibles en los próximos 12 meses')
+    }
+    if (firstOver15M) {
+      lines.push(`• Superás $1.500.000 acumulado en: ${MES[firstOver15M.m]} ${firstOver15M.y}`)
+    }
+    if (lightest) {
+      lines.push(`• Mes más cómodo: ${MES[lightest.m]} ${lightest.y} — saldo final ${fmtCLPshort(lightest.balanceEnd)}`)
+    }
+    if (varAmount > 0) {
+      lines.push(`• Incluye ${fmtCLPshort(varAmount)}/mes en gastos variables`)
+    }
+    return lines.join('\n')
+  }, [months, plan.monthlyIncome, plan.monthlyRecurring, plan.heaviestMonth, varAmount, planCMR, lightest, firstOver1M, firstOver15M])
 
   const simInstallments = sim.payment === 'contado' ? 1 : Number(sim.payment) || 1
   const simAmount       = Math.round(Number(sim.amount) || 0)
@@ -565,13 +577,25 @@ function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, exp
             <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">Saldo mínimo de seguridad</div>
             <div className="relative">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--muted)] pointer-events-none">$</span>
-              <input type="number" min="0" placeholder="ej. 200000"
+              <input type="number" min="0" placeholder="300000"
                 value={planMinBal}
                 onChange={e => setPlanMinBal(e.target.value)}
                 onBlur={() => localStorage.setItem('g_plan_minbal', planMinBal)}
                 className="h-8 pl-6 pr-3 w-36 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg text-[12px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
             </div>
             {minBalance > 0 && <div className="text-[10.5px] text-[var(--muted)] mt-1">{fmtCLPshort(minBalance)} mínimo</div>}
+          </label>
+          <label className="block">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">Contado CMR estimado</div>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--muted)] pointer-events-none">$</span>
+              <input type="number" min="0" placeholder="370000"
+                value={planCMRInput}
+                onChange={e => setPlanCMRInput(e.target.value)}
+                onBlur={() => localStorage.setItem('g_plan_cmr', planCMRInput)}
+                className="h-8 pl-6 pr-3 w-36 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg text-[12px] font-mono focus:outline-none focus:border-[var(--ink)]"/>
+            </div>
+            {planCMR > 0 && <div className="text-[10.5px] text-[var(--muted)] mt-1">{fmtCLPshort(planCMR)}/mes</div>}
           </label>
           <div className="text-[11px] text-[var(--muted)] max-w-[220px] leading-relaxed">
             Guardados automáticamente en el navegador.
@@ -687,7 +711,7 @@ function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, exp
             </div>
             <div>
               <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Lectura automática</div>
-              <p className="text-[13.5px] leading-relaxed">{readingText}</p>
+              <div className="text-[13.5px] leading-relaxed whitespace-pre-line">{readingText}</div>
             </div>
           </div>
         </Card>
@@ -706,7 +730,7 @@ function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, exp
           <table className="w-full text-[12.5px]">
             <thead>
               <tr className="border-b border-[var(--line)]">
-                {['Mes', 'Saldo inicial', 'Ingresos', 'Cuotas', 'Recurrentes', 'Variables', 'Saldo final', 'Estado'].map(h => (
+                {['Mes', 'Saldo inicial', 'Ingresos', 'Cuotas', 'Contado CMR', 'Recurrentes', 'Variables', 'Saldo final', 'Estado'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left font-medium text-[var(--muted)] uppercase tracking-[0.08em] text-[10px] whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -723,6 +747,9 @@ function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, exp
                     <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--ink-2)]">{fmtCLPshort(mo.balanceStart)}</td>
                     <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--accent-ink)]">{mo.income > 0 ? fmtCLPshort(mo.income) : '—'}</td>
                     <td className="px-4 py-2.5 font-mono tabular-nums">{cuotas > 0 ? fmtCLPshort(cuotas) : '—'}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums" style={{ color: mo.contadoCMR > 0 ? CREDIT_COLOR : undefined }}>
+                      {mo.contadoCMR > 0 ? fmtCLPshort(mo.contadoCMR) : '—'}
+                    </td>
                     <td className="px-4 py-2.5 font-mono tabular-nums">{mo.recurring > 0 ? fmtCLPshort(mo.recurring) : '—'}</td>
                     <td className="px-4 py-2.5 font-mono tabular-nums" style={{ color: mo.varExpenses > 0 ? VARIABLE_COLOR : undefined }}>
                       {mo.varExpenses > 0 ? fmtCLPshort(mo.varExpenses) : '—'}
@@ -818,14 +845,23 @@ function PlanFuturo({ accounts, installmentDebts, recurringList, incomeList, exp
                   {simResult.verdict === 'recomendado' ? '✓' : simResult.verdict === 'ajustado' ? '~' : '✗'}
                 </div>
                 <div>
-                  <div className={`font-bold text-[16px] tracking-tight ${
+                  <div className={`font-bold text-[15px] tracking-tight leading-snug ${
                     simResult.verdict === 'recomendado' ? 'text-[var(--accent-ink)]'
                     : simResult.verdict === 'ajustado'  ? 'text-[var(--amber-ink)]'
                     : 'text-[#A02828]'
                   }`}>
-                    {simResult.verdict === 'recomendado' ? 'Recomendado'
-                     : simResult.verdict === 'ajustado'  ? 'Ajustado — bajo mínimo'
-                     : 'No recomendado'}
+                    {simInstallments > 1
+                      ? simResult.verdict === 'recomendado'
+                        ? `En ${simInstallments} cuotas de ${fmtCLP(simMonthlyAdd)} desde ${simResult.targetMo ? `${MES[simResult.targetMo.m]} ${simResult.targetMo.y}` : '…'}, nunca bajarías de tu mínimo ✅`
+                        : simResult.verdict === 'ajustado'
+                          ? `En ${simInstallments} cuotas de ${fmtCLP(simMonthlyAdd)}, podrías quedar bajo el mínimo de ${fmtCLPshort(minBalance)} ⚠️`
+                          : `En ${simInstallments} cuotas de ${fmtCLP(simMonthlyAdd)}, no es viable en ese mes ✗`
+                      : simResult.verdict === 'recomendado'
+                        ? 'Puedes pagarlo contado sin problemas ✅'
+                        : simResult.verdict === 'ajustado'
+                          ? `Contado, quedarías bajo el mínimo de ${fmtCLPshort(minBalance)} ⚠️`
+                          : 'Contado, saldo insuficiente ✗'
+                    }
                   </div>
                   <div className="text-[12px] text-[var(--muted)] mt-0.5">
                     {sim.name ? `"${sim.name}" · ` : ''}{fmtCLP(simAmount)}
@@ -913,6 +949,9 @@ export default function Reports({
   const [horizon,         setHorizon]         = useState(6)
   const [scenario,        setScenario]        = useState('solo_compromisos')
   const [varExpensesInput, setVarExpensesInput] = useState('')
+  const [contadoCMRInput, setContadoCMRInput] = useState(
+    () => localStorage.getItem('g_reports_cmr') ?? '370000'
+  )
   const [includeSavings,  setIncludeSavings]  = useState(false)
 
   // ── Resumen del periodo ────────────────────────────────────────
@@ -1010,8 +1049,10 @@ export default function Reports({
     })
     const gastosTotal = periodExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0)
 
-    // Recurring expenses
-    const recurItems = recurringList.filter(r => r.kind === 'expense' && rIsActive(r, mk))
+    // Recurring expenses — excluye tarjeta crédito y comisiones (solo referencia)
+    const recurItems = recurringList.filter(r =>
+      r.kind === 'expense' && rIsActive(r, mk) && r.type !== 'credito' && !r.comisionBancaria
+    )
     const recurTotal = recurItems.reduce((s, r) => s + (Number(r.amount) || 0), 0)
 
     // Installment debts
@@ -1093,23 +1134,26 @@ export default function Reports({
     promedio_historico: { varExpensesAmount: 0,                           useHistoricalVar: true  },
   }[scenario] ?? {}), [scenario, varExpensesInput])
 
+  const contadoCMRValue = Math.round(Number(contadoCMRInput) || 0)
+
   const projBase = {
     accounts, installmentDebts, recurringList, incomeList, expenses,
     horizonMonths: horizon,
     withHistoricalAvg: false,
+    contadoCMR: contadoCMRValue,
     ...scenarioServiceParams,
   }
 
   const proj = useMemo(
     () => buildMonthlyProjection({ ...projBase, includeSavingsBalance: false }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario, varExpensesInput]
+    [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario, varExpensesInput, contadoCMRInput]
   )
 
   const projWithSavings = useMemo(
     () => buildMonthlyProjection({ ...projBase, includeSavingsBalance: true }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario, varExpensesInput]
+    [accounts, installmentDebts, recurringList, incomeList, expenses, horizon, scenario, varExpensesInput, contadoCMRInput]
   )
 
   const hasSavingsAccounts = accounts.some(a => a.active && a.type === 'ahorro')
@@ -1636,6 +1680,7 @@ export default function Reports({
           recurringList={recurringList}
           incomeList={incomeList}
           expenses={expenses}
+          contadoCMRDefault={contadoCMRValue}
         />
       )}
 
@@ -1682,6 +1727,19 @@ export default function Reports({
                   )}
                 </div>
               )}
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-[var(--muted)]">Contado CMR:</span>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--muted)] pointer-events-none">$</span>
+                  <input
+                    type="number" min="0" placeholder="370000"
+                    value={contadoCMRInput}
+                    onChange={e => setContadoCMRInput(e.target.value)}
+                    onBlur={() => localStorage.setItem('g_reports_cmr', contadoCMRInput)}
+                    className="h-8 pl-6 pr-3 w-32 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg text-[12px] font-mono focus:outline-none focus:border-[var(--ink)]"
+                  />
+                </div>
+              </div>
               {hasSavingsAccounts && (
                 <div className="flex items-center gap-2">
                   <span className="text-[12px] text-[var(--muted)]">Ahorro:</span>
@@ -1756,13 +1814,13 @@ export default function Reports({
             <ProjKPI
               label="Libre antes de gastos variables"
               value={proj.monthlyIncome > 0
-                ? fmtCLP(proj.monthlyIncome - proj.monthlyRecurring - (activeProjData.months[0]?.installments ?? 0))
+                ? fmtCLP(proj.monthlyIncome - proj.monthlyRecurring - (activeProjData.months[0]?.installments ?? 0) - proj.monthlyCMR)
                 : '—'}
               sub={proj.monthlyIncome > 0
-                ? `${fmtCLPshort(proj.monthlyIncome)} ing. − fijos − cuotas`
+                ? `${fmtCLPshort(proj.monthlyIncome)} − cuotas − CMR − recurrentes`
                 : 'configura tus ingresos'}
               color={proj.monthlyIncome > 0 &&
-                (proj.monthlyIncome - proj.monthlyRecurring - (activeProjData.months[0]?.installments ?? 0)) < 0
+                (proj.monthlyIncome - proj.monthlyRecurring - (activeProjData.months[0]?.installments ?? 0) - proj.monthlyCMR) < 0
                   ? 'text-[#A02828]' : 'text-[var(--ink-2)]'}
             />
           </div>
@@ -1844,6 +1902,7 @@ export default function Reports({
                     {[
                       'Mes', 'Saldo inicio', 'Ingresos',
                       ...activeBanksInProj.map(b => b.label),
+                      'Contado CMR',
                       'Recurrentes',
                       hasVar ? 'Gastos var.' : null,
                       'Total egresos',
@@ -1871,6 +1930,9 @@ export default function Reports({
                           </td>
                         )
                       })}
+                      <td className="px-4 py-2.5 font-mono tabular-nums" style={{ color: mo.contadoCMR > 0 ? CREDIT_COLOR : undefined }}>
+                        {mo.contadoCMR > 0 ? fmtCLPshort(mo.contadoCMR) : '—'}
+                      </td>
                       <td className="px-4 py-2.5 font-mono tabular-nums">{mo.recurring > 0 ? fmtCLPshort(mo.recurring) : '—'}</td>
                       {hasVar && (
                         <td className="px-4 py-2.5 font-mono tabular-nums" style={{ color: VARIABLE_COLOR }}>
@@ -1906,6 +1968,9 @@ export default function Reports({
                           </td>
                         )
                       })}
+                      <td className="px-4 py-2.5 font-mono font-semibold tabular-nums" style={{ color: CREDIT_COLOR }}>
+                        {fmtCLPshort(activeProjData.months.reduce((s, m) => s + (m.contadoCMR || 0), 0))}
+                      </td>
                       <td className="px-4 py-2.5 font-mono font-semibold tabular-nums">
                         {fmtCLPshort(activeProjData.months.reduce((s, m) => s + m.recurring, 0))}
                       </td>
@@ -1937,11 +2002,14 @@ export default function Reports({
           {(recurringList.filter(r => r.kind === 'expense' && r.active !== false).length > 0 ||
             installmentDebts.filter(d => d.status === 'active').length > 0) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {recurringList.filter(r => r.kind === 'expense' && r.active !== false).length > 0 && (
+              {recurringList.filter(r => r.kind === 'expense' && r.active !== false).length > 0 && (() => {
+                const recurReales = recurringList.filter(r => r.kind === 'expense' && r.active !== false && r.type !== 'credito' && !r.comisionBancaria)
+                const recurComisiones = recurringList.filter(r => r.kind === 'expense' && r.active !== false && (r.type === 'credito' || r.comisionBancaria))
+                return (
                 <Card padding="p-5">
                   <div className="font-semibold tracking-tight mb-3">Recurrentes incluidos</div>
                   <div className="flex flex-col gap-2">
-                    {recurringList.filter(r => r.kind === 'expense' && r.active !== false).map(r => (
+                    {recurReales.map(r => (
                       <div key={r.id} className="flex items-center justify-between text-[12.5px]">
                         <span className="text-[var(--ink-2)]">{r.name}</span>
                         <span className="font-mono tabular-nums">{fmtCLP(r.amount)}</span>
@@ -1951,9 +2019,21 @@ export default function Reports({
                       <span>Total mensual</span>
                       <span className="font-mono tabular-nums">{fmtCLP(proj.monthlyRecurring)}</span>
                     </div>
+                    {recurComisiones.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-[var(--line)]">
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-2">Solo referencia (no suman al egreso)</div>
+                        {recurComisiones.map(r => (
+                          <div key={r.id} className="flex items-center justify-between text-[12px] text-[var(--muted)]">
+                            <span>{r.name}</span>
+                            <span className="font-mono tabular-nums">{fmtCLP(r.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </Card>
-              )}
+                )
+              })()}
               {installmentDebts.filter(d => d.status === 'active').length > 0 && (
                 <Card padding="p-5">
                   <div className="font-semibold tracking-tight mb-3">
