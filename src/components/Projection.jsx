@@ -6,12 +6,18 @@ import { useCategories } from '../services/categoriesService'
 import { useBanks } from '../services/banksService'
 
 // ── Persistence ────────────────────────────────────────────────
-const LS_KEY = 'gastito_proj_v1'
-const CC_KEY  = 'gastito_cc_v1'
-const loadItems      = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]') } catch { return [] } }
+const LS_KEY         = 'gastito_proj_v1'
+const CC_KEY         = 'gastito_cc_v1'
+const CYCLIC_KEY     = 'gastito_cyclic_v1'
+const DEBITO_KEY     = 'gastito_debito_v1'
+const loadItems      = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)     || '[]')  } catch { return []  } }
 const saveItems      = items => localStorage.setItem(LS_KEY, JSON.stringify(items))
-const loadStatements = () => { try { return JSON.parse(localStorage.getItem(CC_KEY)  || '[]') } catch { return [] } }
+const loadStatements = () => { try { return JSON.parse(localStorage.getItem(CC_KEY)     || '[]')  } catch { return []  } }
 const saveStatements = stmts => localStorage.setItem(CC_KEY, JSON.stringify(stmts))
+const loadCyclic     = () => { try { return JSON.parse(localStorage.getItem(CYCLIC_KEY) || '{}')  } catch { return {}  } }
+const saveCyclic     = v   => localStorage.setItem(CYCLIC_KEY, JSON.stringify(v))
+const loadDebito     = () => { try { return JSON.parse(localStorage.getItem(DEBITO_KEY) || '{}')  } catch { return {}  } }
+const saveDebito     = v   => localStorage.setItem(DEBITO_KEY, JSON.stringify(v))
 
 // ── Math ───────────────────────────────────────────────────────
 function mDiff(a, b) {
@@ -37,30 +43,34 @@ function mkKey(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}` }
 // debitoMP    = estimado débito/efectivo misceláneos
 function computeMonths({
   startBalance,
-  incomeItems      = [],
-  receivables      = [],
-  payables         = [],
-  recurringItems   = [],
-  installmentDebts = [],
-  creditStatements = [],
-  projectedItems   = [],
-  cyclicSpend      = 370000,
-  debitoMP         = 50000,
-  sw               = {},
+  incomeItems         = [],
+  receivables         = [],
+  payables            = [],
+  recurringItems      = [],
+  installmentDebts    = [],
+  creditStatements    = [],
+  projectedItems      = [],
+  defaultCyclicSpend  = 370000,
+  cyclicSpendOverrides = {},
+  defaultDebitoMP     = 50000,
+  debitoOverrides     = {},
+  sw                  = {},
 }) {
-  const today    = new Date()
-  const todayDay = today.getDate()
-  const active   = projectedItems.filter(i => i.active)
+  const today  = new Date()
+  const active = projectedItems.filter(i => i.active)
   let balC = startBalance
   let balE = startBalance
   let balS = startBalance
 
-  return [0, 1, 2].map(offset => {
-    const d         = new Date(today.getFullYear(), today.getMonth() + offset, 1)
-    const y         = d.getFullYear()
-    const m         = d.getMonth()
-    const mk        = mkKey(y, m)
-    const isCurrent = offset === 0
+  // Proyección arranca siempre en el mes siguiente al actual
+  return [1, 2, 3].map(offset => {
+    const d  = new Date(today.getFullYear(), today.getMonth() + offset, 1)
+    const y  = d.getFullYear()
+    const m  = d.getMonth()
+    const mk = mkKey(y, m)
+
+    const cyclicSpend = cyclicSpendOverrides[mk] ?? defaultCyclicSpend
+    const debitoMP    = debitoOverrides[mk]     ?? defaultDebitoMP
 
     // ── Recurring expenses (startDate/endDate aware) ────────────
     // comisionBancaria=true → solo visual, excluido del cálculo (doble conteo con facturación)
@@ -71,8 +81,7 @@ function computeMonths({
       if (r.kind !== 'expense' || r.active === false) continue
       if (r.startDate && r.startDate.slice(0, 7) > mk) continue
       if (r.endDate   && r.endDate.slice(0, 7)   < mk) continue
-      if (isCurrent && r.dayOfMonth != null && Number(r.dayOfMonth) <= todayDay) continue
-      const isComision = r.comisionBancaria === true
+      const isComision   = r.comisionBancaria === true
       const isCreditCard = r.type === 'credito'
       if (isComision) {
         recurringCommissionDetail.push({ item: r, amount: r.amount || 0 })
@@ -80,7 +89,7 @@ function computeMonths({
         recurringDetail.push({ item: r, amount: r.amount || 0 })
       }
     }
-    const recurring           = recurringDetail.reduce((s, x) => s + x.amount, 0)
+    const recurring            = recurringDetail.reduce((s, x) => s + x.amount, 0)
     const recurringCommissions = recurringCommissionDetail.reduce((s, x) => s + x.amount, 0)
 
     // ── Income ──────────────────────────────────────────────────
@@ -89,22 +98,17 @@ function computeMonths({
       if (r.active === false) continue
       if (r.startDate && r.startDate.slice(0, 7) > mk) continue
       if (r.endDate   && r.endDate.slice(0, 7)   < mk) continue
-      if (isCurrent && r.dayOfMonth != null && Number(r.dayOfMonth) <= todayDay) continue
       incomeDetail.push({ item: r, amount: r.amount || 0 })
     }
     const income = incomeDetail.reduce((s, x) => s + x.amount, 0)
 
-    // ── Receivables (current month only) ───────────────────────
-    const recvDetail = isCurrent
-      ? receivables.filter(r => r.status !== 'paid').map(r => ({ item: r, amount: r.amount || 0 }))
-      : []
-    const recvAmt = recvDetail.reduce((s, x) => s + x.amount, 0)
+    // ── Receivables ─────────────────────────────────────────────
+    const recvDetail = receivables.filter(r => r.status !== 'paid').map(r => ({ item: r, amount: r.amount || 0 }))
+    const recvAmt    = recvDetail.reduce((s, x) => s + x.amount, 0)
 
-    // ── Payables (current month only) ──────────────────────────
-    const payDetail = isCurrent
-      ? payables.filter(p => p.status !== 'paid').map(p => ({ item: p, amount: p.amount || 0 }))
-      : []
-    const payAmt = payDetail.reduce((s, x) => s + x.amount, 0)
+    // ── Payables ────────────────────────────────────────────────
+    const payDetail = payables.filter(p => p.status !== 'paid').map(p => ({ item: p, amount: p.amount || 0 }))
+    const payAmt    = payDetail.reduce((s, x) => s + x.amount, 0)
 
     // ── Installment cuotas (compras en cuotas) ─────────────────
     // installmentNum added for display in the drawer
@@ -113,7 +117,6 @@ function computeMonths({
       if (debt.status !== 'active' || !debt.startMonth) continue
       const el = mDiff(debt.startMonth, mk)
       if (el < 0 || el >= debt.installments) continue
-      if (isCurrent && debt.dayOfMonth != null && Number(debt.dayOfMonth) <= todayDay) continue
       cuotasDetail.push({ item: debt, amount: debt.monthlyAmount || 0, installmentNum: el + 1 })
     }
     const cuotas = cuotasDetail.reduce((s, x) => s + x.amount, 0)
@@ -155,53 +158,18 @@ function computeMonths({
     const newBalE = balE + income + effRecv - effOut
     const newBalS = balS + income + effRecv - effOut - effSim
 
-    // ── Diagnostic logs ─────────────────────────────────────────
-    const itemsExcluidos = recurringItems.filter(r =>
-      r.kind === 'expense' && r.active !== false &&
-      !recurringDetail.some(x => x.item.id === r.id) &&
-      !recurringCommissionDetail.some(x => x.item.id === r.id)
-    ).map(r => ({
-      name: r.name,
-      reason: r.type === 'credito'
-        ? 'crédito CMR (capturado en contado)'
-        : (r.startDate?.slice(0, 7) > mk)
-        ? `startDate ${r.startDate.slice(0, 7)} > ${mk}`
-        : (r.endDate?.slice(0, 7) < mk)
-        ? `endDate ${r.endDate.slice(0, 7)} < ${mk}`
-        : `día ${r.dayOfMonth} ya pasó (hoy: ${todayDay})`,
-    }))
-    console.log('[projection:recurrentes]', {
-      periodo: mk, isCurrent,
-      itemsIncluidos: recurringDetail.map(x => ({ name: x.item.name, amount: x.amount })),
-      comisiones: recurringCommissionDetail.map(x => ({ name: x.item.name, amount: x.amount })),
-      itemsExcluidos,
-      totalRecurrentes: recurring,
-      totalComisiones: recurringCommissions,
-      cyclicSpend,
-      debitoMP,
-    })
-    console.log('[projection:cuotas_credito]', {
-      periodo: mk,
-      cuotasIncluidas: [
-        ...cuotasDetail.map(x => ({ type: 'cuota', nombre: x.item.description, cuotaNum: x.installmentNum, total: x.item.installments, amount: x.amount })),
-        ...ccDetail.map(x => ({ type: 'facturacion', card: x.item.cardName, amount: x.amount })),
-      ],
-      totalCuotas: cuotasTotal,
-      switchCuotasActivo: sw.cuotas !== false,
-    })
     console.log('[projection:resumen]', {
       periodo: mk,
-      ...(offset === 0 ? { saldoBase: startBalance } : {}),
+      ...(offset === 1 ? { saldoBase: startBalance } : {}),
       ingresosIncluidos: income + effRecv,
       gastosIncluidos: effOut,
       cuotasIncluidas: effCuotas,
       simulacionesIncluidas: effSim,
-      saldoFinalConservador: newBalC,
       saldoFinalEsperado: newBalE,
     })
 
     const row = {
-      key: mk, y, m, offset, isCurrent,
+      key: mk, y, m, offset,
       income, recvAmt, payAmt, recurring,
       recurringDetail, recurringCommissions, recurringCommissionDetail,
       cyclicSpend, debitoMP,
@@ -232,7 +200,7 @@ const VC = {
   rojo:     { label: 'No recomendado',    bg: '#FFF0EE',            color: '#C0392B',            icon: 'alert' },
 }
 
-const PERIOD_LABELS = ['Este mes', 'Próximo mes', '3er mes']
+const PERIOD_LABELS = ['Próximo mes', '2do mes', '3er mes']
 const mkBlank = () => ({
   id: null, name: '', amount: '', category: 'otros',
   date: new Date().toISOString().slice(0, 10),
@@ -468,12 +436,7 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
     return                        { label: 'pendiente', color: 'var(--amber-ink)',  bg: 'var(--amber-soft)'  }
   }
 
-  const debtStatus = x => {
-    if (!period.isCurrent) return { label: 'próxima',  color: 'var(--muted)',      bg: 'var(--line)'        }
-    const dom = Number(x.item.dayOfMonth)
-    if (!dom || dom > todayDay) return { label: 'pendiente', color: 'var(--amber-ink)', bg: 'var(--amber-soft)'  }
-    return                             { label: 'cobrado',   color: 'var(--accent-ink)', bg: 'var(--accent-soft)' }
-  }
+  const debtStatus = () => ({ label: 'próxima', color: 'var(--muted)', bg: 'var(--line)' })
 
   return (
     <div className="fixed inset-0 z-50 flex md:items-stretch items-end justify-end">
@@ -798,7 +761,7 @@ function ProjModal({ item, onClose, onSave }) {
 function ProjItem({ item, cat, impact, activePeriod, period, onToggle, onDelete, onEdit }) {
   const itemDate = new Date(item.date)
   const monthly  = item.installments > 1 ? Math.round(item.amount / item.installments) : null
-  const pName    = activePeriod === 0 ? 'este mes' : activePeriod === 1 ? 'el próx. mes' : `en ${MES[period?.m]}`
+  const pName    = activePeriod === 0 ? 'el próx. mes' : activePeriod === 1 ? 'en 2 meses' : `en ${MES[period?.m]}`
 
   return (
     <div className={`flex items-start gap-[11px] px-4 py-[13px] ${!item.active ? 'opacity-55' : ''}`}>
@@ -873,18 +836,25 @@ export default function Projection({
   const categories = useCategories()
   const banks      = useBanks()
 
-  const [items,          setItems]          = useState(loadItems)
-  const [statements,     setStatements]     = useState(loadStatements)
-  const [editItem,       setEditItem]       = useState(null)
-  const [cuotasModal,    setCuotasModal]    = useState(false)
-  const [activePeriod,   setActivePeriod]   = useState(1)
-  const [baseOverride,   setBaseOverride]   = useState(null)
-  const [editingBase,    setEditingBase]    = useState(false)
-  const [baseInput,      setBaseInput]      = useState('')
-  const [openSection,    setOpenSection]    = useState(null)
-  const [cyclicSpend,    setCyclicSpend]    = useState(370000)
-  const [editingCyclic,  setEditingCyclic]  = useState(false)
-  const [cyclicInput,    setCyclicInput]    = useState('')
+  const [items,                setItems]              = useState(loadItems)
+  const [statements,           setStatements]         = useState(loadStatements)
+  const [editItem,             setEditItem]           = useState(null)
+  const [cuotasModal,          setCuotasModal]        = useState(false)
+  const [activePeriod,         setActivePeriod]       = useState(0)
+  const [baseOverride,         setBaseOverride]       = useState(null)
+  const [editingBase,          setEditingBase]        = useState(false)
+  const [baseInput,            setBaseInput]          = useState('')
+  const [openSection,          setOpenSection]        = useState(null)
+  const [defaultCyclicSpend,   setDefaultCyclicSpend] = useState(370000)
+  const [cyclicSpendOverrides, setCyclicSpendOverrides] = useState(loadCyclic)
+  const [editingCyclic,        setEditingCyclic]      = useState(false)
+  const [cyclicInput,          setCyclicInput]        = useState('')
+  const [defaultDebitoMP,      setDefaultDebitoMP]    = useState(50000)
+  const [debitoOverrides,      setDebitoOverrides]    = useState(loadDebito)
+  const [editingDebitoHeader,  setEditingDebitoHeader] = useState(false)
+  const [debitoHeaderInput,    setDebitoHeaderInput]  = useState('')
+  const [editingDebitoMonth,   setEditingDebitoMonth] = useState(null)
+  const [debitoMonthInput,     setDebitoMonthInput]   = useState('')
   const [sw, setSw] = useState({ receivables: true, payables: false, cuotas: true, sim: true })
   const toggleSw = k => setSw(p => ({ ...p, [k]: !p[k] }))
 
@@ -902,18 +872,20 @@ export default function Projection({
   const months = useMemo(() =>
     computeMonths({
       startBalance,
-      incomeItems:      incomeList,
+      incomeItems:          incomeList,
       receivables,
       payables,
-      recurringItems:   recurringList,
+      recurringItems:       recurringList,
       installmentDebts,
-      creditStatements: statements,
-      projectedItems:   items,
-      cyclicSpend,
-      debitoMP:         50000,
+      creditStatements:     statements,
+      projectedItems:       items,
+      defaultCyclicSpend,
+      cyclicSpendOverrides,
+      defaultDebitoMP,
+      debitoOverrides,
       sw,
     })
-  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, statements, items, cyclicSpend, sw])
+  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, statements, items, defaultCyclicSpend, cyclicSpendOverrides, defaultDebitoMP, debitoOverrides, sw])
 
   const period  = months[activePeriod]
   const dispBal = mo => (mo.hasSim && sw.sim !== false) ? mo.balSim : mo.balExpected
@@ -922,7 +894,7 @@ export default function Projection({
   const vc = VC[v]
 
   const recText = period ? (() => {
-    const pName = activePeriod === 0 ? 'este mes' : activePeriod === 1 ? 'el próximo mes' : `en ${MES[period.m]}`
+    const pName = activePeriod === 0 ? 'el próximo mes' : activePeriod === 1 ? 'en 2 meses' : `en ${MES[period.m]}`
     const bal   = dispBal(period)
     if (!period.hasSim || sw.sim === false)
       return `Sin gastos simulados activos, proyectas terminar ${pName} con ${fmtCLP(bal)}.`
@@ -953,12 +925,32 @@ export default function Projection({
     setEditingBase(false)
   }
   const resetBaseOverride = () => { setBaseOverride(null); setEditingBase(false) }
-  const applyCyclicSpend  = () => {
+
+  const applyCyclicDefault = () => {
     const val = Number(String(cyclicInput).replace(/[^0-9]/g, ''))
-    if (!isNaN(val) && val >= 0) setCyclicSpend(val)
+    if (!isNaN(val) && val >= 0) setDefaultCyclicSpend(val)
     setEditingCyclic(false)
   }
-  const toggleSection     = s => setOpenSection(p => p === s ? null : s)
+
+  const applyDebitoHeader = () => {
+    const val = Number(String(debitoHeaderInput).replace(/[^0-9]/g, ''))
+    if (!isNaN(val) && val >= 0) setDefaultDebitoMP(val)
+    setEditingDebitoHeader(false)
+  }
+
+  const applyDebitoMonth = (mk) => {
+    const val = Number(String(debitoMonthInput).replace(/[^0-9]/g, ''))
+    const next = { ...debitoOverrides }
+    if (!isNaN(val) && val >= 0) {
+      if (val === 0) delete next[mk]
+      else next[mk] = val
+    }
+    setDebitoOverrides(next)
+    saveDebito(next)
+    setEditingDebitoMonth(null)
+  }
+
+  const toggleSection = s => setOpenSection(p => p === s ? null : s)
 
   const showRecvWarning = sw.receivables !== false && (months[0]?.recvAmt ?? 0) > 0
 
@@ -980,8 +972,9 @@ export default function Projection({
           </button>
         </div>
 
-        {/* Controles de saldo base y contado estimado */}
+        {/* Controles: saldo base, contado CMR, débito MP */}
         <div className="mt-3 flex flex-wrap gap-2">
+          {/* Saldo base */}
           <div className="inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
             <Icon name="info" size={13}/>
             <span>Saldo base:</span>
@@ -1008,6 +1001,8 @@ export default function Projection({
               </button>
             )}
           </div>
+
+          {/* Contado CMR default */}
           <div className="inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
             <span style={{ color: '#e67e22', fontSize: 13 }}>⊕</span>
             <span>Contado CMR:</span>
@@ -1015,18 +1010,46 @@ export default function Projection({
               <span className="flex items-center gap-1.5">
                 <input type="text" inputMode="numeric" value={cyclicInput}
                   onChange={e => setCyclicInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') applyCyclicSpend(); if (e.key === 'Escape') setEditingCyclic(false) }}
-                  placeholder={fmtCLP(cyclicSpend)} autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') applyCyclicDefault(); if (e.key === 'Escape') setEditingCyclic(false) }}
+                  placeholder={fmtCLP(defaultCyclicSpend)} autoFocus
                   className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
                 />
-                <button onClick={applyCyclicSpend} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                <button onClick={applyCyclicDefault} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
                 <button onClick={() => setEditingCyclic(false)}><Icon name="x" size={11}/></button>
               </span>
             ) : (
               <button onClick={() => { setCyclicInput(''); setEditingCyclic(true) }}
                 className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
-                <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(cyclicSpend)}</strong>
-                {cyclicSpend !== 370000 && (
+                <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(defaultCyclicSpend)}</strong>
+                {defaultCyclicSpend !== 370000 && (
+                  <span className="text-[10px] px-1 py-0.5 rounded"
+                    style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
+                )}
+                <Icon name="pencil" size={11}/>
+              </button>
+            )}
+          </div>
+
+          {/* Débito MP default */}
+          <div className="inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
+            <span style={{ color: '#9ba5c2', fontSize: 13 }}>💳</span>
+            <span>Débito MP:</span>
+            {editingDebitoHeader ? (
+              <span className="flex items-center gap-1.5">
+                <input type="text" inputMode="numeric" value={debitoHeaderInput}
+                  onChange={e => setDebitoHeaderInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') applyDebitoHeader(); if (e.key === 'Escape') setEditingDebitoHeader(false) }}
+                  placeholder={fmtCLP(defaultDebitoMP)} autoFocus
+                  className="w-24 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+                />
+                <button onClick={applyDebitoHeader} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                <button onClick={() => setEditingDebitoHeader(false)}><Icon name="x" size={11}/></button>
+              </span>
+            ) : (
+              <button onClick={() => { setDebitoHeaderInput(''); setEditingDebitoHeader(true) }}
+                className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
+                <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(defaultDebitoMP)}</strong>
+                {defaultDebitoMP !== 50000 && (
                   <span className="text-[10px] px-1 py-0.5 rounded"
                     style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
                 )}
@@ -1080,10 +1103,10 @@ export default function Projection({
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-[15px]">
           <div className="text-[9.5px] font-bold tracking-[0.09em] uppercase text-[var(--muted)] mb-1.5 flex items-center gap-[5px]">
             <span className="w-[6px] h-[6px] rounded-full bg-[var(--accent)] shrink-0"/>
-            {MES[months[1].m]} esperado
+            {MES[months[0].m]} esperado
           </div>
           <div className="text-[24px] font-extrabold text-[var(--ink)] tabular-nums tracking-tight leading-none">
-            {fmtCLP(dispBal(months[1]))}
+            {fmtCLP(dispBal(months[0]))}
           </div>
           <div className="text-[10.5px] text-[var(--muted)] mt-[5px]">después de pagos</div>
         </div>
@@ -1175,14 +1198,33 @@ export default function Projection({
                     <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.recurring)}</span>
                   </div>
                 )}
-                {mo.debitoMP > 0 && (
-                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
-                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
-                      <span className="w-2 h-2 rounded-full shrink-0 bg-[#9ba5c2]"/>Débito/efectivo est.
+                <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                  <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                    <span className="w-2 h-2 rounded-full shrink-0 bg-[#9ba5c2]"/>Débito/efectivo est.
+                    {debitoOverrides[mo.key] != null && (
+                      <span className="text-[10px] px-1 py-0.5 rounded"
+                        style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>mes</span>
+                    )}
+                  </span>
+                  {editingDebitoMonth === mo.key ? (
+                    <span className="flex items-center gap-1.5">
+                      <input type="text" inputMode="numeric" value={debitoMonthInput}
+                        onChange={e => setDebitoMonthInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') applyDebitoMonth(mo.key); if (e.key === 'Escape') setEditingDebitoMonth(null) }}
+                        placeholder={fmtCLP(mo.debitoMP)} autoFocus
+                        className="w-24 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+                      />
+                      <button onClick={() => applyDebitoMonth(mo.key)} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                      <button onClick={() => setEditingDebitoMonth(null)}><Icon name="x" size={11}/></button>
                     </span>
-                    <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.debitoMP)}</span>
-                  </div>
-                )}
+                  ) : (
+                    <button onClick={() => { setDebitoMonthInput(''); setEditingDebitoMonth(mo.key) }}
+                      className="flex items-center gap-1.5 hover:opacity-75 transition">
+                      <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.debitoMP)}</span>
+                      <Icon name="pencil" size={10} className="text-[var(--muted)]"/>
+                    </button>
+                  )}
+                </div>
                 {mo.recurringCommissions > 0 && (
                   <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]" style={{ opacity: 0.6 }}>
                     <span className="flex items-center gap-2 text-[12px] text-[var(--muted)] italic">

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Icon, fmtCLP } from '../lib/helpers'
-import { PAYMENT_METHODS } from '../data'
+import { PAYMENT_METHODS, CATEGORIES } from '../data'
 import { useBanks } from '../services/banksService'
-import { useCategories } from '../services/categoriesService'
 
 // ── Chevron SVG ───────────────────────────────────────────────
 function Chevron({ color = '#9ba5c2' }) {
@@ -85,14 +84,13 @@ function TogBtn({ active, onClick, children }) {
 
 // ── Main modal ────────────────────────────────────────────────
 export default function ExpenseModal({ expense, onClose, onSave }) {
-  const banks      = useBanks()
-  const categories = useCategories()
+  const banks = useBanks()
   const [form, setForm] = useState(expense)
   useEffect(() => { setForm(expense) }, [expense])
   if (!expense) return null
 
-  const isNew    = expense.id === null
-  const cat      = categories.find(c => c.id === form.category) ?? categories.find(c => c.id === 'otros') ?? categories[0]
+  const isNew = expense.id === null
+  const cat   = CATEGORIES.find(c => c.id === form.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0]
   const setF     = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const dateInput = new Date(form.date).toISOString().slice(0, 16)
 
@@ -158,7 +156,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
             <div>
               <FieldLabel>Categoría</FieldLabel>
               <StyledSelect value={form.category} onChange={v => setF('category', v)}>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
               </StyledSelect>
             </div>
             <div>
