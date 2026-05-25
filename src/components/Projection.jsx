@@ -6,12 +6,18 @@ import { useCategories } from '../services/categoriesService'
 import { useBanks } from '../services/banksService'
 
 // ── Persistence ────────────────────────────────────────────────
-const LS_KEY = 'gastito_proj_v1'
-const CC_KEY  = 'gastito_cc_v1'
-const loadItems      = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]') } catch { return [] } }
+const LS_KEY         = 'gastito_proj_v1'
+const CC_KEY         = 'gastito_cc_v1'
+const CYCLIC_KEY     = 'gastito_cyclic_v1'
+const DEBITO_KEY     = 'gastito_debito_v1'
+const loadItems      = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)     || '[]')  } catch { return []  } }
 const saveItems      = items => localStorage.setItem(LS_KEY, JSON.stringify(items))
-const loadStatements = () => { try { return JSON.parse(localStorage.getItem(CC_KEY)  || '[]') } catch { return [] } }
+const loadStatements = () => { try { return JSON.parse(localStorage.getItem(CC_KEY)     || '[]')  } catch { return []  } }
 const saveStatements = stmts => localStorage.setItem(CC_KEY, JSON.stringify(stmts))
+const loadCyclic     = () => { try { return JSON.parse(localStorage.getItem(CYCLIC_KEY) || '{}')  } catch { return {}  } }
+const saveCyclic     = v   => localStorage.setItem(CYCLIC_KEY, JSON.stringify(v))
+const loadDebito     = () => { try { return JSON.parse(localStorage.getItem(DEBITO_KEY) || '{}')  } catch { return {}  } }
+const saveDebito     = v   => localStorage.setItem(DEBITO_KEY, JSON.stringify(v))
 
 // ── Math ───────────────────────────────────────────────────────
 function mDiff(a, b) {
@@ -30,41 +36,78 @@ function mkKey(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}` }
 // "Cuotas de crédito" = installmentDebts (compras en cuotas) +
 //                       creditStatements (facturaciones tarjeta mensual)
 // Both are controlled by sw.cuotas.
+//
+// Recurrentes con comisionBancaria=true o type='credito' se excluyen del
+// cálculo de egresos para evitar doble conteo con la facturación tarjeta.
+// cyclicSpend = contado CMR del ciclo anterior (cae íntegro en factura siguiente)
+// debitoMP    = estimado débito/efectivo misceláneos
 function computeMonths({
   startBalance,
-  incomeItems      = [],
-  receivables      = [],
-  payables         = [],
-  recurringItems   = [],
-  installmentDebts = [],
-  creditStatements = [],
-  projectedItems   = [],
-  sw               = {},
+  incomeItems          = [],
+  receivables          = [],
+  payables             = [],
+  recurringItems       = [],
+  installmentDebts     = [],
+  creditStatements     = [],
+  projectedItems       = [],
+  expenses             = [],
+  defaultCyclicSpend   = 370000,
+  cyclicSpendOverrides = {},
+  defaultDebitoMP      = 50000,
+  debitoOverrides      = {},
+  sw                   = {},
 }) {
-  const today    = new Date()
-  const todayDay = today.getDate()
-  const active   = projectedItems.filter(i => i.active)
+  const today  = new Date()
+  const active = projectedItems.filter(i => i.active)
   let balC = startBalance
   let balE = startBalance
   let balS = startBalance
 
-  return [0, 1, 2].map(offset => {
-    const d         = new Date(today.getFullYear(), today.getMonth() + offset, 1)
-    const y         = d.getFullYear()
-    const m         = d.getMonth()
-    const mk        = mkKey(y, m)
-    const isCurrent = offset === 0
+  // Proyección arranca siempre en el mes siguiente al actual
+  return [1, 2, 3, 4, 5, 6].map(offset => {
+    const d  = new Date(today.getFullYear(), today.getMonth() + offset, 1)
+    const y  = d.getFullYear()
+    const m  = d.getMonth()
+    const mk = mkKey(y, m)
+
+    // Contado ciclo: mes proyectado N usa el contado real de Falabella del mes N-1
+    const prevD           = new Date(y, m - 1, 1)
+    const prevY           = prevD.getFullYear()
+    const prevM           = prevD.getMonth()
+    const autoContado     = calcContadoFalabella(expenses, prevY, prevM)
+    const cyclicExpenses  = autoContado > 0
+      ? expenses.filter(e => {
+          const d = new Date(e.date)
+          return d.getFullYear() === prevY && d.getMonth() === prevM
+              && e.type === 'credito' && (e.installments ?? 1) <= 1 && e.bank === 'falabella'
+        })
+      : []
+    const cyclicSpendAuto = autoContado > 0 ? autoContado : defaultCyclicSpend
+    const cyclicSpend     = cyclicSpendOverrides[mk] ?? cyclicSpendAuto
+    const cyclicSource    = cyclicSpendOverrides[mk] != null ? 'manual'
+                          : autoContado > 0             ? 'calculado'
+                          :                               'estimado'
+    const debitoMP        = debitoOverrides[mk] ?? defaultDebitoMP
 
     // ── Recurring expenses (startDate/endDate aware) ────────────
+    // comisionBancaria=true → solo visual, excluido del cálculo (doble conteo con facturación)
+    // type='credito' → ya capturado dentro del contado CMR, excluir también
     const recurringDetail = []
+    const recurringCommissionDetail = []
     for (const r of recurringItems) {
       if (r.kind !== 'expense' || r.active === false) continue
       if (r.startDate && r.startDate.slice(0, 7) > mk) continue
       if (r.endDate   && r.endDate.slice(0, 7)   < mk) continue
-      if (isCurrent && r.dayOfMonth != null && Number(r.dayOfMonth) <= todayDay) continue
-      recurringDetail.push({ item: r, amount: r.amount || 0 })
+      const isComision   = r.comisionBancaria === true
+      const isCreditCard = r.type === 'credito'
+      if (isComision) {
+        recurringCommissionDetail.push({ item: r, amount: r.amount || 0 })
+      } else if (!isCreditCard) {
+        recurringDetail.push({ item: r, amount: r.amount || 0 })
+      }
     }
-    const recurring = recurringDetail.reduce((s, x) => s + x.amount, 0)
+    const recurring            = recurringDetail.reduce((s, x) => s + x.amount, 0)
+    const recurringCommissions = recurringCommissionDetail.reduce((s, x) => s + x.amount, 0)
 
     // ── Income ──────────────────────────────────────────────────
     const incomeDetail = []
@@ -72,22 +115,17 @@ function computeMonths({
       if (r.active === false) continue
       if (r.startDate && r.startDate.slice(0, 7) > mk) continue
       if (r.endDate   && r.endDate.slice(0, 7)   < mk) continue
-      if (isCurrent && r.dayOfMonth != null && Number(r.dayOfMonth) <= todayDay) continue
       incomeDetail.push({ item: r, amount: r.amount || 0 })
     }
     const income = incomeDetail.reduce((s, x) => s + x.amount, 0)
 
-    // ── Receivables (current month only) ───────────────────────
-    const recvDetail = isCurrent
-      ? receivables.filter(r => r.status !== 'paid').map(r => ({ item: r, amount: r.amount || 0 }))
-      : []
-    const recvAmt = recvDetail.reduce((s, x) => s + x.amount, 0)
+    // ── Receivables ─────────────────────────────────────────────
+    const recvDetail = receivables.filter(r => r.status !== 'paid').map(r => ({ item: r, amount: r.amount || 0 }))
+    const recvAmt    = recvDetail.reduce((s, x) => s + x.amount, 0)
 
-    // ── Payables (current month only) ──────────────────────────
-    const payDetail = isCurrent
-      ? payables.filter(p => p.status !== 'paid').map(p => ({ item: p, amount: p.amount || 0 }))
-      : []
-    const payAmt = payDetail.reduce((s, x) => s + x.amount, 0)
+    // ── Payables ────────────────────────────────────────────────
+    const payDetail = payables.filter(p => p.status !== 'paid').map(p => ({ item: p, amount: p.amount || 0 }))
+    const payAmt    = payDetail.reduce((s, x) => s + x.amount, 0)
 
     // ── Installment cuotas (compras en cuotas) ─────────────────
     // installmentNum added for display in the drawer
@@ -96,7 +134,6 @@ function computeMonths({
       if (debt.status !== 'active' || !debt.startMonth) continue
       const el = mDiff(debt.startMonth, mk)
       if (el < 0 || el >= debt.installments) continue
-      if (isCurrent && debt.dayOfMonth != null && Number(debt.dayOfMonth) <= todayDay) continue
       cuotasDetail.push({ item: debt, amount: debt.monthlyAmount || 0, installmentNum: el + 1 })
     }
     const cuotas = cuotasDetail.reduce((s, x) => s + x.amount, 0)
@@ -132,56 +169,31 @@ function computeMonths({
     const effPay    = sw.payables    ?           payAmt     : 0
     const effCuotas = sw.cuotas      !== false ? cuotasTotal : 0
     const effSim    = sw.sim         !== false ? projOut    : 0
-    const effOut    = recurring + effCuotas + effPay
+    const effOut    = recurring + cyclicSpend + debitoMP + effCuotas + effPay
 
     const newBalC = balC - effOut
     const newBalE = balE + income + effRecv - effOut
     const newBalS = balS + income + effRecv - effOut - effSim
 
-    // ── Diagnostic logs ─────────────────────────────────────────
-    const itemsExcluidos = recurringItems.filter(r =>
-      r.kind === 'expense' && r.active !== false &&
-      !recurringDetail.some(x => x.item.id === r.id)
-    ).map(r => ({
-      name: r.name,
-      reason: (r.startDate?.slice(0, 7) > mk)
-        ? `startDate ${r.startDate.slice(0, 7)} > ${mk}`
-        : (r.endDate?.slice(0, 7) < mk)
-        ? `endDate ${r.endDate.slice(0, 7)} < ${mk}`
-        : `día ${r.dayOfMonth} ya pasó (hoy: ${todayDay})`,
-    }))
-    console.log('[projection:recurrentes]', {
-      periodo: mk, isCurrent,
-      itemsIncluidos: recurringDetail.map(x => ({ name: x.item.name, amount: x.amount })),
-      itemsExcluidos,
-      total: recurring,
-    })
-    console.log('[projection:cuotas_credito]', {
-      periodo: mk,
-      cuotasIncluidas: [
-        ...cuotasDetail.map(x => ({ type: 'cuota', nombre: x.item.description, cuotaNum: x.installmentNum, total: x.item.installments, amount: x.amount })),
-        ...ccDetail.map(x => ({ type: 'facturacion', card: x.item.cardName, amount: x.amount })),
-      ],
-      totalCuotas: cuotasTotal,
-      switchCuotasActivo: sw.cuotas !== false,
-    })
     console.log('[projection:resumen]', {
       periodo: mk,
-      ...(offset === 0 ? { saldoBase: startBalance } : {}),
+      ...(offset === 1 ? { saldoBase: startBalance } : {}),
       ingresosIncluidos: income + effRecv,
       gastosIncluidos: effOut,
       cuotasIncluidas: effCuotas,
       simulacionesIncluidas: effSim,
-      saldoFinalConservador: newBalC,
       saldoFinalEsperado: newBalE,
     })
 
     const row = {
-      key: mk, y, m, offset, isCurrent,
+      key: mk, y, m, offset,
       income, recvAmt, payAmt, recurring,
+      recurringDetail, recurringCommissions, recurringCommissionDetail,
+      cyclicSpend, cyclicSource, cyclicExpenses, prevY, prevM, defaultCyclicSpend,
+      debitoMP,
       cuotas, cuotasDetail,
       ccTotal, ccDetail, cuotasTotal,
-      incomeDetail, recvDetail, payDetail, recurringDetail,
+      incomeDetail, recvDetail, payDetail,
       projOut, projBreakdown,
       balConservative: newBalC,
       balExpected:     newBalE,
@@ -206,7 +218,7 @@ const VC = {
   rojo:     { label: 'No recomendado',    bg: '#FFF0EE',            color: '#C0392B',            icon: 'alert' },
 }
 
-const PERIOD_LABELS = ['Este mes', 'Próximo mes', '3er mes']
+const PERIOD_LABELS = ['Próximo mes', '2do mes', '3er mes']
 const mkBlank = () => ({
   id: null, name: '', amount: '', category: 'otros',
   date: new Date().toISOString().slice(0, 10),
@@ -442,12 +454,7 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
     return                        { label: 'pendiente', color: 'var(--amber-ink)',  bg: 'var(--amber-soft)'  }
   }
 
-  const debtStatus = x => {
-    if (!period.isCurrent) return { label: 'próxima',  color: 'var(--muted)',      bg: 'var(--line)'        }
-    const dom = Number(x.item.dayOfMonth)
-    if (!dom || dom > todayDay) return { label: 'pendiente', color: 'var(--amber-ink)', bg: 'var(--amber-soft)'  }
-    return                             { label: 'cobrado',   color: 'var(--accent-ink)', bg: 'var(--accent-soft)' }
-  }
+  const debtStatus = () => ({ label: 'próxima', color: 'var(--muted)', bg: 'var(--line)' })
 
   return (
     <div className="fixed inset-0 z-50 flex md:items-stretch items-end justify-end">
@@ -637,6 +644,221 @@ function CuotasModal({ period, banks, allStatements, onClose, onAddStatement, on
   )
 }
 
+// ── Shared slide drawer shell ──────────────────────────────────
+function SlideDrawer({ title, subtitle, total, totalLabel = 'Total', onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex md:items-stretch items-end justify-end">
+      <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" onClick={onClose}/>
+      <div className="relative w-full md:max-w-[460px]
+                      max-h-[85vh] md:max-h-none md:h-full
+                      bg-[var(--bg-elev)] border-l border-[var(--line)]
+                      rounded-t-2xl md:rounded-none flex flex-col overflow-hidden"
+           style={{ animation: 'slideUp .2s ease-out' }}>
+        <div className="shrink-0 bg-[var(--bg-elev)] border-b border-[var(--line)] px-5 py-3.5 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{title}</div>
+            {subtitle && <div className="font-semibold tracking-tight">{subtitle}</div>}
+            {total != null && (
+              <div className="text-[11px] font-mono text-[var(--muted)] mt-0.5">{totalLabel}: −{fmtCLP(total)}</div>
+            )}
+          </div>
+          <button onClick={onClose} className="w-9 h-9 grid place-items-center rounded-md border border-[var(--line)] hover:bg-[var(--hover)]">
+            <Icon name="x" size={16}/>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Detail row inside a drawer ─────────────────────────────────
+function DrawerRow({ label, sub, amount, sign = '−', amountColor = 'var(--ink-2)', badge }) {
+  return (
+    <div className="rounded-lg border border-[var(--line)] px-3.5 py-2.5 flex items-center gap-2.5">
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-medium truncate flex items-center gap-1.5">
+          {label}
+          {badge && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
+              style={{ background: badge.bg, color: badge.color }}>{badge.text}</span>
+          )}
+        </div>
+        {sub && <div className="text-[11px] text-[var(--muted)] mt-0.5">{sub}</div>}
+      </div>
+      <div className="font-mono text-[13px] font-semibold tabular-nums shrink-0" style={{ color: amountColor }}>
+        {sign}{fmtCLP(amount)}
+      </div>
+    </div>
+  )
+}
+
+function DrawerTotal({ label, amount, sign = '−' }) {
+  return (
+    <div className="rounded-lg bg-[var(--bg)] border border-[var(--line)] px-3.5 py-2.5 flex items-center justify-between">
+      <span className="text-[12px] text-[var(--muted)]">{label}</span>
+      <span className="font-mono text-[14px] font-semibold">{sign}{fmtCLP(amount)}</span>
+    </div>
+  )
+}
+
+// ── Contado ciclo modal ─────────────────────────────────────────
+function ContadoModal({ period, onClose }) {
+  const prevLabel = `${MES[period.prevM]} ${period.prevY}`
+  const isCalc    = period.cyclicSource === 'calculado'
+  const isManual  = period.cyclicSource === 'manual'
+
+  return (
+    <SlideDrawer
+      title="Contado ciclo anterior"
+      subtitle={`${MES[period.m]} ${period.y} — ${period.cyclicSource}`}
+      total={period.cyclicSpend}
+      onClose={onClose}
+    >
+      {isCalc ? (
+        <>
+          <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] flex items-center gap-1.5">
+            <Icon name="card" size={12}/> Crédito Falabella · {prevLabel} ({period.cyclicExpenses.length} gastos)
+          </div>
+          {period.cyclicExpenses.length > 0 ? (
+            period.cyclicExpenses
+              .slice()
+              .sort((a, b) => b.amount - a.amount)
+              .map((e, i) => (
+                <DrawerRow key={i}
+                  label={e.description || 'Sin descripción'}
+                  sub={new Date(e.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
+                  amount={e.amount}
+                />
+              ))
+          ) : (
+            <div className="text-[13px] text-[var(--muted)] text-center py-4">Sin gastos registrados</div>
+          )}
+          <DrawerTotal label="Total calculado" amount={period.cyclicSpend}/>
+        </>
+      ) : (
+        <>
+          <div className="rounded-lg border border-[var(--line)] p-3.5 text-[13px] text-[var(--muted)] leading-relaxed flex items-start gap-2">
+            <Icon name="info" size={14} className="mt-px shrink-0"/>
+            <div>
+              {isManual
+                ? <>Valor <strong className="text-[var(--ink)]">ingresado manualmente</strong> de {fmtCLP(period.cyclicSpend)}. Usa el lápiz en el header para cambiar el estimado global o el de este mes.</>
+                : <>Basado en el estimado configurado (<strong className="text-[var(--ink)]">{fmtCLP(period.defaultCyclicSpend)}</strong>). No hay gastos de crédito Falabella registrados en {prevLabel}. Registra tus gastos para ver el cálculo real.</>
+              }
+            </div>
+          </div>
+          <DrawerTotal label={isManual ? 'Valor manual' : 'Estimado por defecto'} amount={period.cyclicSpend}/>
+        </>
+      )}
+    </SlideDrawer>
+  )
+}
+
+// ── Recurrentes modal ───────────────────────────────────────────
+function RecurrentesModal({ period, onClose }) {
+  return (
+    <SlideDrawer
+      title="Recurrentes fijos"
+      subtitle={`${MES[period.m]} ${period.y}`}
+      total={period.recurring}
+      onClose={onClose}
+    >
+      <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] flex items-center gap-1.5">
+        <Icon name="repeat" size={12}/> Gastos recurrentes activos ({period.recurringDetail.length})
+      </div>
+      {period.recurringDetail.length > 0 ? (
+        period.recurringDetail
+          .slice()
+          .sort((a, b) => (a.item.dayOfMonth ?? 99) - (b.item.dayOfMonth ?? 99))
+          .map((x, i) => (
+            <DrawerRow key={i}
+              label={x.item.name}
+              sub={x.item.dayOfMonth != null ? `día ${x.item.dayOfMonth}` : undefined}
+              amount={x.amount}
+            />
+          ))
+      ) : (
+        <div className="text-[13px] text-[var(--muted)] text-center py-4">Sin recurrentes para este período</div>
+      )}
+      <DrawerTotal label="Total recurrentes" amount={period.recurring}/>
+    </SlideDrawer>
+  )
+}
+
+// ── Débito modal ────────────────────────────────────────────────
+function DebitoModal({ period, defaultDebitoMP, debitoOverrides, onClose, onEditHeader, onEditMonth }) {
+  const hasOverride = debitoOverrides[period.key] != null
+  return (
+    <SlideDrawer
+      title="Débito / Efectivo estimado"
+      subtitle={`${MES[period.m]} ${period.y}`}
+      total={period.debitoMP}
+      onClose={onClose}
+    >
+      <DrawerRow
+        label="Valor general configurado"
+        sub="Aplica a todos los meses sin override"
+        amount={defaultDebitoMP}
+        amountColor="var(--muted)"
+      />
+      <DrawerRow
+        label={hasOverride ? 'Override este mes' : 'Override este mes'}
+        sub={hasOverride ? 'Valor específico para este mes' : 'Sin override — usa el valor general'}
+        amount={hasOverride ? debitoOverrides[period.key] : defaultDebitoMP}
+        amountColor={hasOverride ? 'var(--amber-ink)' : 'var(--muted)'}
+        badge={hasOverride ? { text: 'mes', bg: 'var(--amber-soft)', color: 'var(--amber-ink)' } : undefined}
+      />
+      <DrawerTotal label="Total aplicado este mes" amount={period.debitoMP}/>
+      <div className="flex gap-2 pt-1">
+        <button onClick={() => { onClose(); onEditHeader() }}
+          className="flex-1 h-9 rounded-lg border border-[var(--line)] text-[12px] font-medium text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--hover)] transition">
+          Editar valor general
+        </button>
+        <button onClick={() => { onClose(); onEditMonth(period.key) }}
+          className="flex-1 h-9 rounded-lg border border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)] text-[12px] font-medium transition hover:opacity-90">
+          Editar este mes
+        </button>
+      </div>
+    </SlideDrawer>
+  )
+}
+
+// ── Comisiones modal ────────────────────────────────────────────
+function ComisionesModal({ period, onClose }) {
+  return (
+    <SlideDrawer
+      title="Comisiones bancarias"
+      subtitle="Solo referencia — no afectan el cálculo"
+      total={period.recurringCommissions}
+      totalLabel="Total ref."
+      onClose={onClose}
+    >
+      <div className="rounded-lg border border-[var(--line)] p-3 text-[11.5px] text-[var(--muted)] leading-snug flex items-start gap-2">
+        <Icon name="info" size={13} className="mt-px shrink-0"/>
+        <span>Estas comisiones ya están incluidas dentro del total de facturación de cada tarjeta. Se muestran aquí solo como referencia visual y <strong className="text-[var(--ink)]">no se suman como egreso</strong> para evitar doble conteo.</span>
+      </div>
+      <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] flex items-center gap-1.5">
+        <Icon name="card" size={12}/> Comisiones fijas ({period.recurringCommissionDetail.length})
+      </div>
+      {period.recurringCommissionDetail.length > 0 ? (
+        period.recurringCommissionDetail.map((x, i) => (
+          <DrawerRow key={i}
+            label={x.item.name}
+            sub={x.item.bank ? undefined : undefined}
+            amount={x.amount}
+            amountColor="var(--muted)"
+          />
+        ))
+      ) : (
+        <div className="text-[13px] text-[var(--muted)] text-center py-4">Sin comisiones registradas</div>
+      )}
+      <DrawerTotal label="Total referencia (no impacta saldo)" amount={period.recurringCommissions}/>
+    </SlideDrawer>
+  )
+}
+
 // ── Projected expense modal ────────────────────────────────────
 function ProjModal({ item, onClose, onSave }) {
   const categories = useCategories()
@@ -772,7 +994,7 @@ function ProjModal({ item, onClose, onSave }) {
 function ProjItem({ item, cat, impact, activePeriod, period, onToggle, onDelete, onEdit }) {
   const itemDate = new Date(item.date)
   const monthly  = item.installments > 1 ? Math.round(item.amount / item.installments) : null
-  const pName    = activePeriod === 0 ? 'este mes' : activePeriod === 1 ? 'el próx. mes' : `en ${MES[period?.m]}`
+  const pName    = activePeriod === 0 ? 'el próx. mes' : activePeriod === 1 ? 'en 2 meses' : `en ${MES[period?.m]}`
 
   return (
     <div className={`flex items-start gap-[11px] px-4 py-[13px] ${!item.active ? 'opacity-55' : ''}`}>
@@ -836,6 +1058,20 @@ function KpiCard({ label, bal, sub, dotCls }) {
 }
 
 // ── Main ───────────────────────────────────────────────────────
+// Calcula el contado real de crédito Falabella (1 cuota) en un mes dado
+function calcContadoFalabella(expenses, year, month) {
+  return expenses
+    .filter(e => {
+      const d = new Date(e.date)
+      return d.getFullYear() === year
+          && d.getMonth()    === month
+          && e.type          === 'credito'
+          && (e.installments ?? 1) <= 1
+          && e.bank          === 'falabella'
+    })
+    .reduce((s, e) => s + (e.amount || 0), 0)
+}
+
 export default function Projection({
   accounts         = [],
   recurringList    = [],
@@ -843,19 +1079,31 @@ export default function Projection({
   receivables      = [],
   payables         = [],
   installmentDebts = [],
+  expenses         = [],
 }) {
   const categories = useCategories()
   const banks      = useBanks()
 
-  const [items,          setItems]          = useState(loadItems)
-  const [statements,     setStatements]     = useState(loadStatements)
-  const [editItem,       setEditItem]       = useState(null)
-  const [cuotasModal,    setCuotasModal]    = useState(false)
-  const [activePeriod,   setActivePeriod]   = useState(1)
-  const [baseOverride,   setBaseOverride]   = useState(null)
-  const [editingBase,    setEditingBase]    = useState(false)
-  const [baseInput,      setBaseInput]      = useState('')
-  const [openSection,    setOpenSection]    = useState(null)
+  const [items,                setItems]              = useState(loadItems)
+  const [statements,           setStatements]         = useState(loadStatements)
+  const [editItem,             setEditItem]           = useState(null)
+  const [cuotasModal,          setCuotasModal]        = useState(false)
+  const [activePeriod,         setActivePeriod]       = useState(0)
+  const [baseOverride,         setBaseOverride]       = useState(null)
+  const [editingBase,          setEditingBase]        = useState(false)
+  const [baseInput,            setBaseInput]          = useState('')
+  const [openSection,          setOpenSection]        = useState(null)
+  const [defaultCyclicSpend,   setDefaultCyclicSpend] = useState(370000)
+  const [cyclicSpendOverrides, setCyclicSpendOverrides] = useState(loadCyclic)
+  const [editingCyclic,        setEditingCyclic]      = useState(false)
+  const [cyclicInput,          setCyclicInput]        = useState('')
+  const [defaultDebitoMP,      setDefaultDebitoMP]    = useState(50000)
+  const [debitoOverrides,      setDebitoOverrides]    = useState(loadDebito)
+  const [editingDebitoHeader,  setEditingDebitoHeader] = useState(false)
+  const [debitoHeaderInput,    setDebitoHeaderInput]  = useState('')
+  const [editingDebitoMonth,   setEditingDebitoMonth] = useState(null)
+  const [debitoMonthInput,     setDebitoMonthInput]   = useState('')
+  const [detailModal,          setDetailModal]        = useState(null) // { type, period }
   const [sw, setSw] = useState({ receivables: true, payables: false, cuotas: true, sim: true })
   const toggleSw = k => setSw(p => ({ ...p, [k]: !p[k] }))
 
@@ -873,16 +1121,21 @@ export default function Projection({
   const months = useMemo(() =>
     computeMonths({
       startBalance,
-      incomeItems:      incomeList,
+      incomeItems:          incomeList,
       receivables,
       payables,
-      recurringItems:   recurringList,
+      recurringItems:       recurringList,
       installmentDebts,
-      creditStatements: statements,
-      projectedItems:   items,
+      creditStatements:     statements,
+      projectedItems:       items,
+      expenses,
+      defaultCyclicSpend,
+      cyclicSpendOverrides,
+      defaultDebitoMP,
+      debitoOverrides,
       sw,
     })
-  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, statements, items, sw])
+  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, statements, items, expenses, defaultCyclicSpend, cyclicSpendOverrides, defaultDebitoMP, debitoOverrides, sw])
 
   const period  = months[activePeriod]
   const dispBal = mo => (mo.hasSim && sw.sim !== false) ? mo.balSim : mo.balExpected
@@ -891,7 +1144,7 @@ export default function Projection({
   const vc = VC[v]
 
   const recText = period ? (() => {
-    const pName = activePeriod === 0 ? 'este mes' : activePeriod === 1 ? 'el próximo mes' : `en ${MES[period.m]}`
+    const pName = activePeriod === 0 ? 'el próximo mes' : activePeriod === 1 ? 'en 2 meses' : `en ${MES[period.m]}`
     const bal   = dispBal(period)
     if (!period.hasSim || sw.sim === false)
       return `Sin gastos simulados activos, proyectas terminar ${pName} con ${fmtCLP(bal)}.`
@@ -922,7 +1175,32 @@ export default function Projection({
     setEditingBase(false)
   }
   const resetBaseOverride = () => { setBaseOverride(null); setEditingBase(false) }
-  const toggleSection     = s => setOpenSection(p => p === s ? null : s)
+
+  const applyCyclicDefault = () => {
+    const val = Number(String(cyclicInput).replace(/[^0-9]/g, ''))
+    if (!isNaN(val) && val >= 0) setDefaultCyclicSpend(val)
+    setEditingCyclic(false)
+  }
+
+  const applyDebitoHeader = () => {
+    const val = Number(String(debitoHeaderInput).replace(/[^0-9]/g, ''))
+    if (!isNaN(val) && val >= 0) setDefaultDebitoMP(val)
+    setEditingDebitoHeader(false)
+  }
+
+  const applyDebitoMonth = (mk) => {
+    const val = Number(String(debitoMonthInput).replace(/[^0-9]/g, ''))
+    const next = { ...debitoOverrides }
+    if (!isNaN(val) && val >= 0) {
+      if (val === 0) delete next[mk]
+      else next[mk] = val
+    }
+    setDebitoOverrides(next)
+    saveDebito(next)
+    setEditingDebitoMonth(null)
+  }
+
+  const toggleSection = s => setOpenSection(p => p === s ? null : s)
 
   const showRecvWarning = sw.receivables !== false && (months[0]?.recvAmt ?? 0) > 0
 
@@ -944,32 +1222,91 @@ export default function Projection({
           </button>
         </div>
 
-        {/* Saldo base editable */}
-        <div className="mt-3 inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
-          <Icon name="info" size={13}/>
-          <span>Saldo base:</span>
-          {editingBase ? (
-            <span className="flex items-center gap-1.5">
-              <input type="text" inputMode="numeric" value={baseInput}
-                onChange={e => setBaseInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') applyBaseOverride(); if (e.key === 'Escape') resetBaseOverride() }}
-                placeholder={fmtCLP(usableBalance)} autoFocus
-                className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
-              />
-              <button onClick={applyBaseOverride} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
-              <button onClick={resetBaseOverride}><Icon name="x" size={11}/></button>
-            </span>
-          ) : (
-            <button onClick={() => { setBaseInput(''); setEditingBase(true) }}
-              className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
-              <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(startBalance)}</strong>
-              {baseOverride != null && (
-                <span className="text-[10px] px-1 py-0.5 rounded"
-                  style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
-              )}
-              <Icon name="pencil" size={11}/>
-            </button>
-          )}
+        {/* Controles: saldo base, contado CMR, débito MP */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {/* Saldo base */}
+          <div className="inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
+            <Icon name="info" size={13}/>
+            <span>Saldo base:</span>
+            {editingBase ? (
+              <span className="flex items-center gap-1.5">
+                <input type="text" inputMode="numeric" value={baseInput}
+                  onChange={e => setBaseInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') applyBaseOverride(); if (e.key === 'Escape') resetBaseOverride() }}
+                  placeholder={fmtCLP(usableBalance)} autoFocus
+                  className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+                />
+                <button onClick={applyBaseOverride} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                <button onClick={resetBaseOverride}><Icon name="x" size={11}/></button>
+              </span>
+            ) : (
+              <button onClick={() => { setBaseInput(''); setEditingBase(true) }}
+                className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
+                <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(startBalance)}</strong>
+                {baseOverride != null && (
+                  <span className="text-[10px] px-1 py-0.5 rounded"
+                    style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
+                )}
+                <Icon name="pencil" size={11}/>
+              </button>
+            )}
+          </div>
+
+          {/* Contado CMR default */}
+          <div className="inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
+            <span style={{ color: '#e67e22', fontSize: 13 }}>⊕</span>
+            <span>Contado CMR:</span>
+            {editingCyclic ? (
+              <span className="flex items-center gap-1.5">
+                <input type="text" inputMode="numeric" value={cyclicInput}
+                  onChange={e => setCyclicInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') applyCyclicDefault(); if (e.key === 'Escape') setEditingCyclic(false) }}
+                  placeholder={fmtCLP(defaultCyclicSpend)} autoFocus
+                  className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+                />
+                <button onClick={applyCyclicDefault} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                <button onClick={() => setEditingCyclic(false)}><Icon name="x" size={11}/></button>
+              </span>
+            ) : (
+              <button onClick={() => { setCyclicInput(''); setEditingCyclic(true) }}
+                className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
+                <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(defaultCyclicSpend)}</strong>
+                {defaultCyclicSpend !== 370000 && (
+                  <span className="text-[10px] px-1 py-0.5 rounded"
+                    style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
+                )}
+                <Icon name="pencil" size={11}/>
+              </button>
+            )}
+          </div>
+
+          {/* Débito MP default */}
+          <div className="inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
+            <span style={{ color: '#9ba5c2', fontSize: 13 }}>💳</span>
+            <span>Débito MP:</span>
+            {editingDebitoHeader ? (
+              <span className="flex items-center gap-1.5">
+                <input type="text" inputMode="numeric" value={debitoHeaderInput}
+                  onChange={e => setDebitoHeaderInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') applyDebitoHeader(); if (e.key === 'Escape') setEditingDebitoHeader(false) }}
+                  placeholder={fmtCLP(defaultDebitoMP)} autoFocus
+                  className="w-24 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+                />
+                <button onClick={applyDebitoHeader} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                <button onClick={() => setEditingDebitoHeader(false)}><Icon name="x" size={11}/></button>
+              </span>
+            ) : (
+              <button onClick={() => { setDebitoHeaderInput(''); setEditingDebitoHeader(true) }}
+                className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
+                <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(defaultDebitoMP)}</strong>
+                {defaultDebitoMP !== 50000 && (
+                  <span className="text-[10px] px-1 py-0.5 rounded"
+                    style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
+                )}
+                <Icon name="pencil" size={11}/>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1016,10 +1353,10 @@ export default function Projection({
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-[15px]">
           <div className="text-[9.5px] font-bold tracking-[0.09em] uppercase text-[var(--muted)] mb-1.5 flex items-center gap-[5px]">
             <span className="w-[6px] h-[6px] rounded-full bg-[var(--accent)] shrink-0"/>
-            {MES[months[1].m]} esperado
+            {MES[months[0].m]} esperado
           </div>
           <div className="text-[24px] font-extrabold text-[var(--ink)] tabular-nums tracking-tight leading-none">
-            {fmtCLP(dispBal(months[1]))}
+            {fmtCLP(dispBal(months[0]))}
           </div>
           <div className="text-[10.5px] text-[var(--muted)] mt-[5px]">después de pagos</div>
         </div>
@@ -1030,10 +1367,12 @@ export default function Projection({
         <div className="flex items-center justify-between mb-3 px-0.5">
           <span className="text-[11px] font-bold text-[var(--muted)] uppercase tracking-[0.08em]">Próximo ciclo de pago</span>
         </div>
-        <div className="flex flex-col gap-[10px]">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-[10px]">
           {months.map((mo, i) => {
             const totalIn  = mo.income + (sw.receivables !== false ? mo.recvAmt : 0)
             const totalEg  = mo.recurring
+                           + mo.cyclicSpend
+                           + mo.debitoMP
                            + (sw.cuotas !== false ? mo.cuotasTotal : 0)
                            + (sw.payables         ? mo.payAmt      : 0)
                            + (sw.sim !== false     ? mo.projOut     : 0)
@@ -1093,13 +1432,75 @@ export default function Projection({
                     </button>
                   </div>
                 )}
+                {/* Contado ciclo */}
+                <button type="button" onClick={() => setDetailModal({ type: 'contado', period: mo })}
+                  className="w-full flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)] hover:bg-[var(--hover)] transition text-left">
+                  <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#e67e22' }}/>Contado ciclo ant.
+                    <span className="text-[10px] px-1 py-0.5 rounded"
+                      style={{ background: mo.cyclicSource === 'calculado' ? 'var(--accent-soft)' : 'var(--amber-soft)',
+                               color:      mo.cyclicSource === 'calculado' ? 'var(--accent-ink)'  : 'var(--amber-ink)' }}>
+                      {mo.cyclicSource}
+                    </span>
+                    <Icon name="chevron" size={10} className="text-[var(--muted)]"/>
+                  </span>
+                  <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.cyclicSpend)}</span>
+                </button>
+
+                {/* Recurrentes fijos */}
                 {mo.recurring > 0 && (
-                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                  <button type="button" onClick={() => setDetailModal({ type: 'recurrentes', period: mo })}
+                    className="w-full flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)] hover:bg-[var(--hover)] transition text-left">
                     <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#f97316' }}/>Recurrentes fijos
+                      <Icon name="chevron" size={10} className="text-[var(--muted)]"/>
                     </span>
                     <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.recurring)}</span>
-                  </div>
+                  </button>
+                )}
+
+                {/* Débito / efectivo estimado */}
+                <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                  <button type="button" onClick={() => setDetailModal({ type: 'debito', period: mo })}
+                    className="flex items-center gap-2 text-[13.5px] text-[var(--muted)] hover:text-[var(--ink)] transition">
+                    <span className="w-2 h-2 rounded-full shrink-0 bg-[#9ba5c2]"/>Débito/efectivo est.
+                    {debitoOverrides[mo.key] != null && (
+                      <span className="text-[10px] px-1 py-0.5 rounded"
+                        style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>mes</span>
+                    )}
+                    <Icon name="chevron" size={10} className="text-[var(--muted)]"/>
+                  </button>
+                  {editingDebitoMonth === mo.key ? (
+                    <span className="flex items-center gap-1.5">
+                      <input type="text" inputMode="numeric" value={debitoMonthInput}
+                        onChange={e => setDebitoMonthInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') applyDebitoMonth(mo.key); if (e.key === 'Escape') setEditingDebitoMonth(null) }}
+                        placeholder={fmtCLP(mo.debitoMP)} autoFocus
+                        className="w-24 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+                      />
+                      <button onClick={() => applyDebitoMonth(mo.key)} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                      <button onClick={() => setEditingDebitoMonth(null)}><Icon name="x" size={11}/></button>
+                    </span>
+                  ) : (
+                    <button onClick={() => { setDebitoMonthInput(''); setEditingDebitoMonth(mo.key) }}
+                      className="flex items-center gap-1.5 hover:opacity-75 transition">
+                      <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.debitoMP)}</span>
+                      <Icon name="pencil" size={10} className="text-[var(--muted)]"/>
+                    </button>
+                  )}
+                </div>
+
+                {/* Comisiones bancarias (ref.) */}
+                {mo.recurringCommissions > 0 && (
+                  <button type="button" onClick={() => setDetailModal({ type: 'comisiones', period: mo })}
+                    className="w-full flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)] hover:bg-[var(--hover)] transition text-left"
+                    style={{ opacity: 0.65 }}>
+                    <span className="flex items-center gap-2 text-[12px] text-[var(--muted)] italic">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-[#546E7A]"/>Comisiones bancarias (ref.)
+                      <Icon name="chevron" size={10} className="text-[var(--muted)]"/>
+                    </span>
+                    <span className="text-[12px] tabular-nums font-mono text-[var(--muted)]">−{fmtCLP(mo.recurringCommissions)}</span>
+                  </button>
                 )}
                 {sw.payables && mo.payAmt > 0 && (
                   <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
@@ -1213,6 +1614,26 @@ export default function Projection({
           onDeleteStatement={onDeleteStatement}
           onMarkStatementPaid={onMarkStatementPaid}
         />
+      )}
+
+      {detailModal?.type === 'contado' && (
+        <ContadoModal period={detailModal.period} onClose={() => setDetailModal(null)}/>
+      )}
+      {detailModal?.type === 'recurrentes' && (
+        <RecurrentesModal period={detailModal.period} onClose={() => setDetailModal(null)}/>
+      )}
+      {detailModal?.type === 'debito' && (
+        <DebitoModal
+          period={detailModal.period}
+          defaultDebitoMP={defaultDebitoMP}
+          debitoOverrides={debitoOverrides}
+          onClose={() => setDetailModal(null)}
+          onEditHeader={() => { setDebitoHeaderInput(''); setEditingDebitoHeader(true) }}
+          onEditMonth={mk => { setDebitoMonthInput(''); setEditingDebitoMonth(mk) }}
+        />
+      )}
+      {detailModal?.type === 'comisiones' && (
+        <ComisionesModal period={detailModal.period} onClose={() => setDetailModal(null)}/>
       )}
     </div>
   )

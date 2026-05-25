@@ -226,7 +226,6 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
   }, [])
 
   const allCuotas = useMemo(() => debts.flatMap(d => expandSchedule(d).map(c => ({ ...c, debt: d }))), [debts])
-  const activeRecurring = (recurring ?? []).filter(r => r.active)
 
   // Bank filter derived values
   const bankIdsInDebts      = useMemo(() => [...new Set(debts.map(d => d.bank).filter(Boolean))], [debts])
@@ -266,18 +265,13 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
       const { y, m } = addMonths(curY, curM, i)
       const key      = ymKey(y, m)
       const cuotas   = filteredCuotas.filter(c => c.monthKey === key && !c.paid).sort((a, b) => a.day - b.day)
-      const recCharges = activeRecurring.map(r => ({
-        kind: 'recurring', debtId: r.id, description: r.name,
-        amount: r.amount, day: r.dayOfMonth, bank: r.bank, category: r.category,
-      })).sort((a, b) => a.day - b.day)
       const cuotaTotal = cuotas.reduce((s, c) => s + c.amount, 0)
-      const recTotal   = recCharges.reduce((s, c) => s + c.amount, 0)
-      months.push({ y, m, key, cuotas, recCharges, cuotaTotal, recTotal, total: cuotaTotal + recTotal })
+      months.push({ y, m, key, cuotas, cuotaTotal, total: cuotaTotal })
     }
     return months
-  }, [filteredCuotas, activeRecurring])
+  }, [filteredCuotas])
 
-  const maxMonthTotal = Math.max(1, ...upcomingMonths.map(m => m.total))
+  const maxMonthTotal = Math.max(1, ...upcomingMonths.map(m => m.cuotaTotal))
 
   const markCuotaPaid = (debtId) => {
     const updated = debts.map(d => d.id === debtId ? {
@@ -527,24 +521,18 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
         <div className="px-[16px] pt-[14px] pb-[10px] flex justify-between items-start">
           <div>
             <div className="text-[15px] font-extrabold text-[var(--ink)]">Próximos meses</div>
-            <div className="text-[11.5px] text-[var(--muted)] mt-[2px]">Cuotas y cargos recurrentes</div>
+            <div className="text-[11.5px] text-[var(--muted)] mt-[2px]">Solo cuotas de crédito</div>
           </div>
-          <div className="flex gap-[10px] items-center shrink-0">
-            <div className="flex items-center gap-[4px] text-[10.5px] text-[var(--muted)]">
-              <span className="w-[8px] h-[8px] rounded-[2px] bg-[var(--ink)] shrink-0 inline-block"/>Cuotas
-            </div>
-            <div className="flex items-center gap-[4px] text-[10.5px] text-[var(--muted)]">
-              <span className="w-[8px] h-[8px] rounded-[2px] bg-[var(--accent)] shrink-0 inline-block"/>Recurrentes
-            </div>
+          <div className="flex items-center gap-[4px] text-[10.5px] text-[var(--muted)]">
+            <span className="w-[8px] h-[8px] rounded-[2px] bg-[var(--ink)] shrink-0 inline-block"/>Cuotas
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-[10px] px-[14px] pb-[14px]">
           {upcomingMonths.map((mo, i) => {
-            const isCurrent  = i === 0
-            const cuotaFlex  = mo.total > 0 ? (mo.cuotaTotal / mo.total) * 5 : 0
-            const recFlex    = mo.total > 0 ? (mo.recTotal   / mo.total) * 5 : 0
-            const emptyFlex  = Math.max(0, 5 - cuotaFlex - recFlex)
+            const isCurrent = i === 0
+            const barFlex   = maxMonthTotal > 0 ? (mo.cuotaTotal / maxMonthTotal) * 5 : 0
+            const emptyFlex = Math.max(0, 5 - barFlex)
             return (
               <div key={mo.key} onClick={() => toggleMonth(i)}
                 className={`rounded-[10px] border-[1.5px] px-[10px] py-[11px] cursor-pointer transition-all ${
@@ -554,15 +542,13 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
                   {MES[mo.m].toUpperCase()} {mo.y}
                   {isCurrent && <span className="bg-[var(--ink)] text-[var(--bg)] text-[8.5px] font-extrabold px-[5px] py-[1px] rounded-[6px]">actual</span>}
                 </div>
-                <div className="text-[17px] font-extrabold text-[var(--ink)] tabular-nums tracking-tight mb-[7px]">{fmtCLPshort(mo.total)}</div>
+                <div className="text-[17px] font-extrabold text-[var(--ink)] tabular-nums tracking-tight mb-[7px]">{fmtCLPshort(mo.cuotaTotal)}</div>
                 <div className="flex gap-[3px] mb-[6px]">
-                  {cuotaFlex > 0 && <div className="h-[5px] rounded-[3px] bg-[var(--ink)]"    style={{ flex: cuotaFlex }}/>}
-                  {recFlex   > 0 && <div className="h-[5px] rounded-[3px] bg-[var(--accent)]" style={{ flex: recFlex }}/>}
-                  <div className="h-[5px] rounded-[3px] bg-[var(--line)]" style={{ flex: mo.total === 0 ? 1 : emptyFlex }}/>
+                  {barFlex > 0 && <div className="h-[5px] rounded-[3px] bg-[var(--ink)]" style={{ flex: barFlex }}/>}
+                  <div className="h-[5px] rounded-[3px] bg-[var(--line)]" style={{ flex: mo.cuotaTotal === 0 ? 1 : emptyFlex }}/>
                 </div>
-                <div className="flex gap-[10px]">
+                <div>
                   <span className="text-[10px] text-[var(--muted)]"><strong className="text-[var(--ink)] font-bold">{mo.cuotas.length}</strong> cuotas</span>
-                  <span className="text-[10px] text-[var(--muted)]"><strong className="text-[var(--ink)] font-bold">{mo.recCharges.length}</strong> rec.</span>
                 </div>
               </div>
             )
@@ -571,11 +557,7 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
 
         <div className="border-t border-[var(--line)]">
           {upcomingMonths.map((mo, i) => {
-            const isOpen  = openMonths.has(i)
-            const allItems = [
-              ...mo.cuotas.map(c => ({ ...c, kind: 'cuota' })),
-              ...mo.recCharges.map(c => ({ ...c, kind: 'rec' })),
-            ].sort((a, b) => a.day - b.day)
+            const isOpen = openMonths.has(i)
             return (
               <div key={mo.key} className="border-b border-[var(--line)] last:border-b-0">
                 <div className="flex justify-between items-center px-[16px] py-[10px] cursor-pointer bg-[var(--bg)]" onClick={() => toggleMonth(i)}>
@@ -585,13 +567,13 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
                     </svg>
                     <span className="text-[13.5px] font-bold text-[var(--ink)]">{MES[mo.m]} {mo.y}</span>
                     {i === 0 && <span className="bg-[var(--ink)] text-[var(--bg)] text-[10px] font-bold px-[8px] py-[2px] rounded-[20px]">este mes</span>}
-                    <span className="text-[12px] text-[var(--muted)] font-normal">{allItems.length} cargos</span>
+                    <span className="text-[12px] text-[var(--muted)] font-normal">{mo.cuotas.length} cuotas</span>
                   </div>
-                  <div className="text-[14px] font-extrabold tabular-nums text-[var(--ink)]">{fmtCLP(mo.total)}</div>
+                  <div className="text-[14px] font-extrabold tabular-nums text-[var(--ink)]">{fmtCLP(mo.cuotaTotal)}</div>
                 </div>
-                {isOpen && allItems.length > 0 && (
+                {isOpen && mo.cuotas.length > 0 && (
                   <div>
-                    {allItems.map((it, idx) => {
+                    {mo.cuotas.map((it, idx) => {
                       const bank = banks.find(b => b.id === it.bank)
                       return (
                         <div key={idx} className="flex items-center gap-[12px] px-[16px] py-[10px] border-t border-[var(--line)] bg-[var(--bg-elev)]">
@@ -601,14 +583,9 @@ export default function Installments({ debts, setDebts, recurring = [], onCreate
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-[6px] flex-wrap text-[13px] font-semibold text-[var(--ink)]">
                               {it.description}
-                              {it.kind === 'rec'
-                                ? <span className="text-[10px] font-bold bg-[var(--accent-soft)] border border-[var(--accent-soft)] text-[var(--accent-ink)] px-[7px] py-[1px] rounded-[20px]">recurrente</span>
-                                : <span className="text-[10px] font-mono bg-[var(--bg)] border border-[var(--line)] text-[var(--muted)] px-[7px] py-[1px] rounded-[20px]">#{it.n}/{it.total}</span>
-                              }
+                              <span className="text-[10px] font-mono bg-[var(--bg)] border border-[var(--line)] text-[var(--muted)] px-[7px] py-[1px] rounded-[20px]">#{it.n}/{it.total}</span>
                             </div>
-                            <div className="text-[11px] text-[var(--muted)] mt-[1px]">
-                              {it.kind === 'cuota' ? `${bank?.label} · cuota ${it.n}/${it.total}` : bank?.label}
-                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-[1px]">{bank?.label} · cuota {it.n}/{it.total}</div>
                           </div>
                           <div className="text-[13px] font-bold tabular-nums text-[var(--ink)] whitespace-nowrap">{fmtCLP(it.amount)}</div>
                         </div>
