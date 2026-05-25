@@ -30,6 +30,11 @@ function mkKey(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}` }
 // "Cuotas de crédito" = installmentDebts (compras en cuotas) +
 //                       creditStatements (facturaciones tarjeta mensual)
 // Both are controlled by sw.cuotas.
+//
+// Recurrentes con comisionBancaria=true o type='credito' se excluyen del
+// cálculo de egresos para evitar doble conteo con la facturación tarjeta.
+// cyclicSpend = contado CMR del ciclo anterior (cae íntegro en factura siguiente)
+// debitoMP    = estimado débito/efectivo misceláneos
 function computeMonths({
   startBalance,
   incomeItems      = [],
@@ -39,6 +44,8 @@ function computeMonths({
   installmentDebts = [],
   creditStatements = [],
   projectedItems   = [],
+  cyclicSpend      = 370000,
+  debitoMP         = 50000,
   sw               = {},
 }) {
   const today    = new Date()
@@ -56,15 +63,25 @@ function computeMonths({
     const isCurrent = offset === 0
 
     // ── Recurring expenses (startDate/endDate aware) ────────────
+    // comisionBancaria=true → solo visual, excluido del cálculo (doble conteo con facturación)
+    // type='credito' → ya capturado dentro del contado CMR, excluir también
     const recurringDetail = []
+    const recurringCommissionDetail = []
     for (const r of recurringItems) {
       if (r.kind !== 'expense' || r.active === false) continue
       if (r.startDate && r.startDate.slice(0, 7) > mk) continue
       if (r.endDate   && r.endDate.slice(0, 7)   < mk) continue
       if (isCurrent && r.dayOfMonth != null && Number(r.dayOfMonth) <= todayDay) continue
-      recurringDetail.push({ item: r, amount: r.amount || 0 })
+      const isComision = r.comisionBancaria === true
+      const isCreditCard = r.type === 'credito'
+      if (isComision) {
+        recurringCommissionDetail.push({ item: r, amount: r.amount || 0 })
+      } else if (!isCreditCard) {
+        recurringDetail.push({ item: r, amount: r.amount || 0 })
+      }
     }
-    const recurring = recurringDetail.reduce((s, x) => s + x.amount, 0)
+    const recurring           = recurringDetail.reduce((s, x) => s + x.amount, 0)
+    const recurringCommissions = recurringCommissionDetail.reduce((s, x) => s + x.amount, 0)
 
     // ── Income ──────────────────────────────────────────────────
     const incomeDetail = []
@@ -132,7 +149,7 @@ function computeMonths({
     const effPay    = sw.payables    ?           payAmt     : 0
     const effCuotas = sw.cuotas      !== false ? cuotasTotal : 0
     const effSim    = sw.sim         !== false ? projOut    : 0
-    const effOut    = recurring + effCuotas + effPay
+    const effOut    = recurring + cyclicSpend + debitoMP + effCuotas + effPay
 
     const newBalC = balC - effOut
     const newBalE = balE + income + effRecv - effOut
@@ -141,10 +158,13 @@ function computeMonths({
     // ── Diagnostic logs ─────────────────────────────────────────
     const itemsExcluidos = recurringItems.filter(r =>
       r.kind === 'expense' && r.active !== false &&
-      !recurringDetail.some(x => x.item.id === r.id)
+      !recurringDetail.some(x => x.item.id === r.id) &&
+      !recurringCommissionDetail.some(x => x.item.id === r.id)
     ).map(r => ({
       name: r.name,
-      reason: (r.startDate?.slice(0, 7) > mk)
+      reason: r.type === 'credito'
+        ? 'crédito CMR (capturado en contado)'
+        : (r.startDate?.slice(0, 7) > mk)
         ? `startDate ${r.startDate.slice(0, 7)} > ${mk}`
         : (r.endDate?.slice(0, 7) < mk)
         ? `endDate ${r.endDate.slice(0, 7)} < ${mk}`
@@ -153,8 +173,12 @@ function computeMonths({
     console.log('[projection:recurrentes]', {
       periodo: mk, isCurrent,
       itemsIncluidos: recurringDetail.map(x => ({ name: x.item.name, amount: x.amount })),
+      comisiones: recurringCommissionDetail.map(x => ({ name: x.item.name, amount: x.amount })),
       itemsExcluidos,
-      total: recurring,
+      totalRecurrentes: recurring,
+      totalComisiones: recurringCommissions,
+      cyclicSpend,
+      debitoMP,
     })
     console.log('[projection:cuotas_credito]', {
       periodo: mk,
@@ -179,9 +203,11 @@ function computeMonths({
     const row = {
       key: mk, y, m, offset, isCurrent,
       income, recvAmt, payAmt, recurring,
+      recurringDetail, recurringCommissions, recurringCommissionDetail,
+      cyclicSpend, debitoMP,
       cuotas, cuotasDetail,
       ccTotal, ccDetail, cuotasTotal,
-      incomeDetail, recvDetail, payDetail, recurringDetail,
+      incomeDetail, recvDetail, payDetail,
       projOut, projBreakdown,
       balConservative: newBalC,
       balExpected:     newBalE,
@@ -856,6 +882,9 @@ export default function Projection({
   const [editingBase,    setEditingBase]    = useState(false)
   const [baseInput,      setBaseInput]      = useState('')
   const [openSection,    setOpenSection]    = useState(null)
+  const [cyclicSpend,    setCyclicSpend]    = useState(370000)
+  const [editingCyclic,  setEditingCyclic]  = useState(false)
+  const [cyclicInput,    setCyclicInput]    = useState('')
   const [sw, setSw] = useState({ receivables: true, payables: false, cuotas: true, sim: true })
   const toggleSw = k => setSw(p => ({ ...p, [k]: !p[k] }))
 
@@ -880,9 +909,11 @@ export default function Projection({
       installmentDebts,
       creditStatements: statements,
       projectedItems:   items,
+      cyclicSpend,
+      debitoMP:         50000,
       sw,
     })
-  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, statements, items, sw])
+  , [startBalance, incomeList, receivables, payables, recurringList, installmentDebts, statements, items, cyclicSpend, sw])
 
   const period  = months[activePeriod]
   const dispBal = mo => (mo.hasSim && sw.sim !== false) ? mo.balSim : mo.balExpected
@@ -922,6 +953,11 @@ export default function Projection({
     setEditingBase(false)
   }
   const resetBaseOverride = () => { setBaseOverride(null); setEditingBase(false) }
+  const applyCyclicSpend  = () => {
+    const val = Number(String(cyclicInput).replace(/[^0-9]/g, ''))
+    if (!isNaN(val) && val >= 0) setCyclicSpend(val)
+    setEditingCyclic(false)
+  }
   const toggleSection     = s => setOpenSection(p => p === s ? null : s)
 
   const showRecvWarning = sw.receivables !== false && (months[0]?.recvAmt ?? 0) > 0
@@ -944,32 +980,60 @@ export default function Projection({
           </button>
         </div>
 
-        {/* Saldo base editable */}
-        <div className="mt-3 inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
-          <Icon name="info" size={13}/>
-          <span>Saldo base:</span>
-          {editingBase ? (
-            <span className="flex items-center gap-1.5">
-              <input type="text" inputMode="numeric" value={baseInput}
-                onChange={e => setBaseInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') applyBaseOverride(); if (e.key === 'Escape') resetBaseOverride() }}
-                placeholder={fmtCLP(usableBalance)} autoFocus
-                className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
-              />
-              <button onClick={applyBaseOverride} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
-              <button onClick={resetBaseOverride}><Icon name="x" size={11}/></button>
-            </span>
-          ) : (
-            <button onClick={() => { setBaseInput(''); setEditingBase(true) }}
-              className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
-              <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(startBalance)}</strong>
-              {baseOverride != null && (
-                <span className="text-[10px] px-1 py-0.5 rounded"
-                  style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
-              )}
-              <Icon name="pencil" size={11}/>
-            </button>
-          )}
+        {/* Controles de saldo base y contado estimado */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <div className="inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
+            <Icon name="info" size={13}/>
+            <span>Saldo base:</span>
+            {editingBase ? (
+              <span className="flex items-center gap-1.5">
+                <input type="text" inputMode="numeric" value={baseInput}
+                  onChange={e => setBaseInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') applyBaseOverride(); if (e.key === 'Escape') resetBaseOverride() }}
+                  placeholder={fmtCLP(usableBalance)} autoFocus
+                  className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+                />
+                <button onClick={applyBaseOverride} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                <button onClick={resetBaseOverride}><Icon name="x" size={11}/></button>
+              </span>
+            ) : (
+              <button onClick={() => { setBaseInput(''); setEditingBase(true) }}
+                className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
+                <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(startBalance)}</strong>
+                {baseOverride != null && (
+                  <span className="text-[10px] px-1 py-0.5 rounded"
+                    style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
+                )}
+                <Icon name="pencil" size={11}/>
+              </button>
+            )}
+          </div>
+          <div className="inline-flex items-center gap-2 bg-[var(--bg-elev)] border border-[var(--line)] rounded-lg px-3 py-[7px] text-[13px] text-[var(--muted)]">
+            <span style={{ color: '#e67e22', fontSize: 13 }}>⊕</span>
+            <span>Contado CMR:</span>
+            {editingCyclic ? (
+              <span className="flex items-center gap-1.5">
+                <input type="text" inputMode="numeric" value={cyclicInput}
+                  onChange={e => setCyclicInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') applyCyclicSpend(); if (e.key === 'Escape') setEditingCyclic(false) }}
+                  placeholder={fmtCLP(cyclicSpend)} autoFocus
+                  className="w-28 h-6 px-2 text-[12px] font-mono bg-[var(--bg)] border border-[var(--ink)] rounded focus:outline-none text-[var(--ink)]"
+                />
+                <button onClick={applyCyclicSpend} className="text-[var(--accent-ink)] font-medium hover:underline text-[12px]">Ok</button>
+                <button onClick={() => setEditingCyclic(false)}><Icon name="x" size={11}/></button>
+              </span>
+            ) : (
+              <button onClick={() => { setCyclicInput(''); setEditingCyclic(true) }}
+                className="flex items-center gap-1.5 hover:text-[var(--ink)] transition">
+                <strong className="text-[var(--ink)] font-extrabold text-[14px]">{fmtCLP(cyclicSpend)}</strong>
+                {cyclicSpend !== 370000 && (
+                  <span className="text-[10px] px-1 py-0.5 rounded"
+                    style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>manual</span>
+                )}
+                <Icon name="pencil" size={11}/>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1034,6 +1098,8 @@ export default function Projection({
           {months.map((mo, i) => {
             const totalIn  = mo.income + (sw.receivables !== false ? mo.recvAmt : 0)
             const totalEg  = mo.recurring
+                           + mo.cyclicSpend
+                           + mo.debitoMP
                            + (sw.cuotas !== false ? mo.cuotasTotal : 0)
                            + (sw.payables         ? mo.payAmt      : 0)
                            + (sw.sim !== false     ? mo.projOut     : 0)
@@ -1093,12 +1159,36 @@ export default function Projection({
                     </button>
                   </div>
                 )}
+                {mo.cyclicSpend > 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#e67e22' }}/>Contado ciclo ant.
+                    </span>
+                    <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.cyclicSpend)}</span>
+                  </div>
+                )}
                 {mo.recurring > 0 && (
                   <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
                     <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#f97316' }}/>Recurrentes fijos
                     </span>
                     <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.recurring)}</span>
+                  </div>
+                )}
+                {mo.debitoMP > 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]">
+                    <span className="flex items-center gap-2 text-[13.5px] text-[var(--muted)]">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-[#9ba5c2]"/>Débito/efectivo est.
+                    </span>
+                    <span className="text-[14px] font-bold tabular-nums" style={{ color: '#C0392B' }}>−{fmtCLP(mo.debitoMP)}</span>
+                  </div>
+                )}
+                {mo.recurringCommissions > 0 && (
+                  <div className="flex items-center justify-between px-4 py-[7px] border-t border-[var(--line)]" style={{ opacity: 0.6 }}>
+                    <span className="flex items-center gap-2 text-[12px] text-[var(--muted)] italic">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-[#546E7A]"/>Comisiones bancarias (ref.)
+                    </span>
+                    <span className="text-[12px] tabular-nums font-mono text-[var(--muted)]">−{fmtCLP(mo.recurringCommissions)}</span>
                   </div>
                 )}
                 {sw.payables && mo.payAmt > 0 && (
