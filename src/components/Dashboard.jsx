@@ -112,6 +112,8 @@ export default function Dashboard({
     return next
   })
 
+  const [cicloOpen, setCicloOpen] = useState(false)
+
   // ── Installments ───────────────────────────────────────────
   const activeDebts        = installmentDebts.filter(d => d.status === 'active')
   const cuotasThisMonth    = activeDebts.reduce((s, d) => s + (d.monthlyAmount || 0), 0)
@@ -186,6 +188,46 @@ export default function Dashboard({
   const nextCycleBalance   = usableBalance + monthlyIncome - nextCycleOutflow
   const nextCycleRatio     = monthlyIncome > 0 ? nextCycleOutflow / monthlyIncome : 0
 
+  // ── Ciclo en curso (21 → 20) ───────────────────────────────
+  const cicloInicio = (() => {
+    if (today.getDate() <= 20) {
+      let m = today.getMonth() - 1, y = today.getFullYear()
+      if (m < 0) { m = 11; y-- }
+      return new Date(y, m, 21)
+    }
+    return new Date(today.getFullYear(), today.getMonth(), 21)
+  })()
+  const cicloFin         = new Date(cicloInicio.getFullYear(), cicloInicio.getMonth() + 1, 20)
+  const cicloNextPayDate = new Date(cicloFin.getFullYear(), cicloFin.getMonth() + 1, 5)
+  const cicloDaysTotal   = Math.round((cicloFin - cicloInicio) / 86400000) + 1
+  const cicloDaysElapsed = Math.min(Math.round((today - cicloInicio) / 86400000) + 1, cicloDaysTotal)
+  const cicloDaysLeft    = cicloDaysTotal - cicloDaysElapsed
+  const cicloDayRatio    = cicloDaysElapsed / cicloDaysTotal
+  const cicloInicioTs    = cicloInicio.getTime()
+  const cicloFinTs       = new Date(cicloFin.getFullYear(), cicloFin.getMonth(), 20, 23, 59, 59).getTime()
+
+  const cicloExpenses = useMemo(() =>
+    expenses.filter(e => { const ts = new Date(e.date).getTime(); return ts >= cicloInicioTs && ts <= cicloFinTs }),
+    [expenses, cicloInicioTs, cicloFinTs]
+  )
+  const cicloTotal = cicloExpenses.reduce((s, e) => s + (e.amount || 0), 0)
+
+  const cicloByMedio = useMemo(() => {
+    const g = { credito: 0, debito: 0, efectivo: 0 }
+    cicloExpenses.forEach(e => {
+      if (e.method === 'efectivo') g.efectivo += e.amount || 0
+      else if (e.type === 'credito') g.credito += e.amount || 0
+      else g.debito += e.amount || 0
+    })
+    return g
+  }, [cicloExpenses])
+
+  const cicloByBank = useMemo(() => {
+    const g = {}
+    cicloExpenses.forEach(e => { if (e.bank) g[e.bank] = (g[e.bank] || 0) + (e.amount || 0) })
+    return g
+  }, [cicloExpenses])
+
   return (
     <div className="-mx-4 md:-mx-7 -mt-5 md:-mt-7">
 
@@ -259,6 +301,130 @@ export default function Dashboard({
             )}
           </div>
         )}
+      </div>
+
+      {/* ── BLOQUE 1.5: CICLO EN CURSO ────────────────────── */}
+      <div className="px-4 pt-3 pb-0">
+        <div className="bg-white border border-[#e8e6df] rounded-2xl overflow-hidden"
+          style={{ boxShadow: '0 1px 3px rgba(30,37,53,0.05)' }}>
+
+          {/* Header row — tap to expand */}
+          <button type="button" onClick={() => setCicloOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-3.5 text-left active:bg-[#f0efe9] transition-colors"
+            style={{ WebkitTapHighlightColor: 'transparent' }}>
+
+            <div className="flex-1 min-w-0 pr-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-[9.5px] font-bold tracking-[0.09em] uppercase" style={{ color: '#5d6888' }}>Ciclo en curso</span>
+                <span className="text-[9.5px] font-semibold px-[7px] py-[2px] rounded-full"
+                  style={{ background: '#e8f9ef', color: '#1a9e60' }}>
+                  próx. pago {fmtShortDate(cicloNextPayDate)}
+                </span>
+              </div>
+              <div className="text-[22px] font-extrabold tabular-nums leading-none mb-2"
+                style={{ color: '#1e2535', letterSpacing: '-0.02em' }}>
+                {fmtCLP(cicloTotal)}
+              </div>
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="text-[11px]" style={{ color: '#5d6888' }}>
+                  Día {cicloDaysElapsed} de {cicloDaysTotal}
+                </span>
+                <span style={{ color: '#c8c5bc', fontSize: '9px' }}>●</span>
+                <span className="text-[11px]" style={{ color: '#9ba5c2' }}>
+                  {cicloDaysLeft} día{cicloDaysLeft !== 1 ? 's' : ''} restante{cicloDaysLeft !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="h-[5px] rounded-full overflow-hidden" style={{ background: '#e8e6df' }}>
+                <div className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${(cicloDayRatio * 100).toFixed(1)}%`, background: 'linear-gradient(90deg, #28c47a 0%, #3dd68c 100%)' }}/>
+              </div>
+            </div>
+
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+              style={{ transform: cicloOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.22s ease', flexShrink: 0 }}>
+              <path d="M6 9l6 6 6-6" stroke="#9ba5c2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
+          {/* Expandable body */}
+          <div style={{ maxHeight: cicloOpen ? '700px' : 0, overflow: 'hidden', transition: 'max-height 0.35s ease' }}>
+            <div className="px-4 pb-4">
+              <div className="h-px mb-3" style={{ background: '#e8e6df' }}/>
+
+              {/* Por medio de pago */}
+              <div className="text-[10px] font-bold tracking-[0.07em] uppercase mb-1.5" style={{ color: '#9ba5c2' }}>
+                Por medio de pago
+              </div>
+              {[
+                { key: 'credito',  label: 'Crédito' },
+                { key: 'debito',   label: 'Débito' },
+                { key: 'efectivo', label: 'Efectivo' },
+              ].filter(m => cicloByMedio[m.key] > 0).map(m => (
+                <div key={m.key} className="flex justify-between items-center py-[5px]">
+                  <span className="text-[13.5px]" style={{ color: '#4a5370' }}>{m.label}</span>
+                  <span className="text-[13.5px] font-semibold tabular-nums" style={{ color: '#1e2535' }}>
+                    {fmtCLP(cicloByMedio[m.key])}
+                  </span>
+                </div>
+              ))}
+              {Object.values(cicloByMedio).every(v => v === 0) && (
+                <div className="py-2 text-[12px]" style={{ color: '#9ba5c2' }}>Sin gastos registrados en el ciclo</div>
+              )}
+
+              {/* Por banco / tarjeta */}
+              {Object.keys(cicloByBank).length > 0 && (
+                <>
+                  <div className="h-px my-3" style={{ background: '#e8e6df' }}/>
+                  <div className="text-[10px] font-bold tracking-[0.07em] uppercase mb-1.5" style={{ color: '#9ba5c2' }}>
+                    Por banco / tarjeta
+                  </div>
+                  {Object.entries(cicloByBank)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([bankId, amt]) => {
+                      const bc        = BANK_COLORS[bankId] ?? BANK_COLORS.default
+                      const bankLabel = banks.find(b => b.id === bankId)?.label ?? bankId
+                      return (
+                        <div key={bankId} className="flex items-center justify-between py-[5px] gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: bc.stroke }}/>
+                            <span className="text-[13.5px]" style={{ color: '#4a5370' }}>{bankLabel}</span>
+                          </div>
+                          <span className="text-[13.5px] font-semibold tabular-nums" style={{ color: '#1e2535' }}>
+                            {fmtCLP(amt)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                </>
+              )}
+
+              {/* Footer */}
+              <div className="h-px mt-3 mb-1" style={{ background: '#e8e6df' }}/>
+              <div className="flex justify-between items-center py-2">
+                <div>
+                  <div className="text-[12px] font-bold" style={{ color: '#1e2535' }}>Total gastado</div>
+                  <div className="text-[11px] mt-[1px]" style={{ color: '#9ba5c2' }}>ciclo actual</div>
+                </div>
+                <div className="text-[17px] font-extrabold tabular-nums" style={{ color: '#1e2535', letterSpacing: '-0.01em' }}>
+                  {fmtCLP(cicloTotal)}
+                </div>
+              </div>
+              {cicloByMedio.credito > 0 && (
+                <div className="flex justify-between items-center py-2">
+                  <div>
+                    <div className="text-[12px] font-semibold" style={{ color: '#5d6888' }}>Estimado próx. pago</div>
+                    <div className="text-[11px] mt-[1px]" style={{ color: '#9ba5c2' }}>
+                      solo crédito · vence {fmtShortDate(cicloNextPayDate)}
+                    </div>
+                  </div>
+                  <div className="text-[15px] font-semibold tabular-nums" style={{ color: '#5d6888', letterSpacing: '-0.01em' }}>
+                    {fmtCLP(cicloByMedio.credito)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── BLOQUE 2: DESGLOSE POR BANCO ──────────────────── */}
