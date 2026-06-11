@@ -33,11 +33,15 @@ function TxtInput({ value, onChange, placeholder, type = 'text', style: extraSty
       placeholder={placeholder}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      className={`w-full rounded-[10px] border px-3.5 py-[11px] text-[13.5px] outline-none transition-colors ${className}`}
+      className={`w-full rounded-[10px] border px-3.5 py-[11px] outline-none transition-colors ${className}`}
       style={{
         background:  '#f0efe9',
         borderColor: focused ? '#1e2535' : '#e8e6df',
         color:       '#1e2535',
+        fontSize:    '16px',
+        minWidth:    0,
+        maxWidth:    '100%',
+        boxSizing:   'border-box',
         ...extraStyle,
       }}
     />
@@ -48,17 +52,21 @@ function TxtInput({ value, onChange, placeholder, type = 'text', style: extraSty
 function StyledSelect({ value, onChange, children }) {
   const [focused, setFocused] = useState(false)
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full pl-3.5 pr-8 py-[10px] rounded-[10px] border text-[13.5px] outline-none appearance-none cursor-pointer transition-colors"
+        className="w-full pl-3.5 pr-8 py-[10px] rounded-[10px] border outline-none appearance-none cursor-pointer transition-colors"
         style={{
           background:  '#f0efe9',
           borderColor: focused ? '#1e2535' : '#e8e6df',
           color:       '#1e2535',
+          fontSize:    '16px',
+          minWidth:    0,
+          maxWidth:    '100%',
+          boxSizing:   'border-box',
         }}>
         {children}
       </select>
@@ -99,8 +107,8 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
          style={{ background: 'rgba(20,24,36,.5)', backdropFilter: 'blur(4px)' }}>
       <div className="absolute inset-0" onClick={onClose}/>
 
-      <div className="relative w-full md:max-w-[430px] rounded-t-[20px] md:rounded-[20px] max-h-[92vh] overflow-y-auto"
-           style={{ background: '#ffffff', animation: 'sheetUp .28s cubic-bezier(.34,1.12,.64,1)' }}>
+      <div className="relative w-full md:max-w-[430px] rounded-t-[20px] md:rounded-[20px] max-h-[92vh] overflow-y-auto overflow-x-hidden"
+           style={{ background: '#ffffff', animation: 'sheetUp .28s cubic-bezier(.34,1.12,.64,1)', maxWidth: '100vw' }}>
 
         {/* ── Sticky header ── */}
         <div className="sticky top-0 z-10 flex items-center gap-3 border-b"
@@ -125,7 +133,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
         </div>
 
         {/* ── Body ── */}
-        <div style={{ padding: '16px' }} className="flex flex-col gap-4">
+        <div style={{ padding: '16px' }} className="flex flex-col gap-4 overflow-x-hidden max-w-full">
 
           {/* Monto */}
           <div>
@@ -133,6 +141,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
             <div className="flex items-baseline gap-1.5 pt-3 pb-1">
               <span className="text-[24px] font-light" style={{ color: '#9ba5c2' }}>$</span>
               <input
+                data-keep-size
                 type="text"
                 inputMode="numeric"
                 value={form.amount}
@@ -152,34 +161,33 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
           </div>
 
           {/* Categoría + fecha */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
+          <div className="grid grid-cols-2 gap-2.5 overflow-x-hidden">
+            <div className="min-w-0">
               <FieldLabel>Categoría</FieldLabel>
               <StyledSelect value={form.category} onChange={v => setF('category', v)}>
                 {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
               </StyledSelect>
             </div>
-            <div>
+            <div className="min-w-0 overflow-hidden">
               <FieldLabel>Fecha y hora</FieldLabel>
               <TxtInput
                 type="datetime-local"
                 value={dateInput}
                 onChange={e => setF('date', new Date(e.target.value).toISOString())}
-                style={{ fontSize: '12px' }}
-                className="px-3"
+                style={{ overflow: 'hidden', minWidth: 0 }}
               />
             </div>
           </div>
 
           {/* Medio + banco */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
+          <div className="grid grid-cols-2 gap-2.5 overflow-x-hidden">
+            <div className="min-w-0">
               <FieldLabel>Medio de pago</FieldLabel>
               <StyledSelect value={form.method} onChange={v => setF('method', v)}>
                 {PAYMENT_METHODS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
               </StyledSelect>
             </div>
-            <div>
+            <div className="min-w-0">
               <FieldLabel>Banco / Tarjeta</FieldLabel>
               <StyledSelect value={form.bank} onChange={v => setF('bank', v)}>
                 {banks.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
@@ -205,8 +213,8 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
                   value={form.installments}
                   disabled={form.type !== 'credito'}
                   onChange={e => setF('installments', Number(e.target.value))}
-                  className="w-[80px] py-[10px] px-3 rounded-[10px] text-[13.5px] font-bold border-[1.5px] text-center outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: '#f0efe9', borderColor: '#dddbd3', color: '#1e2535' }}
+                  className="w-[80px] py-[10px] px-3 rounded-[10px] font-bold border-[1.5px] text-center outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: '#f0efe9', borderColor: '#dddbd3', color: '#1e2535', fontSize: '16px', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
@@ -220,8 +228,8 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
               rows={3}
               onChange={e => setF('notes', e.target.value)}
               placeholder="Algún detalle adicional..."
-              className="w-full rounded-[10px] border px-3.5 py-[11px] text-[13.5px] outline-none resize-none leading-relaxed transition-colors"
-              style={{ background: '#f0efe9', borderColor: '#e8e6df', color: '#1e2535', minHeight: '80px' }}
+              className="w-full rounded-[10px] border px-3.5 py-[11px] outline-none resize-none leading-relaxed transition-colors"
+              style={{ background: '#f0efe9', borderColor: '#e8e6df', color: '#1e2535', minHeight: '80px', fontSize: '16px', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
               onFocus={e => (e.target.style.borderColor = '#1e2535')}
               onBlur={e => (e.target.style.borderColor = '#e8e6df')}
             />

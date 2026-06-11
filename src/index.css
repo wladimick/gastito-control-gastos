@@ -24,6 +24,8 @@ html, body {
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   min-height: 100%;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 #root {
@@ -43,5 +45,26 @@ input[type="number"] {
 ::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
 
 select { background-image: none !important; }
+
+/* Prevent date/time inputs from overflowing their grid cell */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+/* Prevent iOS zoom on input focus: font-size must be >= 16px.
+   Excludes large decorative inputs (e.g. the 42px amount field). */
+@media screen and (max-width: 768px) {
+  input:not([data-keep-size]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
 
 @keyframes spin { to { transform: rotate(360deg); } }
