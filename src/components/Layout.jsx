@@ -24,6 +24,7 @@ const BASE_NAV_GROUPS = [
   {
     label: "Análisis",
     items: [
+      { id: "billing",      label: "Facturación",      icon: "card",    short: "Factur." },
       { id: "reports",      label: "Reportes",         icon: "chart",   short: "Reportes" },
       { id: "comparison",   label: "Comparación",      icon: "scale",   short: "Compar." },
     ],
