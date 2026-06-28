@@ -16,6 +16,7 @@ import UserProfile from './components/UserProfile'
 import Savings from './components/Savings'
 import Accounts from './components/Accounts'
 import Projection from './components/Projection'
+import Billing from './components/Billing'
 import BotChat from './components/BotChat'
 import { Icon } from './lib/helpers'
 import {
@@ -743,6 +744,14 @@ export default function App() {
             payables={payablesList}
             installmentDebts={installmentDebts}
             expenses={expenses}
+          />
+        )}
+        {view === 'billing' && (
+          <Billing
+            expenses={expenses}
+            installmentDebts={installmentDebts}
+            creditCards={creditCards}
+            recurringList={recurringList}
           />
         )}
         {view === 'comparison' && <Comparison expenses={expenses}/>}
