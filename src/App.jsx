@@ -40,6 +40,7 @@ import { fetchCurrentRole } from './services/adminService'
 import { fetchGoals, createGoal, updateGoal, removeGoal, addMovement } from './services/savingsService'
 import { fetchAccounts, createAccount, updateAccount, removeAccount } from './services/accountsService'
 import { fetchMyCards, createCard, updateCard, removeCard } from './services/creditCardsService'
+import { getBilledStatements, upsertBilledStatement, deleteBilledStatement } from './services/billedStatementsService'
 import Login, { NewPasswordForm } from './components/Login'
 
 const IS_REAL = isConfigured
@@ -188,6 +189,11 @@ export default function App() {
       .then(msg => { if (msg) setLastBotMessage(msg) })
       .catch(() => {})
   }, [session])
+
+  // ── Billed Statements (localStorage) ─────────────────────────
+  const [billedStatements, setBilledStatements] = useState(() => getBilledStatements())
+  const onUpsertBilled = (stmt) => setBilledStatements(upsertBilledStatement(stmt))
+  const onDeleteBilled = (cardId, cycleKey) => setBilledStatements(deleteBilledStatement(cardId, cycleKey))
 
   // ── Accounts & Credit Cards ──────────────────────────────────
   const [accounts,    setAccounts]    = useState([])
@@ -644,6 +650,7 @@ export default function App() {
             accounts={accounts}
             creditCards={creditCards}
             userSettings={userSettings}
+            billedStatements={billedStatements}
           />
         )}
         {view === 'expenses' && (
@@ -752,6 +759,9 @@ export default function App() {
             installmentDebts={installmentDebts}
             creditCards={creditCards}
             recurringList={recurringList}
+            billedStatements={billedStatements}
+            onUpsertBilled={onUpsertBilled}
+            onDeleteBilled={onDeleteBilled}
           />
         )}
         {view === 'comparison' && <Comparison expenses={expenses}/>}

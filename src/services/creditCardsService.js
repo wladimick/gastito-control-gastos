@@ -6,8 +6,9 @@ function mapCard(row) {
     name:          row.name,
     bank:          row.bank_id,
     lastFour:      row.last_four,
-    billingDay:    row.billing_day,
-    paymentDueDay: row.payment_due_day,
+    billingDay:      row.billing_day,
+    billingStartDay: row.billing_start_day ?? null,
+    paymentDueDay:   row.payment_due_day,
     creditLimit:   row.credit_limit,
     isActive:      row.is_active,
   }
@@ -18,8 +19,9 @@ function toRow(card) {
     name:            card.name,
     bank_id:         card.bank || null,
     last_four:       card.lastFour?.trim() || null,
-    billing_day:     card.billingDay     ? Number(card.billingDay)     : null,
-    payment_due_day: card.paymentDueDay  ? Number(card.paymentDueDay)  : null,
+    billing_day:       card.billingDay      ? Number(card.billingDay)      : null,
+    billing_start_day: card.billingStartDay ? Number(card.billingStartDay) : null,
+    payment_due_day:   card.paymentDueDay   ? Number(card.paymentDueDay)   : null,
     credit_limit:    card.creditLimit    ? Number(card.creditLimit)    : null,
     is_active:       card.isActive !== false,
   }

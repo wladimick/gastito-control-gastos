@@ -96,6 +96,7 @@ export default function Dashboard({
   installmentDebts = [], recurring = [], accounts = [], creditCards = [],
   income = [], receivables = [],
   userSettings = null,
+  billedStatements = [],
 }) {
   const banks   = useBanks()
   const today   = new Date()
@@ -165,9 +166,14 @@ export default function Dashboard({
 
     const comisionesRec         = (recurring ?? []).filter(r => r.comisionBancaria && r.active !== false && r.bank === card.bank)
     const comisionesRecurrentes = comisionesRec.reduce((s, r) => s + (r.amount || 0), 0)
-    const totalAmount           = contadoAmount + cuotasAmount + cargosTotal
+    const estimatedAmount       = contadoAmount + cuotasAmount + cargosTotal
 
-    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cardCharges, cargosTotal, comisionesRec, comisionesRecurrentes, totalAmount, cycleStart, cycleEnd }
+    // Use real billed amount if recorded for this card's payment month
+    const billedStmt    = billedStatements.find(s => s.cardId === card.id && s.cycleKey === nextPayMonthStr)
+    const totalAmount   = billedStmt?.realBilledAmount ?? estimatedAmount
+    const hasRealBilled = !!billedStmt?.realBilledAmount
+
+    return { card, nextPayDate, contadoAmount, cuotasAmount, cuotasCount, cardCharges, cargosTotal, comisionesRec, comisionesRecurrentes, estimatedAmount, totalAmount, hasRealBilled, cycleStart, cycleEnd }
   })
 
   const totalNextCardPayment       = cardNextPayments.reduce((s, c) => s + c.totalAmount, 0)

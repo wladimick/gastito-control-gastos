@@ -12,7 +12,7 @@ const ACCOUNT_TYPES = [
 const TYPE_MAP = Object.fromEntries(ACCOUNT_TYPES.map(t => [t.id, t]))
 
 const BLANK_ACCOUNT = { name: '', type: 'debito', bankId: '', balance: '', active: true }
-const BLANK_CARD    = { name: '', bank: '', lastFour: '', billingDay: '', paymentDueDay: '', creditLimit: '' }
+const BLANK_CARD    = { name: '', bank: '', lastFour: '', billingDay: '', billingStartDay: '', paymentDueDay: '', creditLimit: '' }
 
 const SHORT_MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
 
@@ -111,10 +111,15 @@ function CreditCardForm({ initial, onSave, onCancel, banks }) {
             onChange={e => set('lastFour', e.target.value.replace(/\D/g,'').slice(0,4))}
             placeholder="1234" className={inp + ' font-mono'}/>
         </Field>
-        <Field label="Día de facturación" hint="Día en que cierra el ciclo de compras.">
+        <Field label="Día de cierre" hint="Último día del ciclo de compras (ej: CMR=19, BChile=18).">
           <input type="number" min="1" max="31" value={f.billingDay}
             onChange={e => set('billingDay', e.target.value)}
-            placeholder="20" className={inp + ' font-mono'}/>
+            placeholder="19" className={inp + ' font-mono'}/>
+        </Field>
+        <Field label="Día de inicio de ciclo" hint="Primer día del nuevo ciclo. Por defecto: día de cierre + 1.">
+          <input type="number" min="1" max="31" value={f.billingStartDay}
+            onChange={e => set('billingStartDay', e.target.value)}
+            placeholder={f.billingDay ? String(Number(f.billingDay) + 1) : '20'} className={inp + ' font-mono'}/>
         </Field>
         <Field label="Día de pago" hint="Día en que se paga la factura.">
           <input type="number" min="1" max="31" value={f.paymentDueDay}
@@ -588,7 +593,8 @@ export default function Accounts({
                       </div>
                       <div className="mt-0.5 text-[11.5px] text-[var(--muted)]">
                         {bank?.label && <span>{bank.label} · </span>}
-                        Factura día <span className="font-mono">{card.billingDay ?? '—'}</span>
+                        Cierre día <span className="font-mono">{card.billingDay ?? '—'}</span>
+                        {card.billingStartDay ? <> · Inicio día <span className="font-mono">{card.billingStartDay}</span></> : null}
                         {' '}· Paga día <span className="font-mono">{card.paymentDueDay ?? '—'}</span>
                       </div>
                     </div>
