@@ -9,8 +9,10 @@ const parts = fs.readdirSync(partsDir)
   .filter(name => /^part-.*\.b64$/.test(name))
   .sort()
 
-const encoded = parts.map(name => fs.readFileSync(path.join(partsDir, name), 'utf8').trim()).join('')
-const patch = Buffer.from(encoded, 'base64')
+const patch = Buffer.concat(parts.map(name => {
+  const encoded = fs.readFileSync(path.join(partsDir, name), 'utf8').replace(/\s+/g, '')
+  return Buffer.from(encoded, 'base64')
+}))
 const expectedSize = 70628
 const expectedSha = '5bced9ac8c2bd41c58d06bf90294791228bd97506aa7425125471ab173cae86e'
 const actualSha = crypto.createHash('sha256').update(patch).digest('hex')
