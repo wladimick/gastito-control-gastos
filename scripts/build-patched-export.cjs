@@ -5,10 +5,16 @@ const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 
 const root = process.cwd()
-const encodedPath = path.join(root, '.chatgpt-patch', 'facturacion.patch.gz.b64')
-const patchPath = path.join(root, '.chatgpt-patch', 'facturacion.patch')
+const patchDir = path.join(root, '.chatgpt-patch')
+const patchPath = path.join(patchDir, 'facturacion.patch')
 const expectedSize = 70628
 const expectedSha = '5bced9ac8c2bd41c58d06bf90294791228bd97506aa7425125471ab173cae86e'
+const parts = [
+  ['part-00.b64', 5520, 'eb194c31d5b0ab52cd477b9afb2d722c3b85437e96e814cf033812cc0055bf63'],
+  ['part-01.b64', 5520, '614e9dd0e17a70d559940eb56e76f364860eaf23e81e20f4dbd1e32ee6614a20'],
+  ['part-02.b64', 5520, '103688f91771f4122b7215e7827e22ca3833bea194e96b96105d5f158c121a45'],
+  ['part-03.b64', 5520, '57ec8258bfeb467056b18cbcd249ebb86e2a4a61954cbc4076ea1c62d2675d59'],
+]
 
 const files = [
   'docs/2026-08-02-facturacion-agosto-2026.md',
@@ -21,7 +27,15 @@ const files = [
   'supabase/migrations/20260802170324_billing_foreign_key_indexes.sql',
 ]
 
-const encoded = fs.readFileSync(encodedPath, 'utf8').trim()
+const encoded = parts.map(([name, expectedLength, expectedPartSha]) => {
+  const value = fs.readFileSync(path.join(patchDir, name), 'utf8').trim()
+  const actualPartSha = crypto.createHash('sha256').update(value).digest('hex')
+  console.log(`PART ${name} length=${value.length} sha256=${actualPartSha}`)
+  if (value.length !== expectedLength) throw new Error(`${name} length mismatch: ${value.length}`)
+  if (actualPartSha !== expectedPartSha) throw new Error(`${name} SHA mismatch: ${actualPartSha}`)
+  return value
+}).join('')
+
 const compressed = Buffer.from(encoded, 'base64')
 const patch = zlib.gunzipSync(compressed)
 const actualSha = crypto.createHash('sha256').update(patch).digest('hex')
