@@ -71,8 +71,6 @@ fs.writeFileSync(patchPath, patch)
 execFileSync('git', ['apply', '--check', patchPath], { cwd: root, stdio: 'inherit' })
 execFileSync('git', ['apply', patchPath], { cwd: root, stdio: 'inherit' })
 
-// Return build configuration to main and remove every reconstruction helper
-// before creating the final Git tree.
 fs.writeFileSync(path.join(root, 'package.json'), originalPackage)
 fs.rmSync(patchDir, { recursive: true, force: true })
 fs.rmSync(path.join(root, 'scripts', 'build-patched-export.cjs'), { force: true })
@@ -89,18 +87,16 @@ const staged = execFileSync('git', ['ls-files', '-s'], { cwd: root, encoding: 'u
   })
 
 const exportRoot = path.join(root, 'public', '__patched')
-fs.mkdirSync(exportRoot, { recursive: true })
+const encodedRoot = path.join(exportRoot, 'encoded')
+fs.mkdirSync(encodedRoot, { recursive: true })
 fs.writeFileSync(path.join(exportRoot, 'tree.json'), JSON.stringify({ baseCommit, desiredTree, entries: staged }))
 
-for (const relative of files) {
-  const source = path.join(root, relative)
-  const raw = fs.readFileSync(source)
-  const targetB64 = path.join(exportRoot, `${relative}.b64`)
-  fs.mkdirSync(path.dirname(targetB64), { recursive: true })
-  fs.writeFileSync(targetB64, raw.toString('base64'))
+files.forEach((relative, index) => {
+  const raw = fs.readFileSync(path.join(root, relative))
   const gitBlob = crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${raw.length}\0`), raw])).digest('hex')
-  console.log(`EXPORTED ${relative} bytes=${raw.length} gitBlob=${gitBlob}`)
-}
+  fs.writeFileSync(path.join(encodedRoot, `${index}.json`), JSON.stringify({ path: relative, encoding: 'base64', content: raw.toString('base64'), gitBlob }))
+  console.log(`EXPORTED ${index} ${relative} bytes=${raw.length} gitBlob=${gitBlob}`)
+})
 
 console.log(`CLEAN_TREE ${desiredTree} entries=${staged.length}`)
 console.log('PATCH_APPLIED_AND_EXPORTED')
