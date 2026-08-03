@@ -1,0 +1,69 @@
+name: Apply billing patch
+
+on:
+  push:
+    branches:
+      - agent/facturacion-agosto-2026
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Rebuild and verify patch
+        run: |
+          set -euo pipefail
+          cat .chatgpt-patch/part-*.b64 | base64 --decode > /tmp/facturacion.patch
+          test "$(wc -c < /tmp/facturacion.patch | tr -d ' ')" = "70628"
+          echo "5bced9ac8c2bd41c58d06bf90294791228bd97506aa7425125471ab173cae86e  /tmp/facturacion.patch" | sha256sum --check --strict
+          git apply --check /tmp/facturacion.patch
+          git apply /tmp/facturacion.patch
+
+      - name: Remove temporary files
+        run: |
+          rm -rf .chatgpt-patch
+          rm -f .github/workflows/apply-billing-patch.yml
+
+      - name: Install and build
+        run: |
+          npm install
+          npm run build
+          git restore package-lock.json 2>/dev/null || true
+
+      - name: Verify final scope
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          cat > /tmp/expected.txt <<'EOF'
+          docs/2026-08-02-facturacion-agosto-2026.md
+          docs/supabase.md
+          src/App.jsx
+          src/components/Billing.jsx
+          src/services/billedStatementsService.js
+          supabase/migrations/20260802160025_billing_cycles_supabase.sql
+          supabase/migrations/20260802161837_billing_privilege_hardening.sql
+          supabase/migrations/20260802170324_billing_foreign_key_indexes.sql
+          EOF
+          git diff --name-only origin/main | sort > /tmp/actual.txt
+          sort /tmp/expected.txt -o /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+
+      - name: Commit final implementation
+        run: |
+          git add -A
+          git commit -m "feat: persistir facturacion por ciclo en Supabase"
+          git push origin HEAD:agent/facturacion-agosto-2026
