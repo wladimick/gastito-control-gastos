@@ -20,7 +20,7 @@ export async function fetchNicolAdminData(userId) {
   const [cyclesResult, transactionsResult, linkResult] = await Promise.all([
     supabase
       .from('billing_cycles')
-      .select('id, cycle_key, period_start, period_end, closing_date, due_date, status, reported_amount, estimated_amount, reconciliation_status, bank_id, credit_card_id')
+      .select('id, cycle_key, period_start, period_end, closing_date, due_date, status, reported_amount, estimated_amount, reconciliation_status, credit_card_id')
       .eq('user_id', userId)
       .order('cycle_key', { ascending: false })
       .order('due_date', { ascending: false }),
@@ -90,7 +90,7 @@ export async function updateNicolSharePercentage(linkId, percentage) {
   ensureSupabase()
   const { data, error } = await supabase
     .from('billing_share_links')
-    .update({ percentage: Number(percentage) })
+    .update({ percentage: Number(percentage), updated_at: new Date().toISOString() })
     .eq('id', linkId)
     .select('id, label, percentage, active, created_at, updated_at')
     .single()
@@ -102,7 +102,7 @@ export async function revokeNicolShare(linkId) {
   ensureSupabase()
   const { error } = await supabase
     .from('billing_share_links')
-    .update({ active: false })
+    .update({ active: false, updated_at: new Date().toISOString() })
     .eq('id', linkId)
   if (error) throw error
 }
