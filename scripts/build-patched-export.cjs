@@ -7,6 +7,7 @@ const { execFileSync } = require('child_process')
 const root = process.cwd()
 const patchDir = path.join(root, '.chatgpt-patch')
 const patchPath = path.join(patchDir, 'facturacion.patch')
+const baseCommit = '91f7db45e49d7a563f2cdfa01119bd16a8c2b4f1'
 const expectedSize = 70628
 const expectedSha = '5bced9ac8c2bd41c58d06bf90294791228bd97506aa7425125471ab173cae86e'
 const parts = [
@@ -39,7 +40,6 @@ const encoded = parts.map(([name, expectedLength, expectedPartSha]) => {
 const compressed = Buffer.from(encoded, 'base64')
 const patch = zlib.gunzipSync(compressed)
 const actualSha = crypto.createHash('sha256').update(patch).digest('hex')
-
 console.log(`PATCH bytes=${patch.length} sha256=${actualSha}`)
 if (patch.length !== expectedSize) throw new Error(`Patch size mismatch: ${patch.length}`)
 if (actualSha !== expectedSha) throw new Error(`Patch SHA mismatch: ${actualSha}`)
@@ -48,16 +48,35 @@ fs.writeFileSync(patchPath, patch)
 execFileSync('git', ['apply', '--check', patchPath], { cwd: root, stdio: 'inherit' })
 execFileSync('git', ['apply', patchPath], { cwd: root, stdio: 'inherit' })
 
+// Return build configuration to main and remove every reconstruction helper
+// before creating the final Git tree.
+execFileSync('git', ['restore', `--source=${baseCommit}`, '--', 'package.json'], { cwd: root, stdio: 'inherit' })
+fs.rmSync(patchDir, { recursive: true, force: true })
+fs.rmSync(path.join(root, 'scripts', 'build-patched-export.cjs'), { force: true })
+try { fs.rmdirSync(path.join(root, 'scripts')) } catch {}
+execFileSync('git', ['add', '-A'], { cwd: root, stdio: 'inherit' })
+
+const desiredTree = execFileSync('git', ['write-tree'], { cwd: root, encoding: 'utf8' }).trim()
+const staged = execFileSync('git', ['ls-files', '-s'], { cwd: root, encoding: 'utf8' })
+  .trim().split('\n').filter(Boolean)
+  .map(line => {
+    const match = line.match(/^(\d+) ([0-9a-f]{40}) \d+\t(.+)$/)
+    if (!match) throw new Error(`Unexpected index entry: ${line}`)
+    return { mode: match[1], type: 'blob', sha: match[2], path: match[3] }
+  })
+
 const exportRoot = path.join(root, 'public', '__patched')
+fs.mkdirSync(exportRoot, { recursive: true })
+fs.writeFileSync(path.join(exportRoot, 'tree.json'), JSON.stringify({ baseCommit, desiredTree, entries: staged }))
+
 for (const relative of files) {
   const source = path.join(root, relative)
   const raw = fs.readFileSync(source)
-  const target = path.join(exportRoot, relative)
   const targetB64 = path.join(exportRoot, `${relative}.b64`)
-  fs.mkdirSync(path.dirname(target), { recursive: true })
-  fs.copyFileSync(source, target)
+  fs.mkdirSync(path.dirname(targetB64), { recursive: true })
   fs.writeFileSync(targetB64, raw.toString('base64'))
-  console.log(`EXPORTED ${relative} bytes=${raw.length} sha256=${crypto.createHash('sha256').update(raw).digest('hex')}`)
+  console.log(`EXPORTED ${relative} bytes=${raw.length} gitBlob=${crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${raw.length}\0`), raw])).digest('hex')}`)
 }
 
+console.log(`CLEAN_TREE ${desiredTree} entries=${staged.length}`)
 console.log('PATCH_APPLIED_AND_EXPORTED')
