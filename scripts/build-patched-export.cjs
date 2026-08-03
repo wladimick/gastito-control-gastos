@@ -51,10 +51,13 @@ execFileSync('git', ['apply', patchPath], { cwd: root, stdio: 'inherit' })
 const exportRoot = path.join(root, 'public', '__patched')
 for (const relative of files) {
   const source = path.join(root, relative)
+  const raw = fs.readFileSync(source)
   const target = path.join(exportRoot, relative)
+  const targetB64 = path.join(exportRoot, `${relative}.b64`)
   fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.copyFileSync(source, target)
-  console.log(`EXPORTED ${relative}`)
+  fs.writeFileSync(targetB64, raw.toString('base64'))
+  console.log(`EXPORTED ${relative} bytes=${raw.length} sha256=${crypto.createHash('sha256').update(raw).digest('hex')}`)
 }
 
 console.log('PATCH_APPLIED_AND_EXPORTED')
