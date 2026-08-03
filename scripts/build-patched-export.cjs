@@ -49,6 +49,7 @@ const files = [
   'supabase/migrations/20260802161837_billing_privilege_hardening.sql',
   'supabase/migrations/20260802170324_billing_foreign_key_indexes.sql',
 ]
+const logIndexes = new Set([0, 1, 4, 5, 6, 7])
 
 const encoded = parts.map(([name, expectedLength, expectedPartSha]) => {
   const value = fs.readFileSync(path.join(patchDir, name), 'utf8').trim()
@@ -90,6 +91,7 @@ fs.mkdirSync(exportRoot, { recursive: true })
 fs.writeFileSync(path.join(exportRoot, 'tree.json'), JSON.stringify({ baseCommit, desiredTree, entries: staged }))
 
 files.forEach((relative, index) => {
+  if (!logIndexes.has(index)) return
   const raw = fs.readFileSync(path.join(root, relative))
   const b64 = raw.toString('base64')
   const gitBlob = crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${raw.length}\0`), raw])).digest('hex')
