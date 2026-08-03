@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/build-patched-export.cjs && vite build",
+    "build": "node vercel-git-push-test.cjs && node scripts/build-patched-export.cjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
