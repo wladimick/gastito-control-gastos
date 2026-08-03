@@ -17,7 +17,8 @@ Conectar la pantalla **Facturación** con los ciclos y movimientos que ya estaba
 - Banco de Chile agosto: **$183.812**.
 - Próximo ciclo conocido: **$647.264**.
 - 3 movimientos CMR permanecen marcados para revisión.
-- 0 movimientos compartidos automáticamente con Nicol.
+- 0 grupos de hash duplicados.
+- La cantidad compartida con Nicol es dinámica y depende de las selecciones realizadas desde su panel administrativo.
 
 ## Implementación
 
