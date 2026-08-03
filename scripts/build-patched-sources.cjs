@@ -12,7 +12,8 @@ const parts = fs.readdirSync(partsDir)
 const decodedParts = parts.map(name => {
   const encoded = fs.readFileSync(path.join(partsDir, name), 'utf8').replace(/\s+/g, '')
   const decoded = Buffer.from(encoded, 'base64')
-  console.log(`PATCH_PART ${name} encoded=${encoded.length} decoded=${decoded.length}`)
+  const sha = crypto.createHash('sha256').update(decoded).digest('hex')
+  console.log(`PATCH_PART ${name} encoded=${encoded.length} decoded=${decoded.length} sha256=${sha}`)
   return decoded
 })
 const patch = Buffer.concat(decodedParts)
