@@ -10,6 +10,29 @@ const patchPath = path.join(patchDir, 'facturacion.patch')
 const baseCommit = '91f7db45e49d7a563f2cdfa01119bd16a8c2b4f1'
 const expectedSize = 70628
 const expectedSha = '5bced9ac8c2bd41c58d06bf90294791228bd97506aa7425125471ab173cae86e'
+const originalPackage = `{
+  "name": "gastito",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "vite": "^5.4.10"
+  }
+}`
 const parts = [
   ['part-00.b64', 5520, 'eb194c31d5b0ab52cd477b9afb2d722c3b85437e96e814cf033812cc0055bf63'],
   ['part-01.b64', 5520, '614e9dd0e17a70d559940eb56e76f364860eaf23e81e20f4dbd1e32ee6614a20'],
@@ -50,7 +73,7 @@ execFileSync('git', ['apply', patchPath], { cwd: root, stdio: 'inherit' })
 
 // Return build configuration to main and remove every reconstruction helper
 // before creating the final Git tree.
-execFileSync('git', ['restore', `--source=${baseCommit}`, '--', 'package.json'], { cwd: root, stdio: 'inherit' })
+fs.writeFileSync(path.join(root, 'package.json'), originalPackage)
 fs.rmSync(patchDir, { recursive: true, force: true })
 fs.rmSync(path.join(root, 'scripts', 'build-patched-export.cjs'), { force: true })
 try { fs.rmdirSync(path.join(root, 'scripts')) } catch {}
@@ -75,7 +98,8 @@ for (const relative of files) {
   const targetB64 = path.join(exportRoot, `${relative}.b64`)
   fs.mkdirSync(path.dirname(targetB64), { recursive: true })
   fs.writeFileSync(targetB64, raw.toString('base64'))
-  console.log(`EXPORTED ${relative} bytes=${raw.length} gitBlob=${crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${raw.length}\0`), raw])).digest('hex')}`)
+  const gitBlob = crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${raw.length}\0`), raw])).digest('hex')
+  console.log(`EXPORTED ${relative} bytes=${raw.length} gitBlob=${gitBlob}`)
 }
 
 console.log(`CLEAN_TREE ${desiredTree} entries=${staged.length}`)
