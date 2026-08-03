@@ -4,6 +4,20 @@ const zlib = require('zlib')
 const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 
+async function upload(url, key, objectName, contentType, body) {
+  const response = await fetch(`${url}/storage/v1/object/chatgpt-transfer/${objectName}`, {
+    method: 'POST',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': contentType,
+      'x-upsert': 'true',
+    },
+    body,
+  })
+  if (!response.ok) throw new Error(`Transfer upload failed for ${objectName}: ${response.status} ${await response.text()}`)
+}
+
 async function main() {
   const root = process.cwd()
   const patchDir = path.join(root, '.chatgpt-patch')
@@ -72,28 +86,22 @@ async function main() {
   fs.writeFileSync(path.join(root, 'package.json'), originalPackage)
   execFileSync('tar', ['-czf', archivePath, ...files], { cwd: root, stdio: 'inherit' })
 
+  const archive = fs.readFileSync(archivePath)
+  const archiveSha = crypto.createHash('sha256').update(archive).digest('hex')
+  const archiveBase64 = archive.toString('base64')
   const supabaseUrl = process.env.VITE_SUPABASE_URL
   const publishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
   if (!supabaseUrl || !publishableKey) throw new Error('Supabase transfer credentials are unavailable')
 
-  const response = await fetch(`${supabaseUrl}/storage/v1/object/chatgpt-transfer/gastito-billing-final.tar.gz`, {
-    method: 'POST',
-    headers: {
-      apikey: publishableKey,
-      Authorization: `Bearer ${publishableKey}`,
-      'Content-Type': 'application/gzip',
-      'x-upsert': 'true',
-    },
-    body: fs.readFileSync(archivePath),
-  })
-  if (!response.ok) throw new Error(`Transfer upload failed: ${response.status} ${await response.text()}`)
+  await upload(supabaseUrl, publishableKey, 'gastito-billing-final.tar.gz', 'application/gzip', archive)
+  await upload(supabaseUrl, publishableKey, 'gastito-billing-final.tar.gz.b64', 'text/plain', archiveBase64)
 
   fs.rmSync(patchDir, { recursive: true, force: true })
   fs.rmSync(path.join(root, 'vercel-git-push-test.cjs'), { force: true })
   fs.rmSync(path.join(root, 'scripts', 'build-patched-export.cjs'), { force: true })
   try { fs.rmdirSync(path.join(root, 'scripts')) } catch {}
 
-  console.log(`TRANSFER_UPLOAD_OK bytes=${fs.statSync(archivePath).size}`)
+  console.log(`TRANSFER_UPLOAD_OK bytes=${archive.length} base64=${archiveBase64.length} sha256=${archiveSha}`)
 }
 
 main().catch(error => {
