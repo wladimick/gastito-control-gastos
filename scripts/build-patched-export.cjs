@@ -39,7 +39,6 @@ const parts = [
   ['part-02.b64', 5520, '103688f91771f4122b7215e7827e22ca3833bea194e96b96105d5f158c121a45'],
   ['part-03.b64', 5520, '57ec8258bfeb467056b18cbcd249ebb86e2a4a61954cbc4076ea1c62d2675d59'],
 ]
-
 const files = [
   'docs/2026-08-02-facturacion-agosto-2026.md',
   'docs/supabase.md',
@@ -87,15 +86,17 @@ const staged = execFileSync('git', ['ls-files', '-s'], { cwd: root, encoding: 'u
   })
 
 const exportRoot = path.join(root, 'public', '__patched')
-const encodedRoot = path.join(exportRoot, 'encoded')
-fs.mkdirSync(encodedRoot, { recursive: true })
+fs.mkdirSync(exportRoot, { recursive: true })
 fs.writeFileSync(path.join(exportRoot, 'tree.json'), JSON.stringify({ baseCommit, desiredTree, entries: staged }))
 
 files.forEach((relative, index) => {
   const raw = fs.readFileSync(path.join(root, relative))
+  const b64 = raw.toString('base64')
   const gitBlob = crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${raw.length}\0`), raw])).digest('hex')
-  fs.writeFileSync(path.join(encodedRoot, `${index}.json`), JSON.stringify({ path: relative, encoding: 'base64', content: raw.toString('base64'), gitBlob }))
-  console.log(`EXPORTED ${index} ${relative} bytes=${raw.length} gitBlob=${gitBlob}`)
+  const chunks = b64.match(/.{1,2400}/g) || []
+  console.log(`BLOB_START ${index} ${relative} bytes=${raw.length} gitBlob=${gitBlob} chunks=${chunks.length}`)
+  chunks.forEach((chunk, chunkIndex) => console.log(`BLOB_${index}_${chunkIndex}=${chunk}`))
+  console.log(`BLOB_END ${index}`)
 })
 
 console.log(`CLEAN_TREE ${desiredTree} entries=${staged.length}`)
