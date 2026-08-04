@@ -79,6 +79,17 @@ function mapCycle(row) {
   }
 }
 
+function getCurrentCycleKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    timeZone: 'America/Santiago',
+  }).formatToParts(new Date())
+  const year = parts.find(part => part.type === 'year')?.value
+  const month = parts.find(part => part.type === 'month')?.value
+  return year && month ? `${year}-${month}` : ''
+}
+
 export async function fetchBillingCycles() {
   if (!isConfigured || !supabase) return []
 
@@ -95,5 +106,13 @@ export async function fetchBillingCycles() {
     .order('cycle_key', { ascending: false })
 
   if (error) throw error
-  return (data || []).map(mapCycle)
+
+  const currentCycleKey = getCurrentCycleKey()
+  return (data || [])
+    .map(mapCycle)
+    .sort((a, b) => {
+      if (a.cycleKey === currentCycleKey && b.cycleKey !== currentCycleKey) return -1
+      if (b.cycleKey === currentCycleKey && a.cycleKey !== currentCycleKey) return 1
+      return b.cycleKey.localeCompare(a.cycleKey) || (b.dueDate || '').localeCompare(a.dueDate || '')
+    })
 }
