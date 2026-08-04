@@ -11,9 +11,28 @@ const CYCLE_SELECT = `
     amount, original_amount, installment_current, installment_total,
     installments_remaining, currency, affects_cycle_total, is_pending,
     review_status, source_file, source_kind, source_row, stable_hash,
-    shared_with_nicol
+    shared_with_nicol, category_id,
+    category:categories ( id, label, icon, color )
   )
 `
+
+const FALLBACK_CATEGORY = {
+  id: null,
+  label: 'Otros',
+  icon: '•',
+  color: '#888880',
+}
+
+function mapCategory(value) {
+  const category = Array.isArray(value) ? value[0] : value
+  if (!category) return FALLBACK_CATEGORY
+  return {
+    id: category.id || null,
+    label: category.label || 'Otros',
+    icon: category.icon || '•',
+    color: category.color || '#888880',
+  }
+}
 
 function mapTransaction(row) {
   return {
@@ -36,7 +55,15 @@ function mapTransaction(row) {
     sourceRow: row.source_row,
     stableHash: row.stable_hash,
     sharedWithNicol: Boolean(row.shared_with_nicol),
+    categoryId: row.category_id || null,
+    category: mapCategory(row.category),
   }
+}
+
+function isExpense(item) {
+  return item.affectsCycleTotal
+    && item.amount > 0
+    && !['payment', 'credit'].includes(item.movementType)
 }
 
 function mapCycle(row) {
@@ -50,6 +77,7 @@ function mapCycle(row) {
 
   const reportedAmount = Number(row.reported_amount ?? 0)
   const estimatedAmount = Number(row.estimated_amount ?? 0)
+  const sharedTransactions = transactions.filter(item => item.sharedWithNicol && isExpense(item))
 
   return {
     id: row.id,
@@ -75,7 +103,9 @@ function mapCycle(row) {
     calculatedAmount,
     difference: reportedAmount - calculatedAmount,
     reviewCount: transactions.filter(item => item.reviewStatus === 'review_required').length,
-    sharedCount: transactions.filter(item => item.sharedWithNicol).length,
+    pendingCount: transactions.filter(item => item.isPending).length,
+    sharedCount: sharedTransactions.length,
+    sharedAmount: sharedTransactions.reduce((sum, item) => sum + item.amount, 0),
   }
 }
 
