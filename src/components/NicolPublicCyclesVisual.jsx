@@ -11,6 +11,13 @@ const TYPE_LABELS = {
   other: 'Gasto mensual',
 }
 
+const FALLBACK_CATEGORY = {
+  id: 'other',
+  label: 'Otros',
+  icon: '•',
+  color: '#888880',
+}
+
 function formatDate(value) {
   if (!value) return ''
   return new Intl.DateTimeFormat('es-CL', {
@@ -30,6 +37,36 @@ function formatCycleLabel(key) {
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year, month - 1, 1)))
   return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+function categoryFor(item) {
+  return {
+    ...FALLBACK_CATEGORY,
+    ...(item?.category || {}),
+  }
+}
+
+function translucent(color, opacity = '18') {
+  return /^#[0-9a-f]{6}$/i.test(String(color || '')) ? `${color}${opacity}` : `#888880${opacity}`
+}
+
+function buildCategorySummary(items, percentage) {
+  const grouped = new Map()
+  for (const item of items || []) {
+    const category = categoryFor(item)
+    const key = category.id || category.label
+    const current = grouped.get(key) || { category, total: 0, count: 0 }
+    current.total += Number(item.amount || 0)
+    current.count += 1
+    grouped.set(key, current)
+  }
+
+  return [...grouped.values()]
+    .map(row => ({
+      ...row,
+      nicolAmount: Math.round(row.total * Number(percentage || 0) / 100),
+    }))
+    .sort((a, b) => b.total - a.total || a.category.label.localeCompare(b.category.label, 'es'))
 }
 
 function Header() {
@@ -128,10 +165,63 @@ function CycleSummary({ cycle, percentage, index, total, onMove }) {
         <div className="text-[13px] font-semibold bg-white/10 rounded-full px-3 py-1.5">{percentage}%</div>
       </div>
 
+      <div className="mt-4 rounded-xl bg-white/10 px-3.5 py-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
+        <span className="font-mono font-semibold">{fmtCLP(cycle.sharedTotal || 0)}</span>
+        <span className="opacity-55">×</span>
+        <span className="font-semibold">{percentage}%</span>
+        <span className="opacity-55">=</span>
+        <span className="font-mono font-bold">{fmtCLP(cycle.nicolAmount || 0)}</span>
+      </div>
+
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] opacity-65 mt-4">
         {cycle.dueDate && <span>Vencimiento desde {formatDate(cycle.dueDate)}</span>}
         {cycle.projectedCount > 0 && <span>{cycle.projectedCount} cuotas proyectadas</span>}
         {cycle.recurringCount > 0 && <span>{cycle.recurringCount} recurrentes</span>}
+      </div>
+    </section>
+  )
+}
+
+function CategorySummary({ rows }) {
+  if (!rows.length) return null
+
+  return (
+    <section>
+      <div className="mb-2">
+        <div className="text-[10px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Resumen por categoría</div>
+        <div className="text-[12px] text-[var(--muted)] mt-0.5">Así se distribuyen los gastos de este ciclo</div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+        {rows.map(row => (
+          <div
+            key={row.category.id || row.category.label}
+            className="rounded-2xl border p-3.5"
+            style={{
+              borderColor: translucent(row.category.color, '55'),
+              backgroundColor: translucent(row.category.color, '12'),
+            }}
+          >
+            <div className="flex items-start gap-2.5">
+              <div
+                className="w-9 h-9 rounded-xl grid place-items-center text-[18px] shrink-0 border"
+                style={{
+                  borderColor: translucent(row.category.color, '55'),
+                  backgroundColor: translucent(row.category.color, '24'),
+                }}
+                aria-hidden="true"
+              >
+                {row.category.icon || '•'}
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11.5px] font-bold truncate">{row.category.label}</div>
+                <div className="font-mono text-[14px] font-bold mt-0.5">{fmtCLP(row.total)}</div>
+                <div className="text-[9.5px] text-[var(--muted)] mt-0.5">
+                  Nicol {fmtCLP(row.nicolAmount)} · {row.count} {row.count === 1 ? 'gasto' : 'gastos'}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   )
@@ -161,32 +251,68 @@ function InstallmentBadges({ item }) {
   )
 }
 
-function TransactionRow({ item }) {
+function TransactionRow({ item, percentage }) {
+  const category = categoryFor(item)
   const isInstallment = item.movementType === 'installment'
     && Number(item.installmentCurrent || 0) > 0
     && Number(item.installmentTotal || 0) > 1
-  const meta = item.isRecurring
-    ? 'Gasto mensual'
-    : item.isProjected
-      ? 'Monto proyectado'
-      : formatDate(item.date) || TYPE_LABELS[item.movementType] || 'Movimiento'
+  const originalAmount = Number(item.originalAmount || 0)
+  const amount = Number(item.amount || 0)
+  const nicolAmount = Math.round(amount * Number(percentage || 0) / 100)
+
+  const stateLabel = item.isRecurring
+    ? item.isProjected ? 'Recurrente estimado' : 'Recurrente mensual'
+    : item.isProjected ? 'Próximo ciclo' : 'Confirmado'
 
   return (
-    <div className="px-4 py-4 flex items-start justify-between gap-4">
-      <div className="min-w-0">
+    <div className="px-4 py-4 flex items-start gap-3.5">
+      <div
+        className="w-10 h-10 rounded-xl grid place-items-center text-[19px] shrink-0 border"
+        style={{
+          borderColor: translucent(category.color, '55'),
+          backgroundColor: translucent(category.color, '20'),
+        }}
+        aria-hidden="true"
+      >
+        {category.icon || '•'}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+          <span
+            className="inline-flex items-center rounded-full border px-2 py-0.5 text-[9.5px] font-bold"
+            style={{
+              borderColor: translucent(category.color, '66'),
+              backgroundColor: translucent(category.color, '18'),
+            }}
+          >
+            {category.label}
+          </span>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9.5px] font-semibold ${item.isProjected
+            ? 'bg-blue-50 text-blue-700'
+            : item.isRecurring
+              ? 'bg-violet-50 text-violet-700'
+              : 'bg-emerald-50 text-emerald-700'}`}>
+            {stateLabel}
+          </span>
+        </div>
+
         <div className="text-[13px] font-semibold break-words leading-snug">{item.description}</div>
         <InstallmentBadges item={item} />
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10.5px] text-[var(--muted)] mt-2">
-          <span>{meta}</span>
-          {!item.isRecurring && !isInstallment && <span>· {TYPE_LABELS[item.movementType] || 'Movimiento'}</span>}
-          {item.isRecurring && (
-            <span className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold">Recurrente</span>
-          )}
+
+        <div className="text-[10.5px] text-[var(--muted)] mt-2 leading-relaxed">
+          {item.isRecurring ? 'Gasto mensual' : item.isProjected ? 'Monto proyectado' : formatDate(item.date) || TYPE_LABELS[item.movementType] || 'Movimiento'}
+          {!item.isRecurring && !isInstallment && <> · {TYPE_LABELS[item.movementType] || 'Movimiento'}</>}
+          {isInstallment && originalAmount > amount && <> · Compra total {fmtCLP(originalAmount)}</>}
         </div>
       </div>
+
       <div className="text-right shrink-0">
-        <div className="font-mono text-[13px] font-bold">{fmtCLP(item.amount || 0)}</div>
-        {isInstallment && <div className="text-[9.5px] text-[var(--muted)] mt-1">valor de esta cuota</div>}
+        <div className="font-mono text-[13px] font-bold">{fmtCLP(amount)}</div>
+        <div className="text-[9.5px] text-[var(--muted)] mt-1">
+          {isInstallment ? 'valor de esta cuota' : item.isRecurring ? 'monto mensual' : 'monto compartido'}
+        </div>
+        <div className="text-[10px] font-semibold mt-2">Nicol {fmtCLP(nicolAmount)}</div>
       </div>
     </div>
   )
@@ -233,6 +359,11 @@ export default function NicolPublicCyclesVisual({ token }) {
     [cycles, selectedKey],
   )
   const cycle = cycles[selectedIndex] || null
+  const percentage = Number(state.data?.percentage || 0)
+  const categorySummary = useMemo(
+    () => buildCategorySummary(cycle?.transactions || [], percentage),
+    [cycle, percentage],
+  )
 
   const move = direction => {
     const nextIndex = selectedIndex + direction
@@ -240,7 +371,7 @@ export default function NicolPublicCyclesVisual({ token }) {
   }
 
   if (!isConfigured) return <Message title="Configuración incompleta" text="Esta vista todavía no tiene conexión a Supabase." />
-  if (state.loading) return <Message loading title="Cargando gastos compartidos" text="Consultando ciclos y próximas cuotas…" />
+  if (state.loading) return <Message loading title="Cargando gastos compartidos" text="Consultando ciclos, categorías y próximas cuotas…" />
   if (state.error || !state.data) return <Message title="Enlace no disponible" text={state.error || 'El enlace no existe o fue desactivado.'} />
 
   return (
@@ -254,11 +385,13 @@ export default function NicolPublicCyclesVisual({ token }) {
               <>
                 <CycleSummary
                   cycle={cycle}
-                  percentage={state.data.percentage || 0}
+                  percentage={percentage}
                   index={selectedIndex}
                   total={cycles.length}
                   onMove={move}
                 />
+
+                <CategorySummary rows={categorySummary} />
 
                 <section className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-[var(--line)] flex items-center justify-between gap-3">
@@ -275,7 +408,9 @@ export default function NicolPublicCyclesVisual({ token }) {
 
                   {(cycle.transactions || []).length > 0 ? (
                     <div className="divide-y divide-[var(--line)]">
-                      {cycle.transactions.map(item => <TransactionRow key={item.id} item={item} />)}
+                      {cycle.transactions.map(item => (
+                        <TransactionRow key={item.id} item={item} percentage={percentage} />
+                      ))}
                     </div>
                   ) : (
                     <div className="px-5 py-10 text-center">
@@ -287,7 +422,7 @@ export default function NicolPublicCyclesVisual({ token }) {
 
                 {cycle.isUpcoming && (
                   <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[11px] text-blue-800 leading-relaxed">
-                    Las cuotas indicadas con “Este ciclo pagará” son proyecciones de ese mes. El monto puede cambiar cuando cierre el estado de cuenta.
+                    Las cuotas indicadas con “Este ciclo pagará” y los recurrentes estimados son una proyección. El monto puede cambiar cuando cierre el estado de cuenta.
                   </div>
                 )}
               </>

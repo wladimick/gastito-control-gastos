@@ -8,7 +8,18 @@ import {
   updateNicolRecurringExpense,
 } from '../services/nicolRecurringService'
 
-const EMPTY_FORM = { name: '', amount: '', dayOfMonth: '5', sharedWithNicol: true }
+const EMPTY_FORM = {
+  name: '',
+  amount: '',
+  dayOfMonth: '5',
+  categoryId: '',
+  sharedWithNicol: true,
+}
+
+const FALLBACK_CATEGORY = {
+  label: 'Otros',
+  icon: '•',
+}
 
 function SimpleMessage({ title, text, loading = false }) {
   return (
@@ -26,6 +37,7 @@ export default function NicolRecurringAdmin() {
   const [authReady, setAuthReady] = useState(false)
   const [session, setSession] = useState(null)
   const [items, setItems] = useState([])
+  const [categories, setCategories] = useState([])
   const [drafts, setDrafts] = useState({})
   const [percentage, setPercentage] = useState(33)
   const [hasActiveLink, setHasActiveLink] = useState(false)
@@ -36,7 +48,7 @@ export default function NicolRecurringAdmin() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!supabase) { setAuthReady(true); return }
+    if (!supabase) { setAuthReady(true); return undefined }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       setAuthReady(true)
@@ -52,11 +64,13 @@ export default function NicolRecurringAdmin() {
     try {
       const result = await fetchNicolRecurringData(currentSession.user.id)
       setItems(result.items)
+      setCategories(result.categories)
       setPercentage(result.percentage)
       setHasActiveLink(result.hasActiveLink)
       setDrafts(Object.fromEntries(result.items.map(item => [item.id, {
         amount: String(item.amount),
         dayOfMonth: item.day_of_month == null ? '' : String(item.day_of_month),
+        categoryId: item.category_id || '',
       }])))
     } catch (loadError) {
       setError(loadError.message || 'No fue posible cargar los recurrentes.')
@@ -67,6 +81,10 @@ export default function NicolRecurringAdmin() {
 
   useEffect(() => { load(session) }, [session])
 
+  const categoriesById = useMemo(
+    () => new Map(categories.map(category => [category.id, category])),
+    [categories],
+  )
   const sharedItems = useMemo(
     () => items.filter(item => item.active && item.shared_with_nicol),
     [items],
@@ -85,6 +103,7 @@ export default function NicolRecurringAdmin() {
       [updated.id]: {
         amount: String(updated.amount),
         dayOfMonth: updated.day_of_month == null ? '' : String(updated.day_of_month),
+        categoryId: updated.category_id || '',
       },
     }))
   }
@@ -110,6 +129,7 @@ export default function NicolRecurringAdmin() {
       const updated = await updateNicolRecurringExpense(item.id, {
         amount: draft.amount,
         dayOfMonth: draft.dayOfMonth,
+        categoryId: draft.categoryId,
       })
       replaceItem(updated)
     } catch (updateError) {
@@ -135,6 +155,7 @@ export default function NicolRecurringAdmin() {
         [created.id]: {
           amount: String(created.amount),
           dayOfMonth: created.day_of_month == null ? '' : String(created.day_of_month),
+          categoryId: created.category_id || '',
         },
       }))
       setForm(EMPTY_FORM)
@@ -191,8 +212,8 @@ export default function NicolRecurringAdmin() {
             </div>
           </div>
           <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl p-4">
-            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Privacidad</div>
-            <div className="text-[11.5px] font-semibold mt-2">Todo parte desmarcado</div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Categorías</div>
+            <div className="text-[11.5px] font-semibold mt-2">Automáticas y editables</div>
           </div>
         </section>
 
@@ -201,7 +222,7 @@ export default function NicolRecurringAdmin() {
             <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Nuevo recurrente</div>
             <h2 className="text-[16px] font-bold mt-1">Agregar gasto mensual</h2>
           </div>
-          <div className="grid sm:grid-cols-[minmax(0,1fr)_160px_120px] gap-3 mt-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_150px_110px_190px] gap-3 mt-4">
             <label>
               <span className="block text-[10.5px] text-[var(--muted)] mb-1">Nombre</span>
               <input value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))}
@@ -219,6 +240,17 @@ export default function NicolRecurringAdmin() {
               <input type="number" min="1" max="31" value={form.dayOfMonth}
                 onChange={event => setForm(current => ({ ...current, dayOfMonth: event.target.value }))}
                 className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 font-mono text-[12px] outline-none focus:ring-1 focus:ring-[var(--accent)]" />
+            </label>
+            <label>
+              <span className="block text-[10.5px] text-[var(--muted)] mb-1">Categoría</span>
+              <select value={form.categoryId}
+                onChange={event => setForm(current => ({ ...current, categoryId: event.target.value }))}
+                className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[12px] outline-none">
+                <option value="">✨ Detectar automáticamente</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>{category.icon || '•'} {category.label}</option>
+                ))}
+              </select>
             </label>
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -238,7 +270,7 @@ export default function NicolRecurringAdmin() {
         <section className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl overflow-hidden">
           <div className="p-4 border-b border-[var(--line)]">
             <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Gastos existentes</div>
-            <h2 className="text-[16px] font-bold mt-1">Seleccionar y actualizar</h2>
+            <h2 className="text-[16px] font-bold mt-1">Seleccionar, categorizar y actualizar</h2>
             <p className="text-[11.5px] text-[var(--muted)] mt-1">Solo los activos y marcados se muestran en el enlace público.</p>
           </div>
 
@@ -249,23 +281,34 @@ export default function NicolRecurringAdmin() {
           ) : (
             <div className="divide-y divide-[var(--line)]">
               {items.map(item => {
-                const draft = drafts[item.id] || { amount: String(item.amount), dayOfMonth: item.day_of_month ?? '' }
+                const draft = drafts[item.id] || {
+                  amount: String(item.amount),
+                  dayOfMonth: item.day_of_month ?? '',
+                  categoryId: item.category_id || '',
+                }
+                const category = categoriesById.get(item.category_id) || FALLBACK_CATEGORY
                 const changed = Number(draft.amount) !== Number(item.amount)
                   || String(draft.dayOfMonth ?? '') !== String(item.day_of_month ?? '')
+                  || String(draft.categoryId || '') !== String(item.category_id || '')
+
                 return (
                   <div key={item.id} className={`p-4 ${item.active ? '' : 'opacity-55'}`}>
                     <div className="flex flex-col lg:flex-row lg:items-end gap-3">
                       <label className="flex items-start gap-3 flex-1 min-w-0 cursor-pointer">
                         <input type="checkbox" checked={Boolean(item.shared_with_nicol)} disabled={busyId === item.id || !item.active}
                           onChange={() => toggleShare(item)} className="mt-1 w-4 h-4 accent-[var(--ink)]" />
+                        <div className="w-9 h-9 rounded-xl border border-[var(--line)] bg-[var(--bg)] grid place-items-center text-[17px] shrink-0">
+                          {category.icon || '•'}
+                        </div>
                         <div className="min-w-0">
                           <div className="text-[13px] font-semibold break-words">{item.name}</div>
                           <div className="text-[10.5px] text-[var(--muted)] mt-1">
-                            {item.active ? 'Activo' : 'Pausado'} · {item.day_of_month ? `Pago el día ${item.day_of_month}` : 'Sin día definido'}
+                            {category.label} · {item.active ? 'Activo' : 'Pausado'} · {item.day_of_month ? `Pago el día ${item.day_of_month}` : 'Sin día definido'}
                           </div>
                         </div>
                       </label>
-                      <div className="grid grid-cols-[150px_100px_auto] gap-2">
+
+                      <div className="grid sm:grid-cols-[130px_90px_180px_auto] gap-2 lg:w-auto">
                         <label>
                           <span className="block text-[9.5px] text-[var(--muted)] mb-1">Monto</span>
                           <input type="number" min="1" step="1" value={draft.amount}
@@ -277,6 +320,17 @@ export default function NicolRecurringAdmin() {
                           <input type="number" min="1" max="31" value={draft.dayOfMonth}
                             onChange={event => setDraft(item.id, 'dayOfMonth', event.target.value)}
                             className="w-full h-9 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 font-mono text-[11.5px] outline-none" />
+                        </label>
+                        <label>
+                          <span className="block text-[9.5px] text-[var(--muted)] mb-1">Categoría</span>
+                          <select value={draft.categoryId}
+                            onChange={event => setDraft(item.id, 'categoryId', event.target.value)}
+                            className="w-full h-9 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 text-[11px] outline-none">
+                            <option value="">✨ Automática</option>
+                            {categories.map(option => (
+                              <option key={option.id} value={option.id}>{option.icon || '•'} {option.label}</option>
+                            ))}
+                          </select>
                         </label>
                         <button type="button" disabled={!changed || busyId === item.id} onClick={() => saveItem(item)}
                           className="self-end h-9 px-3 rounded-lg border border-[var(--line)] text-[11px] font-semibold disabled:opacity-35 hover:bg-[var(--hover)]">
