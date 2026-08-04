@@ -30,7 +30,8 @@ async function categoryMap() {
 }
 
 const FIELDS = `id, name, total_amount, installment_amount, total_installments,
-  paid_installments, bank_id, due_day, start_date, auto_pay, last_paid_month, categories(label)`
+  paid_installments, bank_id, due_day, start_date, auto_pay, last_paid_month,
+  categories(id, label, icon, color)`
 
 function mapRow(row) {
   const category = CATEGORIES.find(
@@ -46,6 +47,7 @@ function mapRow(row) {
     editable: true,
     description: row.name,
     category: category?.id ?? 'otros',
+    categoryMeta: category || { id: 'otros', label: 'Otros', icon: '•', color: '#888880' },
     bank: row.bank_id ?? 'bchile',
     method: 'tarjeta',
     total: Number(row.total_amount || 0),
@@ -72,6 +74,10 @@ async function fetchManualInstallments() {
 
 async function toRow(debt) {
   const { forward } = await categoryMap()
+  const selectedCategory = String(debt.category || '')
+  const categoryId = selectedCategory.includes('-')
+    ? selectedCategory
+    : forward[selectedCategory] ?? null
   return {
     name: debt.description,
     total_amount: Number(debt.total || 0),
@@ -79,7 +85,7 @@ async function toRow(debt) {
     total_installments: Number(debt.installments || 1),
     paid_installments: Number(debt.paid ?? 0),
     bank_id: debt.bank ?? null,
-    category_id: forward[debt.category] ?? null,
+    category_id: categoryId,
     due_day: Number(debt.dayOfMonth ?? 5),
     start_date: debt.startMonth ? `${debt.startMonth}-01` : null,
     auto_pay: Boolean(debt.autoPay),
