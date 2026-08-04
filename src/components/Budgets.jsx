@@ -1,175 +1,60 @@
-import React, { useState } from 'react'
-import { Card, Badge } from './ui'
+import React, { useMemo, useState } from 'react'
+import { Badge, Card } from './ui'
 import { Icon, fmtCLP, MES } from '../lib/helpers'
 import { CATEGORIES } from '../data'
 
-function MiniStat({ label, value, tone }) {
-  const colors = { over: "text-[#A02828]", warn: "text-[var(--amber-ink)]" }[tone] || "text-[var(--ink)]";
-  return (
-    <div className="rounded-lg border border-[var(--line)] p-3">
-      <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{label}</div>
-      <div className={`mt-1.5 font-mono text-[22px] tracking-tight ${colors}`}>{value}</div>
+const EXCLUDED = new Set(['sueldo','ahorro','prestamo','deuda','por_cobrar','por_pagar'])
+function keyFor(date) { const value = String(date || '').slice(0, 10); return value.slice(0, 7) }
+function currentKey() { const parts = new Intl.DateTimeFormat('en-CA', { year:'numeric', month:'2-digit', timeZone:'America/Santiago' }).formatToParts(new Date()); return `${parts.find(p=>p.type==='year')?.value}-${parts.find(p=>p.type==='month')?.value}` }
+function addMonths(key, offset) { const [y,m] = key.split('-').map(Number); const date = new Date(Date.UTC(y,m-1+offset,1)); return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}` }
+function roundBudget(value) { if (!value) return 0; return Math.ceil(value / 5000) * 5000 }
+function sumByCategory(expenses, month) { return expenses.filter(item => keyFor(item.date) === month).reduce((map,item) => { const id = item.category || 'otros'; map[id] = (map[id] || 0) + Number(item.amount || 0); return map }, {}) }
+
+function Metric({ label, value, detail, tone='default' }) { const cls = tone==='dark'?'bg-[var(--ink)] text-[var(--bg)] border-transparent':tone==='warning'?'bg-[var(--amber-soft)] text-[var(--amber-ink)] border-transparent':tone==='danger'?'bg-red-50 text-red-800 border-red-100':'bg-[var(--bg-elev)] border-[var(--line)]'; return <div className={`rounded-2xl border p-4 min-h-[112px] ${cls}`}><div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-60">{label}</div><div className="font-mono text-[22px] font-bold mt-3">{value}</div><div className="text-[10px] opacity-65 mt-1.5">{detail}</div></div> }
+
+export default function Budgets({ expenses = [], budgets = {}, setBudgets }) {
+  const month = currentKey(); const [year,monthNumber] = month.split('-').map(Number)
+  const today = new Date(); const daysInMonth = new Date(year, monthNumber, 0).getDate(); const day = today.getDate()
+  const [editing, setEditing] = useState(null); const [draft, setDraft] = useState(''); const [showAll,setShowAll] = useState(false)
+  const current = useMemo(() => sumByCategory(expenses, month), [expenses, month])
+  const pastMonths = useMemo(() => [-1,-2,-3].map(offset => addMonths(month, offset)), [month])
+  const past = useMemo(() => pastMonths.map(key => sumByCategory(expenses,key)), [expenses,pastMonths])
+
+  const rows = useMemo(() => CATEGORIES.filter(cat => !EXCLUDED.has(cat.id)).map(cat => {
+    const spent = Number(current[cat.id] || 0); const budget = Number(budgets[cat.id] || 0)
+    const average = past.reduce((sum,map) => sum + Number(map[cat.id] || 0), 0) / past.length
+    const suggestion = roundBudget(Math.max(average * .9, spent * 1.05))
+    const pct = budget > 0 ? spent / budget * 100 : 0
+    const state = budget <= 0 ? 'none' : pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok'
+    return { ...cat, spent, budget, average, suggestion, pct, state }
+  }).sort((a,b) => (b.spent + b.budget + b.average) - (a.spent + a.budget + a.average)), [current,budgets,past])
+
+  const relevant = rows.filter(row => row.spent > 0 || row.budget > 0 || row.average > 0)
+  const visible = showAll ? rows : relevant
+  const totalSpent = rows.reduce((sum,row)=>sum+row.spent,0); const totalBudget = rows.reduce((sum,row)=>sum+row.budget,0)
+  const historicalAverage = rows.reduce((sum,row)=>sum+row.average,0)
+  const projected = day <= 7 ? Math.max(totalSpent, historicalAverage) : Math.round(totalSpent / Math.max(1,day) * daysInMonth)
+  const remaining = totalBudget - totalSpent; const configured = rows.filter(row=>row.budget>0).length
+  const warnings = rows.filter(row=>row.state==='warn').length; const over = rows.filter(row=>row.state==='over').length
+  const suggestions = Object.fromEntries(rows.filter(row=>row.suggestion>0).map(row=>[row.id,row.suggestion]))
+
+  const applySuggestions = () => setBudgets?.({ ...budgets, ...suggestions })
+  const commit = () => { if (!editing) return; setBudgets?.({ ...budgets, [editing]: Number(draft || 0) }); setEditing(null) }
+
+  return <div className="max-w-7xl mx-auto pb-20 flex flex-col gap-5">
+    {totalBudget === 0 && <div className="rounded-2xl border border-[var(--amber-ink)]/20 bg-[var(--amber-soft)] p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"><div><div className="text-[12px] font-bold text-[var(--amber-ink)]">Todavía no tienes un plan de presupuesto</div><div className="text-[10.5px] text-[var(--amber-ink)]/75 mt-1">Gastito calculó límites sugeridos usando los últimos tres meses. Puedes aplicarlos y luego ajustar cada categoría.</div></div><button onClick={applySuggestions} className="h-10 px-4 rounded-xl bg-[var(--ink)] text-[var(--bg)] text-[11px] font-semibold">Crear plan sugerido · {fmtCLP(Object.values(suggestions).reduce((s,v)=>s+v,0))}</button></div>}
+
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+      <Metric label={`Gastado · ${MES[monthNumber-1]}`} value={fmtCLP(totalSpent)} detail={`${expenses.filter(item=>keyFor(item.date)===month).length} movimientos`} tone="dark"/>
+      <Metric label="Presupuesto definido" value={totalBudget ? fmtCLP(totalBudget) : 'Sin configurar'} detail={`${configured} categorías con límite`} tone={totalBudget ? 'default' : 'warning'}/>
+      <Metric label="Proyección del mes" value={fmtCLP(projected)} detail={day <= 7 ? 'Basada en promedio histórico por ser inicio de mes' : `Ritmo de los primeros ${day} días`} tone={totalBudget && projected > totalBudget ? 'danger' : 'default'}/>
+      <Metric label="Disponible del plan" value={totalBudget ? fmtCLP(remaining) : '—'} detail={totalBudget ? (remaining >= 0 ? 'Todavía disponible' : 'Sobre el límite total') : 'Define límites para calcularlo'} tone={remaining < 0 ? 'danger' : 'default'}/>
     </div>
-  );
-}
 
-export default function Budgets({ expenses, budgets, setBudgets }) {
-  const today = new Date();
+    {totalBudget > 0 && <Card padding="p-4"><div className="flex items-center justify-between gap-3"><div><div className="text-[12px] font-bold">Ritmo del presupuesto</div><div className="text-[10px] text-[var(--muted)] mt-1">Día {day} de {daysInMonth} · {warnings} en alerta · {over} sobre límite</div></div><div className="font-mono text-[15px] font-bold">{Math.round(totalSpent / totalBudget * 100)}%</div></div><div className="mt-3 h-2 rounded-full bg-[var(--line)] overflow-hidden relative"><div className={`h-full rounded-full ${totalSpent > totalBudget ? 'bg-red-500' : projected > totalBudget ? 'bg-amber-500' : 'bg-[var(--accent)]'}`} style={{width:`${Math.min(100,totalSpent/totalBudget*100)}%`}}/><div className="absolute top-[-3px] bottom-[-3px] w-[2px] bg-[var(--ink)]/50" style={{left:`${Math.min(100,day/daysInMonth*100)}%`}}/></div></Card>}
 
-  const spentByCat = {};
-  expenses.forEach(e => {
-    const d = new Date(e.date);
-    if (d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()) {
-      spentByCat[e.category] = (spentByCat[e.category] || 0) + e.amount;
-    }
-  });
-
-  const rows = CATEGORIES.map(c => {
-    const spent  = spentByCat[c.id] || 0;
-    const budget = budgets[c.id]    || 0;
-    const pct    = budget ? (spent / budget) * 100 : 0;
-    let state;
-    if (budget === 0) state = "none";
-    else if (pct >= 100) state = "over";
-    else if (pct >= 80)  state = "warn";
-    else                 state = "ok";
-    return { ...c, spent, budget, pct, state };
-  });
-
-  const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
-  const totalSpent  = rows.reduce((s, r) => s + r.spent, 0);
-  const remaining   = totalBudget - totalSpent;
-  const totalPct    = totalBudget ? (totalSpent / totalBudget) * 100 : 0;
-
-  const daysIn   = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const dayNow   = today.getDate();
-  const dayRatio = dayNow / daysIn;
-
-  const overCount = rows.filter(r => r.state === "over").length;
-  const warnCount = rows.filter(r => r.state === "warn").length;
-
-  const [editingId, setEditingId] = useState(null);
-  const [draft,     setDraft]     = useState("");
-
-  const startEdit = (id, curr) => { setEditingId(id); setDraft(String(curr)); };
-  const commit    = () => {
-    if (editingId !== null) {
-      setBudgets({ ...budgets, [editingId]: Number(draft) || 0 });
-      setEditingId(null);
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-5">
-      <Card padding="p-5 md:p-6">
-        <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-6">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">Presupuesto · {MES[today.getMonth()]} {today.getFullYear()}</div>
-            <div className="mt-3 flex items-baseline gap-2 flex-wrap">
-              <div className="font-mono text-[34px] md:text-[42px] tracking-tight leading-none">{fmtCLP(totalSpent)}</div>
-              <div className="text-[15px] text-[var(--muted)] font-mono">/ {fmtCLP(totalBudget)}</div>
-            </div>
-            <div className="mt-3 flex items-center gap-2 flex-wrap text-[12.5px]">
-              <Badge tone={totalPct >= 100 || totalPct >= 80 ? "warn" : "ok"}>
-                {totalPct.toFixed(0)}% usado
-              </Badge>
-              <span className="text-[var(--muted)]">·</span>
-              <span className={remaining < 0 ? "text-[var(--amber-ink)]" : "text-[var(--ink-2)]"}>
-                {remaining >= 0 ? "Quedan " : "Pasaste por "}
-                <span className="font-mono">{fmtCLP(Math.abs(remaining))}</span>
-              </span>
-              <span className="text-[var(--muted)]">·</span>
-              <span className="text-[var(--muted)]">Día {dayNow} de {daysIn}</span>
-            </div>
-
-            <div className="mt-5 h-2 rounded-full bg-[var(--line)] overflow-hidden relative">
-              <div className="h-full" style={{
-                width: Math.min(100, totalPct) + "%",
-                background: totalPct > 100 ? "var(--amber-ink)" : (totalPct > dayRatio * 100 + 5 ? "var(--amber-ink)" : "var(--accent)")
-              }}/>
-              <div className="absolute top-[-4px] bottom-[-4px] w-[2px] bg-[var(--ink)]"
-                   style={{ left: (dayRatio * 100) + "%" }}/>
-            </div>
-            <div className="mt-2 flex items-center justify-between text-[10.5px] text-[var(--muted)] font-mono">
-              <span>0%</span>
-              <span>↑ ritmo esperado del mes ({(dayRatio * 100).toFixed(0)}%)</span>
-              <span>100%</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 md:grid-cols-1 gap-2">
-            <MiniStat label="Categorías"   value={rows.filter(r => r.budget > 0).length}/>
-            <MiniStat label="En alerta"    value={warnCount} tone="warn"/>
-            <MiniStat label="Sobre límite" value={overCount} tone="over"/>
-          </div>
-        </div>
-      </Card>
-
-      <Card padding="p-0">
-        <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--line)]">
-          <div>
-            <div className="font-semibold tracking-tight">Por categoría</div>
-            <div className="text-[12px] text-[var(--muted)] mt-0.5">Toca el monto para editarlo</div>
-          </div>
-          <Badge tone="muted">{rows.length}</Badge>
-        </div>
-        <ul className="divide-y divide-[var(--line)]">
-          {rows.map(r => {
-            const stateColor = {
-              ok:   { bar: "var(--accent)",    text: "text-[var(--accent-ink)]", label: "En ruta" },
-              warn: { bar: "var(--amber-ink)", text: "text-[var(--amber-ink)]",  label: "Cerca del límite" },
-              over: { bar: "#A02828",          text: "text-[#A02828]",           label: "Sobre el límite" },
-              none: { bar: "var(--ink-3)",     text: "text-[var(--muted)]",      label: "Sin presupuesto" },
-            }[r.state];
-            const isEditing = editingId === r.id;
-            return (
-              <li key={r.id} className="px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-md grid place-items-center text-[16px] shrink-0" style={{ background: r.color + "20" }}>{r.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-[14px]">{r.label}</span>
-                        <span className={`text-[11px] ${stateColor.text}`}>{stateColor.label}</span>
-                      </div>
-                      <div className="flex items-center gap-2 font-mono text-[13px]">
-                        <span className={r.state === "over" ? "text-[#A02828]" : ""}>{fmtCLP(r.spent)}</span>
-                        <span className="text-[var(--muted)]">/</span>
-                        {isEditing ? (
-                          <div className="inline-flex items-center gap-1">
-                            <span className="text-[var(--muted)]">$</span>
-                            <input
-                              type="number" autoFocus
-                              value={draft}
-                              onChange={e => setDraft(e.target.value)}
-                              onBlur={commit}
-                              onKeyDown={e => e.key === "Enter" && commit()}
-                              className="w-24 bg-transparent border-b border-[var(--ink)] text-right focus:outline-none"/>
-                          </div>
-                        ) : (
-                          <button onClick={() => startEdit(r.id, r.budget)}
-                                  className="text-[var(--ink-2)] hover:underline">
-                            {fmtCLP(r.budget)}
-                          </button>
-                        )}
-                        <span className="text-[var(--muted)] tabular-nums w-12 text-right">{r.budget ? r.pct.toFixed(0) + "%" : "—"}</span>
-                      </div>
-                    </div>
-                    <div className="mt-2 h-1.5 rounded-full bg-[var(--line)] overflow-hidden relative">
-                      <div className="h-full rounded-full transition-all"
-                           style={{ width: Math.min(100, r.pct) + "%", background: stateColor.bar }}/>
-                      {r.budget > 0 && (
-                        <div className="absolute top-[-3px] bottom-[-3px] w-[1.5px] bg-[var(--ink)]/40"
-                             style={{ left: (dayRatio * 100) + "%" }}/>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
-    </div>
-  );
+    <Card padding="p-0"><div className="px-4 py-3.5 border-b border-[var(--line)] flex items-center justify-between gap-3"><div><div className="text-[13px] font-bold">Límites por categoría</div><div className="text-[10px] text-[var(--muted)] mt-1">Solo mostramos categorías con gasto, presupuesto o historial.</div></div><div className="flex gap-2"><button onClick={applySuggestions} className="h-8 px-3 rounded-xl border border-[var(--line)] text-[10px] font-semibold">Actualizar sugerencias</button><button onClick={()=>setShowAll(value=>!value)} className="h-8 px-3 rounded-xl border border-[var(--line)] text-[10px] font-semibold">{showAll?'Ocultar vacías':'Ver todas'}</button></div></div>
+      {!visible.length ? <div className="p-10 text-center"><div className="text-[30px]">🎯</div><div className="text-[13px] font-bold mt-2">Sin historial suficiente</div><div className="text-[10.5px] text-[var(--muted)] mt-1">Cuando registres gastos aparecerán sugerencias automáticas.</div></div> : <div className="divide-y divide-[var(--line)]">{visible.map(row => { const state = row.state==='over'?{label:'Sobre límite',tone:'danger',bar:'bg-red-500'}:row.state==='warn'?{label:'Cerca del límite',tone:'warn',bar:'bg-amber-500'}:row.state==='ok'?{label:'En ruta',tone:'ok',bar:'bg-[var(--accent)]'}:{label:'Sin límite',tone:'muted',bar:'bg-[var(--line)]'}; return <div key={row.id} className="p-4"><div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl grid place-items-center text-[18px]" style={{background:`${row.color}20`}}>{row.icon}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="text-[12px] font-semibold">{row.label}</span><Badge tone={state.tone}>{state.label}</Badge></div><div className="font-mono text-[12px] flex items-center gap-1.5"><strong>{fmtCLP(row.spent)}</strong><span className="text-[var(--muted)]">/</span>{editing===row.id?<input autoFocus type="number" value={draft} onChange={event=>setDraft(event.target.value)} onBlur={commit} onKeyDown={event=>event.key==='Enter'&&commit()} className="w-24 h-7 rounded-lg border border-[var(--line)] px-2 text-right"/>:<button onClick={()=>{setEditing(row.id);setDraft(String(row.budget||row.suggestion||0))}} className="underline decoration-dotted underline-offset-4">{row.budget?fmtCLP(row.budget):'Definir'}</button>}</div></div><div className="mt-2 h-1.5 rounded-full bg-[var(--line)] overflow-hidden"><div className={`h-full rounded-full ${state.bar}`} style={{width:`${row.budget?Math.min(100,row.pct):0}%`}}/></div><div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9.5px] text-[var(--muted)]"><span>Promedio 3 meses: {fmtCLP(Math.round(row.average))}</span><button onClick={()=>setBudgets?.({...budgets,[row.id]:row.suggestion})} className="font-semibold text-[var(--ink-2)]">Usar sugerencia {fmtCLP(row.suggestion)}</button></div></div></div></div>})}</div>}
+    </Card>
+  </div>
 }
