@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase'
 
-const FIELDS = 'id, name, amount, day_of_month, active, shared_with_nicol, updated_at'
+const FIELDS = 'id, name, amount, day_of_month, active, shared_with_nicol, category_id, updated_at'
 
 function ensureSupabase() {
   if (!supabase) throw new Error('Supabase no está configurado')
@@ -8,7 +8,7 @@ function ensureSupabase() {
 
 export async function fetchNicolRecurringData(userId) {
   ensureSupabase()
-  const [itemsResult, linkResult] = await Promise.all([
+  const [itemsResult, categoriesResult, linkResult] = await Promise.all([
     supabase
       .from('recurring_expenses')
       .select(FIELDS)
@@ -17,6 +17,12 @@ export async function fetchNicolRecurringData(userId) {
       .order('active', { ascending: false })
       .order('day_of_month', { ascending: true, nullsFirst: false })
       .order('name', { ascending: true }),
+    supabase
+      .from('categories')
+      .select('id, user_id, label, icon, color, sort_order')
+      .or(`user_id.is.null,user_id.eq.${userId}`)
+      .order('sort_order', { ascending: true })
+      .order('label', { ascending: true }),
     supabase
       .from('billing_share_links')
       .select('id, percentage, active')
@@ -27,10 +33,12 @@ export async function fetchNicolRecurringData(userId) {
   ])
 
   if (itemsResult.error) throw itemsResult.error
+  if (categoriesResult.error) throw categoriesResult.error
   if (linkResult.error) throw linkResult.error
 
   return {
     items: itemsResult.data || [],
+    categories: categoriesResult.data || [],
     percentage: Number(linkResult.data?.percentage ?? 33),
     hasActiveLink: Boolean(linkResult.data),
   }
@@ -54,6 +62,7 @@ export async function createNicolRecurringExpense(userId, input) {
       name,
       amount,
       day_of_month: day,
+      category_id: input.categoryId || null,
       active: true,
       auto_register: false,
       shared_with_nicol: input.sharedWithNicol !== false,
@@ -81,6 +90,7 @@ export async function updateNicolRecurringExpense(itemId, patch) {
     update.day_of_month = day
   }
 
+  if ('categoryId' in patch) update.category_id = patch.categoryId || null
   if ('sharedWithNicol' in patch) update.shared_with_nicol = Boolean(patch.sharedWithNicol)
   if ('active' in patch) update.active = Boolean(patch.active)
   update.updated_at = new Date().toISOString()
