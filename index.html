@@ -12,5 +12,16 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      document.addEventListener('click', function (event) {
+        const trigger = event.target.closest('button')
+        if (!trigger || trigger.textContent.trim() !== 'Ver facturación') return
+
+        const navigationButton = Array.from(document.querySelectorAll('button')).find(function (button) {
+          return button !== trigger && button.textContent.trim() === 'Facturación'
+        })
+        if (navigationButton) navigationButton.click()
+      })
+    </script>
   </body>
 </html>
