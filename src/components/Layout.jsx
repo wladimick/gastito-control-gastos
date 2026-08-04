@@ -30,6 +30,12 @@ const BASE_NAV_GROUPS = [
     ],
   },
   {
+    label: "Compartidos",
+    items: [
+      { id: "nicol", label: "Gastos con Nicol", icon: "users", short: "Nicol", href: "?nicol-admin=recurrentes" },
+    ],
+  },
+  {
     label: "Bot Telegram",
     items: [
       { id: "unparsed",     label: "Sin interpretar",  icon: "alert",   badge: 5, short: "Bot" },
@@ -70,6 +76,14 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
   const currentGroup = NAV_GROUPS.find(g => g.items.some(i => i.id === view));
   const breadcrumb = currentGroup?.label;
 
+  const openNavItem = item => {
+    if (item.href) {
+      window.location.assign(`${window.location.pathname}${item.href}`)
+      return
+    }
+    setView(item.id)
+  }
+
   return (
     <div className="min-h-screen flex bg-[var(--bg)] text-[var(--ink)]">
       {/* Sidebar desktop */}
@@ -88,7 +102,7 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
               {g.items.map(n => (
                 <button
                   key={n.id}
-                  onClick={() => setView(n.id)}
+                  onClick={() => openNavItem(n)}
                   className={`group flex items-center justify-between px-3 py-2 rounded-md text-[13px] transition
                     ${view === n.id ? "bg-white text-[#0F0F0E]" : "text-[#A0A09A] hover:bg-white/8 hover:text-white"}`}
                 >
@@ -228,7 +242,7 @@ export default function Layout({ view, setView, botStatus, children, onOpenChat,
                   {g.items.map(n => (
                     <button
                       key={n.id}
-                      onClick={() => { setView(n.id); setOpenMobile(false); }}
+                      onClick={() => { openNavItem(n); setOpenMobile(false); }}
                       className={`flex items-center justify-between px-3 py-2.5 rounded-md text-sm
                         ${view === n.id ? "bg-white text-[#0F0F0E]" : "text-[#A0A09A] hover:bg-white/8 hover:text-white"}`}
                     >
