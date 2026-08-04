@@ -3,22 +3,28 @@
 @tailwind utilities;
 
 :root {
-  --bg:         #FAFAF7;
-  --bg-elev:    #FFFFFF;
-  --ink:        #1A1A18;
-  --ink-2:      #3D3D3A;
-  --ink-3:      #B8B8B0;
-  --muted:      #8A8A82;
-  --line:       #E9E7E0;
-  --hover:      #F2F0E9;
-  --accent:     oklch(0.62 0.13 165);
-  --accent-ink: oklch(0.36 0.08 165);
-  --accent-soft:oklch(0.94 0.04 165);
-  --amber-ink:  oklch(0.42 0.13 70);
-  --amber-soft: oklch(0.94 0.06 80);
+  --bg:          #FAFAF7;
+  --bg-elev:     #FFFFFF;
+  --soft:        #F4F2EC;
+  --ink:         #1A1A18;
+  --ink-2:       #3D3D3A;
+  --ink-3:       #B8B8B0;
+  --muted:       #83837B;
+  --line:        #E7E4DC;
+  --hover:       #F2F0E9;
+  --accent:      oklch(0.62 0.13 165);
+  --accent-ink:  oklch(0.36 0.08 165);
+  --accent-soft: oklch(0.94 0.04 165);
+  --amber-ink:   oklch(0.42 0.13 70);
+  --amber-soft:  oklch(0.94 0.06 80);
 }
 
-html, body {
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
   font-family: 'Manrope', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--ink);
@@ -28,6 +34,10 @@ html, body {
   max-width: 100%;
 }
 
+body {
+  line-height: 1.45;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -35,21 +45,57 @@ html, body {
 .font-mono,
 code,
 pre,
-input[type="number"] {
+input[type='number'] {
   font-family: 'JetBrains Mono', ui-monospace, monospace !important;
-  font-feature-settings: "ss01" on, "cv11" on;
+  font-feature-settings: 'ss01' on, 'cv11' on;
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+button,
+input,
+select,
+textarea {
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+}
 
-select { background-image: none !important; }
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
 
-/* Prevent date/time inputs from overflowing their grid cell */
-input[type="date"],
-input[type="datetime-local"],
-input[type="time"] {
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-3);
+}
+
+select {
+  background-image: none !important;
+}
+
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'],
+input[type='month'] {
   -webkit-appearance: none;
   appearance: none;
   min-width: 0;
@@ -57,8 +103,6 @@ input[type="time"] {
   width: 100%;
 }
 
-/* Prevent iOS zoom on input focus: font-size must be >= 16px.
-   Excludes large decorative inputs (e.g. the 42px amount field). */
 @media screen and (max-width: 768px) {
   input:not([data-keep-size]),
   select,
@@ -67,4 +111,6 @@ input[type="time"] {
   }
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
