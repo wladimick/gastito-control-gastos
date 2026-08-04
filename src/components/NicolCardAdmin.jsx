@@ -7,6 +7,7 @@ import {
   fetchNicolAdminData,
   revokeNicolShare,
   setNicolCycleTransactions,
+  setNicolTransactionCategory,
   setNicolTransactionShared,
   updateNicolSharePercentage,
 } from '../services/nicolShareService'
@@ -18,6 +19,12 @@ const TYPE_LABELS = {
   tax: 'Impuesto',
   interest: 'Interés',
   other: 'Otro cargo',
+}
+
+const FALLBACK_CATEGORY = {
+  label: 'Otros',
+  icon: '•',
+  color: '#888880',
 }
 
 function formatDate(value) {
@@ -39,6 +46,10 @@ function formatCycleLabel(key) {
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year, month - 1, 1)))
   return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+function translucent(color, opacity = '18') {
+  return /^#[0-9a-f]{6}$/i.test(String(color || '')) ? `${color}${opacity}` : `#888880${opacity}`
 }
 
 function SimpleMessage({ title, text, loading = false }) {
@@ -145,46 +156,82 @@ function InstallmentBadges({ item }) {
   )
 }
 
-function TransactionRow({ item, busy, onToggle }) {
+function TransactionRow({ item, categories, categoriesById, busy, categoryBusy, onToggle, onCategoryChange }) {
   const isInstallment = item.movement_type === 'installment'
     && Number(item.installment_current || 0) > 0
     && Number(item.installment_total || 0) > 1
   const originalAmount = Number(item.original_amount || 0)
   const amount = Number(item.amount || 0)
+  const category = categoriesById.get(item.category_id) || FALLBACK_CATEGORY
 
   return (
-    <label className="px-4 py-4 flex items-start gap-3 cursor-pointer hover:bg-[var(--hover)]">
+    <div className="px-4 py-4 flex items-start gap-3 hover:bg-[var(--hover)]">
       <input
         type="checkbox"
         checked={Boolean(item.shared_with_nicol)}
         disabled={busy}
         onChange={() => onToggle(item)}
-        className="mt-1 w-4 h-4 accent-[var(--ink)]"
+        aria-label={`Compartir ${item.description} con Nicol`}
+        className="mt-1 w-4 h-4 accent-[var(--ink)] shrink-0"
       />
+
+      <div
+        className="w-9 h-9 rounded-xl grid place-items-center text-[17px] shrink-0 border"
+        style={{
+          borderColor: translucent(category.color, '55'),
+          backgroundColor: translucent(category.color, '20'),
+        }}
+        aria-hidden="true"
+      >
+        {category.icon || '•'}
+      </div>
+
       <div className="flex-1 min-w-0">
         <div className="text-[13px] font-semibold break-words leading-snug">{item.description}</div>
         <InstallmentBadges item={item} />
-        <div className="text-[10.5px] text-[var(--muted)] mt-2 leading-relaxed">
-          {formatDate(item.transaction_date)} · {TYPE_LABELS[item.movement_type] || item.movement_type}
-          {isInstallment && originalAmount > amount && (
-            <> · Compra total {fmtCLP(originalAmount)}</>
-          )}
+
+        <div className="mt-2 grid sm:grid-cols-[minmax(0,230px)_1fr] gap-2 sm:items-end">
+          <label>
+            <span className="block text-[9.5px] uppercase tracking-[0.08em] text-[var(--muted)] font-bold mb-1">Categoría</span>
+            <select
+              value={item.category_id || ''}
+              disabled={categoryBusy}
+              onChange={event => onCategoryChange(item, event.target.value)}
+              className="w-full h-9 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 text-[11px] outline-none disabled:opacity-50"
+            >
+              <option value="">✨ Detectar automáticamente</option>
+              {categories.map(option => (
+                <option key={option.id} value={option.id}>
+                  {option.icon || '•'} {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="text-[10.5px] text-[var(--muted)] leading-relaxed sm:pb-1">
+            {formatDate(item.transaction_date)} · {TYPE_LABELS[item.movement_type] || item.movement_type}
+            {isInstallment && originalAmount > amount && <> · Compra total {fmtCLP(originalAmount)}</>}
+          </div>
         </div>
       </div>
+
       <div className="text-right shrink-0">
         <div className="font-mono text-[13px] font-bold">{fmtCLP(amount)}</div>
-        {isInstallment && <div className="text-[9.5px] text-[var(--muted)] mt-1">valor de esta cuota</div>}
+        <div className="text-[9.5px] text-[var(--muted)] mt-1">
+          {isInstallment ? 'valor de esta cuota' : 'monto del gasto'}
+        </div>
       </div>
-    </label>
+    </div>
   )
 }
 
 export default function NicolCardAdmin() {
   const [authReady, setAuthReady] = useState(false)
   const [session, setSession] = useState(null)
-  const [data, setData] = useState({ cycles: [], transactions: [], link: null })
+  const [data, setData] = useState({ cycles: [], transactions: [], categories: [], link: null })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [categoryBusyId, setCategoryBusyId] = useState('')
   const [error, setError] = useState('')
   const [selectedCycle, setSelectedCycle] = useState('')
   const [percentage, setPercentage] = useState('33')
@@ -225,6 +272,10 @@ export default function NicolCardAdmin() {
     () => cycle ? data.transactions.filter(item => item.billing_cycle_id === cycle.id) : [],
     [cycle, data.transactions],
   )
+  const categoriesById = useMemo(
+    () => new Map((data.categories || []).map(category => [category.id, category])),
+    [data.categories],
+  )
   const sharedTotal = visibleTransactions
     .filter(item => item.shared_with_nicol)
     .reduce((sum, item) => sum + Number(item.amount || 0), 0)
@@ -245,6 +296,24 @@ export default function NicolCardAdmin() {
       setError(err.message)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const changeCategory = async (item, categoryId) => {
+    setCategoryBusyId(item.id)
+    setError('')
+    try {
+      const updated = await setNicolTransactionCategory(item.id, categoryId)
+      setData(previous => ({
+        ...previous,
+        transactions: previous.transactions.map(transaction => transaction.id === item.id
+          ? { ...transaction, ...updated }
+          : transaction),
+      }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCategoryBusyId('')
     }
   }
 
@@ -323,7 +392,7 @@ export default function NicolCardAdmin() {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div>
             <div className="text-[18px] font-bold">Gastito · Nicol</div>
-            <div className="text-[11px] text-[var(--muted)] mt-0.5">Configura los gastos compartidos</div>
+            <div className="text-[11px] text-[var(--muted)] mt-0.5">Configura gastos, cuotas y categorías</div>
           </div>
           <a href={window.location.pathname}
             className="text-[11px] font-semibold border border-[var(--line)] rounded-lg px-3 py-2 hover:bg-[var(--hover)]">
@@ -345,6 +414,13 @@ export default function NicolCardAdmin() {
           onRevoke={revoke}
           busy={busy}
         />
+
+        <section className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] px-4 py-3.5">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Categorías automáticas</div>
+          <p className="text-[11.5px] text-[var(--muted)] mt-1 leading-relaxed">
+            Gastito reconoce comercios como Lider, Shell, veterinarias, Sodimac y servicios básicos. Cuando el nombre no sea suficiente, cambia la categoría manualmente en la fila del gasto.
+          </p>
+        </section>
 
         <section className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl overflow-hidden">
           <div className="p-4 border-b border-[var(--line)] space-y-3">
@@ -410,7 +486,16 @@ export default function NicolCardAdmin() {
           ) : (
             <div className="divide-y divide-[var(--line)]">
               {visibleTransactions.map(item => (
-                <TransactionRow key={item.id} item={item} busy={busy} onToggle={toggleOne} />
+                <TransactionRow
+                  key={item.id}
+                  item={item}
+                  categories={data.categories || []}
+                  categoriesById={categoriesById}
+                  busy={busy}
+                  categoryBusy={categoryBusyId === item.id}
+                  onToggle={toggleOne}
+                  onCategoryChange={changeCategory}
+                />
               ))}
             </div>
           )}
