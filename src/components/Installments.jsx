@@ -3,6 +3,7 @@ import { Icon, fmtCLP } from '../lib/helpers'
 import { useBanks } from '../services/banksService'
 import { useCategories } from '../services/categoriesService'
 import { Badge, Card } from './ui'
+import { CATEGORIES } from '../data'
 
 const FALLBACK_CATEGORY = { id: 'otros', label: 'Otros', icon: '•', color: '#888880' }
 const BLANK = {
@@ -43,7 +44,17 @@ function formatDueDate(value) {
 
 function categoryFor(categories, value, meta) {
   if (meta?.label) return meta
+  const local = CATEGORIES.find(category => category.id === value)
+  if (local) return local
   return categories.find(category => category.id === value) || FALLBACK_CATEGORY
+}
+
+function formCategoryId(categories, plan) {
+  const direct = categories.find(category => category.id === plan.category)
+  if (direct) return direct.id
+  const local = CATEGORIES.find(category => category.id === plan.category)
+  const label = plan.categoryMeta?.label || local?.label
+  return categories.find(category => category.label === label)?.id || categories[0]?.id || plan.category || 'otros'
 }
 
 function bankFor(banks, id) {
@@ -282,6 +293,7 @@ export default function Installments({
   const bankIds = [...new Set(occurrences.map(item => item.bankId).filter(Boolean))]
   const bankPlans = plans.filter(plan => plan.source !== 'manual')
   const manualPlans = plans.filter(plan => plan.source === 'manual')
+  const openManualForm = plan => setFormState({ ...plan, category: formCategoryId(categories, plan) })
 
   const monthTotal = key => occurrences.filter(item => item.monthKey === key).reduce((sum, item) => sum + Number(item.amount || 0), 0)
 
@@ -401,12 +413,12 @@ export default function Installments({
         <div className="mt-4 grid lg:grid-cols-2 gap-3">
           <Card padding="p-0" className="overflow-hidden">
             <div className="px-3.5 py-3 border-b border-[var(--line)]"><div className="text-[12px] font-bold">Planes respaldados por banco</div><div className="text-[9.5px] text-[var(--muted)] mt-0.5">Fuente principal de la proyección.</div></div>
-            {bankPlans.map(plan => <PlanRow key={plan.id} plan={plan} categories={categories} banks={banks} onEdit={setFormState} onDelete={deleteManual} onMarkPaid={markPaid}/>) }
+            {bankPlans.map(plan => <PlanRow key={plan.id} plan={plan} categories={categories} banks={banks} onEdit={openManualForm} onDelete={deleteManual} onMarkPaid={markPaid}/>) }
             {!bankPlans.length && <div className="p-9 text-center text-[10.5px] text-[var(--muted)]">Todavía no hay cuotas bancarias.</div>}
           </Card>
           <Card padding="p-0" className="overflow-hidden">
             <div className="px-3.5 py-3 border-b border-[var(--line)]"><div className="text-[12px] font-bold">Seguimientos solo manuales</div><div className="text-[9.5px] text-[var(--muted)] mt-0.5">Compromisos que aún no aparecen en Facturación.</div></div>
-            {manualPlans.map(plan => <PlanRow key={plan.id} plan={plan} categories={categories} banks={banks} onEdit={setFormState} onDelete={deleteManual} onMarkPaid={markPaid}/>) }
+            {manualPlans.map(plan => <PlanRow key={plan.id} plan={plan} categories={categories} banks={banks} onEdit={openManualForm} onDelete={deleteManual} onMarkPaid={markPaid}/>) }
             {!manualPlans.length && <div className="p-9 text-center text-[10.5px] text-[var(--muted)]">Todos los seguimientos están respaldados por el banco.</div>}
           </Card>
         </div>
