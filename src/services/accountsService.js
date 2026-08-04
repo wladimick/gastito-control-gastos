@@ -2,12 +2,14 @@ import { supabase, isConfigured } from '../lib/supabase'
 
 function mapRow(row) {
   return {
-    id:      row.id,
-    name:    row.name,
-    type:    row.type,
-    bankId:  row.bank_id ?? null,
-    balance: row.balance ?? 0,
-    active:  row.active,
+    id:        row.id,
+    name:      row.name,
+    type:      row.type,
+    bankId:    row.bank_id ?? null,
+    balance:   Number(row.balance ?? 0),
+    active:    row.active,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
   }
 }
 
@@ -41,6 +43,7 @@ export async function updateAccount(a) {
       bank_id: a.bankId || null,
       balance: a.balance ?? 0,
       active:  a.active ?? true,
+      updated_at: new Date().toISOString(),
     })
     .eq('id', a.id)
     .select('*').single()
@@ -49,7 +52,10 @@ export async function updateAccount(a) {
 }
 
 export async function patchAccount(id, patch) {
-  const { error } = await supabase.from('accounts').update(patch).eq('id', id)
+  const { error } = await supabase.from('accounts').update({
+    ...patch,
+    updated_at: new Date().toISOString(),
+  }).eq('id', id)
   if (error) throw error
 }
 
