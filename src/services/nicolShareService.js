@@ -17,7 +17,7 @@ export async function fetchPublicNicolShare(token) {
 
 export async function fetchNicolAdminData(userId) {
   ensureSupabase()
-  const [cyclesResult, transactionsResult, cardsResult, linkResult] = await Promise.all([
+  const [cyclesResult, transactionsResult, cardsResult, categoriesResult, linkResult] = await Promise.all([
     supabase
       .from('billing_cycles')
       .select('id, cycle_key, period_start, period_end, closing_date, due_date, status, reported_amount, estimated_amount, reconciliation_status, credit_card_id')
@@ -26,7 +26,7 @@ export async function fetchNicolAdminData(userId) {
       .order('due_date', { ascending: false }),
     supabase
       .from('billing_transactions')
-      .select('id, billing_cycle_id, transaction_date, description, movement_type, amount, original_amount, installment_current, installment_total, installments_remaining, affects_cycle_total, is_pending, review_status, shared_with_nicol')
+      .select('id, billing_cycle_id, transaction_date, description, movement_type, amount, original_amount, installment_current, installment_total, installments_remaining, affects_cycle_total, is_pending, review_status, shared_with_nicol, category_id')
       .eq('user_id', userId)
       .eq('affects_cycle_total', true)
       .gt('amount', 0)
@@ -36,6 +36,12 @@ export async function fetchNicolAdminData(userId) {
       .from('credit_cards')
       .select('id, name, last_four')
       .eq('user_id', userId),
+    supabase
+      .from('categories')
+      .select('id, user_id, label, icon, color, sort_order')
+      .or(`user_id.is.null,user_id.eq.${userId}`)
+      .order('sort_order', { ascending: true })
+      .order('label', { ascending: true }),
     supabase
       .from('billing_share_links')
       .select('id, label, percentage, active, created_at, updated_at')
@@ -48,6 +54,7 @@ export async function fetchNicolAdminData(userId) {
   if (cyclesResult.error) throw cyclesResult.error
   if (transactionsResult.error) throw transactionsResult.error
   if (cardsResult.error) throw cardsResult.error
+  if (categoriesResult.error) throw categoriesResult.error
   if (linkResult.error) throw linkResult.error
 
   const cardsById = new Map((cardsResult.data || []).map(card => [card.id, card]))
@@ -63,6 +70,7 @@ export async function fetchNicolAdminData(userId) {
   return {
     cycles,
     transactions: transactionsResult.data || [],
+    categories: categoriesResult.data || [],
     link: linkResult.data || null,
   }
 }
@@ -71,9 +79,21 @@ export async function setNicolTransactionShared(transactionId, shared) {
   ensureSupabase()
   const { data, error } = await supabase
     .from('billing_transactions')
-    .update({ shared_with_nicol: Boolean(shared) })
+    .update({ shared_with_nicol: Boolean(shared), updated_at: new Date().toISOString() })
     .eq('id', transactionId)
-    .select('id, shared_with_nicol')
+    .select('id, shared_with_nicol, category_id')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function setNicolTransactionCategory(transactionId, categoryId) {
+  ensureSupabase()
+  const { data, error } = await supabase
+    .from('billing_transactions')
+    .update({ category_id: categoryId || null, updated_at: new Date().toISOString() })
+    .eq('id', transactionId)
+    .select('id, category_id, shared_with_nicol')
     .single()
   if (error) throw error
   return data
@@ -84,9 +104,9 @@ export async function setNicolCycleTransactions(transactionIds, shared) {
   if (!transactionIds.length) return []
   const { data, error } = await supabase
     .from('billing_transactions')
-    .update({ shared_with_nicol: Boolean(shared) })
+    .update({ shared_with_nicol: Boolean(shared), updated_at: new Date().toISOString() })
     .in('id', transactionIds)
-    .select('id, shared_with_nicol')
+    .select('id, shared_with_nicol, category_id')
   if (error) throw error
   return data || []
 }
