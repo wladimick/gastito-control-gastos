@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import NicolShare from './components/NicolShare'
-import NicolPublicCycles from './components/NicolPublicCycles'
+import NicolCardAdmin from './components/NicolCardAdmin'
+import NicolPublicCyclesVisual from './components/NicolPublicCyclesVisual'
 import NicolRecurringAdmin from './components/NicolRecurringAdmin'
 import './index.css'
 
@@ -12,8 +12,8 @@ const nicolAdminMode = params.get('nicol-admin')
 
 let content = <App />
 if (nicolAdminMode === 'recurrentes') content = <NicolRecurringAdmin />
-else if (nicolAdminMode === '1') content = <NicolShare mode="admin" />
-else if (nicolToken) content = <NicolPublicCycles token={nicolToken} />
+else if (nicolAdminMode === '1') content = <NicolCardAdmin />
+else if (nicolToken) content = <NicolPublicCyclesVisual token={nicolToken} />
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
