@@ -26,7 +26,7 @@ export async function fetchNicolAdminData(userId) {
       .order('due_date', { ascending: false }),
     supabase
       .from('billing_transactions')
-      .select('id, billing_cycle_id, transaction_date, description, movement_type, amount, affects_cycle_total, is_pending, review_status, shared_with_nicol')
+      .select('id, billing_cycle_id, transaction_date, description, movement_type, amount, original_amount, installment_current, installment_total, installments_remaining, affects_cycle_total, is_pending, review_status, shared_with_nicol')
       .eq('user_id', userId)
       .eq('affects_cycle_total', true)
       .gt('amount', 0)
@@ -45,9 +45,18 @@ export async function fetchNicolAdminData(userId) {
   if (transactionsResult.error) throw transactionsResult.error
   if (linkResult.error) throw linkResult.error
 
+  const transactions = (transactionsResult.data || []).map(item => ({
+    ...item,
+    description: item.movement_type === 'installment'
+      && item.installment_current != null
+      && item.installment_total != null
+      ? `${item.description} · Cuota ${item.installment_current}/${item.installment_total}`
+      : item.description,
+  }))
+
   return {
     cycles: cyclesResult.data || [],
-    transactions: transactionsResult.data || [],
+    transactions,
     link: linkResult.data || null,
   }
 }
