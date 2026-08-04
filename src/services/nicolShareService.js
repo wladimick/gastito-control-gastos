@@ -17,7 +17,7 @@ export async function fetchPublicNicolShare(token) {
 
 export async function fetchNicolAdminData(userId) {
   ensureSupabase()
-  const [cyclesResult, transactionsResult, linkResult] = await Promise.all([
+  const [cyclesResult, transactionsResult, cardsResult, linkResult] = await Promise.all([
     supabase
       .from('billing_cycles')
       .select('id, cycle_key, period_start, period_end, closing_date, due_date, status, reported_amount, estimated_amount, reconciliation_status, credit_card_id')
@@ -33,6 +33,10 @@ export async function fetchNicolAdminData(userId) {
       .not('movement_type', 'in', '(payment,credit)')
       .order('transaction_date', { ascending: false }),
     supabase
+      .from('credit_cards')
+      .select('id, name, last_four')
+      .eq('user_id', userId),
+    supabase
       .from('billing_share_links')
       .select('id, label, percentage, active, created_at, updated_at')
       .eq('user_id', userId)
@@ -43,20 +47,22 @@ export async function fetchNicolAdminData(userId) {
 
   if (cyclesResult.error) throw cyclesResult.error
   if (transactionsResult.error) throw transactionsResult.error
+  if (cardsResult.error) throw cardsResult.error
   if (linkResult.error) throw linkResult.error
 
-  const transactions = (transactionsResult.data || []).map(item => ({
-    ...item,
-    description: item.movement_type === 'installment'
-      && item.installment_current != null
-      && item.installment_total != null
-      ? `${item.description} · Cuota ${item.installment_current}/${item.installment_total}`
-      : item.description,
-  }))
+  const cardsById = new Map((cardsResult.data || []).map(card => [card.id, card]))
+  const cycles = (cyclesResult.data || []).map(cycle => {
+    const card = cardsById.get(cycle.credit_card_id)
+    return {
+      ...cycle,
+      card_name: card?.name || 'Tarjeta',
+      card_last_four: card?.last_four || '',
+    }
+  })
 
   return {
-    cycles: cyclesResult.data || [],
-    transactions,
+    cycles,
+    transactions: transactionsResult.data || [],
     link: linkResult.data || null,
   }
 }
