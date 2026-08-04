@@ -1,408 +1,706 @@
-import React, { useState, useMemo } from 'react'
-import { Icon, fmtCLP, relDate, timeOnly, MES } from '../lib/helpers'
-import { CATEGORIES, BANKS, PAYMENT_METHODS, TODAY } from '../data'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Icon, fmtCLP } from '../lib/helpers'
+import { CATEGORIES, BANKS } from '../data'
+import { fetchBillingCycles } from '../services/billingCyclesService'
 
-// ── Source badge ──────────────────────────────────────────────
-const SRC = {
-  demo:     { text: 'Modo demo',         style: { background: '#fffbeb', borderColor: '#fde68a', color: '#92400e' } },
-  loading:  { text: 'Cargando…',         style: { background: '#f0efe9', borderColor: '#dddbd3', color: '#9ba5c2' } },
-  supabase: { text: 'Datos reales',      style: { background: 'rgba(61,214,140,0.10)', borderColor: 'rgba(61,214,140,0.22)', color: '#28c47a' } },
-  error:    { text: 'Error de conexión', style: { background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.20)', color: '#ef4444' } },
+const FALLBACK_CATEGORY = {
+  id: 'otros',
+  label: 'Otros',
+  icon: '•',
+  color: '#888880',
 }
 
-// ── Filter select with chevron wrapper ────────────────────────
-function SelectFilter({ value, onChange, options, placeholder }) {
-  const active = Boolean(value)
+const SOURCE_META = {
+  manual: { label: 'Manual', className: 'bg-slate-100 text-slate-700' },
+  card: { label: 'Tarjeta', className: 'bg-blue-50 text-blue-700' },
+  reconciled: { label: 'Conciliado', className: 'bg-emerald-50 text-emerald-700' },
+}
+
+function translucent(color, opacity = '18') {
+  return /^#[0-9a-f]{6}$/i.test(String(color || ''))
+    ? `${color}${opacity}`
+    : `#888880${opacity}`
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function dateOnly(value) {
+  if (!value) return ''
+  return String(value).slice(0, 10)
+}
+
+function monthKey(value) {
+  return dateOnly(value).slice(0, 7)
+}
+
+function monthLabel(key) {
+  if (!key) return 'Sin mes'
+  const [year, month] = key.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, 1))
+  const label = new Intl.DateTimeFormat('es-CL', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+function formatDate(value, compact = false) {
+  const dateValue = dateOnly(value)
+  if (!dateValue) return 'Sin fecha'
+  const date = new Date(`${dateValue}T12:00:00Z`)
+  return new Intl.DateTimeFormat('es-CL', compact
+    ? { day: '2-digit', month: 'short', timeZone: 'UTC' }
+    : { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }
+  ).format(date)
+}
+
+function duplicateKey(row) {
+  const day = dateOnly(row.date)
+  if (!day) return ''
+  return `${day}|${Number(row.amount || 0)}|${normalizeText(row.description)}`
+}
+
+function manualCategory(expense) {
+  return CATEGORIES.find(category => category.id === expense.category) || FALLBACK_CATEGORY
+}
+
+function bankLabel(bankId) {
+  return BANKS.find(bank => bank.id === bankId)?.label || bankId || 'Sin banco'
+}
+
+function mapManualExpense(expense) {
+  return {
+    id: `manual:${expense.id}`,
+    rawId: expense.id,
+    source: 'manual',
+    editable: true,
+    date: expense.date,
+    effectiveDate: expense.date,
+    description: expense.description,
+    amount: Number(expense.amount || 0),
+    category: manualCategory(expense),
+    bankLabel: bankLabel(expense.bank),
+    paymentLabel: expense.method === 'efectivo'
+      ? 'Efectivo'
+      : expense.type === 'credito'
+        ? 'Crédito'
+        : 'Débito',
+    installments: Number(expense.installments || 1),
+    installmentCurrent: null,
+    installmentTotal: Number(expense.installments || 1),
+    originalAmount: null,
+    notes: expense.notes || '',
+    status: expense.status || 'ok',
+    isPending: false,
+    reviewRequired: expense.status === 'revisar',
+    affectsTotal: true,
+    sharedWithNicol: false,
+    cycleKey: '',
+    dueDate: '',
+  }
+}
+
+function mapBillingRows(cycles, creditCards) {
+  const cardMap = new Map(creditCards.map(card => [card.id, card]))
+  const rows = []
+
+  cycles.forEach(cycle => {
+    const card = cardMap.get(cycle.cardId)
+    const cardName = card?.name || card?.nickname || card?.alias || 'Tarjeta'
+    const lastFour = card?.lastFour || card?.last_four || ''
+    const cardLabel = lastFour ? `${cardName} •••• ${lastFour}` : cardName
+
+    cycle.transactions
+      .filter(item => Number(item.amount || 0) > 0 && !['payment', 'credit'].includes(item.movementType))
+      .forEach(item => {
+        rows.push({
+          id: `billing:${item.id}`,
+          rawId: item.id,
+          source: 'card',
+          editable: false,
+          date: item.date,
+          effectiveDate: item.date || cycle.periodEnd || cycle.closingDate,
+          description: item.description,
+          amount: Number(item.amount || 0),
+          category: item.category || FALLBACK_CATEGORY,
+          bankLabel: cardLabel,
+          paymentLabel: item.movementType === 'installment' ? 'Compra en cuotas' : 'Compra con tarjeta',
+          installments: Number(item.installmentTotal || 1),
+          installmentCurrent: item.installmentCurrent,
+          installmentTotal: item.installmentTotal,
+          originalAmount: item.originalAmount,
+          notes: cycle.notes || '',
+          status: item.reviewStatus === 'review_required' ? 'revisar' : 'ok',
+          isPending: Boolean(item.isPending),
+          reviewRequired: item.reviewStatus === 'review_required',
+          affectsTotal: Boolean(item.affectsCycleTotal),
+          sharedWithNicol: Boolean(item.sharedWithNicol),
+          cycleKey: cycle.cycleKey,
+          dueDate: cycle.dueDate,
+        })
+      })
+  })
+
+  return rows
+}
+
+function mergeRows(expenses, cycles, creditCards) {
+  const billingRows = mapBillingRows(cycles, creditCards)
+  const byKey = new Map()
+
+  billingRows.forEach(row => {
+    const key = duplicateKey(row)
+    if (!key) return
+    const list = byKey.get(key) || []
+    list.push(row)
+    byKey.set(key, list)
+  })
+
+  const consumed = new Set()
+  let duplicatesUnified = 0
+
+  const manualRows = expenses.map(mapManualExpense).map(row => {
+    const key = duplicateKey(row)
+    const match = key ? (byKey.get(key) || []).find(item => !consumed.has(item.id)) : null
+    if (!match) return row
+
+    consumed.add(match.id)
+    duplicatesUnified += 1
+    return {
+      ...row,
+      source: 'reconciled',
+      bankLabel: match.bankLabel,
+      paymentLabel: match.paymentLabel,
+      installmentCurrent: match.installmentCurrent,
+      installmentTotal: match.installmentTotal,
+      originalAmount: match.originalAmount,
+      isPending: match.isPending,
+      reviewRequired: row.reviewRequired || match.reviewRequired,
+      affectsTotal: match.affectsTotal,
+      sharedWithNicol: match.sharedWithNicol,
+      cycleKey: match.cycleKey,
+      dueDate: match.dueDate,
+      category: match.category?.id ? match.category : row.category,
+    }
+  })
+
+  const remainingBilling = billingRows.filter(row => !consumed.has(row.id))
+  const rows = [...manualRows, ...remainingBilling]
+    .sort((a, b) => String(b.effectiveDate || '').localeCompare(String(a.effectiveDate || '')) || b.amount - a.amount)
+
+  return { rows, duplicatesUnified }
+}
+
+function groupByCategory(rows) {
+  const grouped = new Map()
+  rows.filter(row => row.affectsTotal && !row.isPending).forEach(row => {
+    const category = row.category || FALLBACK_CATEGORY
+    const key = category.id || category.label
+    const current = grouped.get(key) || { ...category, amount: 0, count: 0, shared: 0 }
+    current.amount += row.amount
+    current.count += 1
+    if (row.sharedWithNicol) current.shared += row.amount
+    grouped.set(key, current)
+  })
+  return [...grouped.values()].sort((a, b) => b.amount - a.amount)
+}
+
+function SummaryCard({ label, value, detail, tone = 'default' }) {
+  const className = tone === 'dark'
+    ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
+    : tone === 'violet'
+      ? 'bg-violet-50 text-violet-950 border-violet-100'
+      : tone === 'warning'
+        ? 'bg-[var(--amber-soft)] text-[var(--amber-ink)] border-transparent'
+        : 'bg-[var(--bg-elev)] text-[var(--ink)] border-[var(--line)]'
+
   return (
-    <div className="relative flex-1">
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full pl-3 pr-8 py-[9px] rounded-[10px] border text-[13px] outline-none appearance-none cursor-pointer transition-colors"
-        style={{
-          background:  active ? '#1e2535' : '#f0efe9',
-          borderColor: active ? '#1e2535' : '#e8e6df',
-          color:       active ? '#ffffff' : '#9ba5c2',
-        }}>
-        <option value="">{placeholder}</option>
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-          <path d="M6 9l6 6 6-6" stroke={active ? '#fff' : '#9ba5c2'} strokeWidth="2.2" strokeLinecap="round"/>
-        </svg>
-      </div>
+    <div className={`rounded-2xl border p-4 min-h-[105px] ${className}`}>
+      <div className="text-[10px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>
+      <div className="font-mono text-[21px] font-bold mt-2">{value}</div>
+      <div className="text-[10.5px] mt-1 opacity-70 leading-relaxed">{detail}</div>
     </div>
   )
 }
 
-// ── Category tag ──────────────────────────────────────────────
-function CatTag({ cat }) {
-  return (
-    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-          style={{ background: '#f0efe9', borderColor: '#dddbd3', color: '#5d6888' }}>
-      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cat.color ?? '#9ca3af' }}/>
-      {cat.label}
-    </span>
-  )
-}
-
-// ── Payment type tag ──────────────────────────────────────────
-function PayTag({ type, method, installments }) {
-  if (method === 'efectivo') {
-    return (
-      <span className="text-[11px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-            style={{ background: '#fefce8', borderColor: '#fde68a', color: '#92400e' }}>
-        Efectivo
-      </span>
-    )
-  }
-  if (type === 'credito') {
-    return (
-      <span className="text-[11px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-            style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8' }}>
-        Crédito{installments > 1 ? ` (${installments}c)` : ''}
-      </span>
-    )
-  }
-  return (
-    <span className="text-[11px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-          style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#15803d' }}>
-      Débito
-    </span>
-  )
-}
-
-// ── Edit/Delete action buttons ────────────────────────────────
-function ActBtn({ onClick, variant, children }) {
-  const style = variant === 'del'
-    ? { background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.20)', color: '#ef4444' }
-    : { background: '#f0efe9', borderColor: '#dddbd3', color: '#5d6888' }
-  return (
-    <button type="button" onClick={onClick}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-opacity hover:opacity-75"
-      style={style}>
-      {children}
-    </button>
-  )
-}
-
-// ── Main component ────────────────────────────────────────────
-export default function ExpensesList({ expenses, onEdit, onDelete, onToggleStatus, onNew, dataSource = 'demo' }) {
-  const today = TODAY
-
-  const months = useMemo(() => {
-    const set = new Set()
-    expenses.forEach(e => {
-      const d = new Date(e.date)
-      set.add(`${d.getFullYear()}-${d.getMonth()}`)
-    })
-    return Array.from(set).map(k => {
-      const [y, m] = k.split('-').map(Number)
-      return { value: k, label: `${MES[m]} ${y}` }
-    }).sort().reverse()
-  }, [expenses])
-
-  const [fMonth,  setFMonth]  = useState(`${today.getFullYear()}-${today.getMonth()}`)
-  const [fCat,    setFCat]    = useState('')
-  const [fBank,   setFBank]   = useState('')
-  const [fMethod, setFMethod] = useState('')
-  const [fType,   setFType]   = useState('')
-  const [q,       setQ]       = useState('')
-
-  const filtered = expenses.filter(e => {
-    const d = new Date(e.date)
-    if (fMonth  && `${d.getFullYear()}-${d.getMonth()}` !== fMonth) return false
-    if (fCat    && e.category !== fCat)   return false
-    if (fBank   && e.bank    !== fBank)   return false
-    if (fMethod && e.method  !== fMethod) return false
-    if (fType   && e.type    !== fType)   return false
-    if (q && !e.description.toLowerCase().includes(q.toLowerCase())) return false
-    return true
-  }).sort((a, b) => new Date(b.date) - new Date(a.date))
-
-  const total         = filtered.reduce((s, e) => s + e.amount, 0)
-  const activeFilters = [fCat, fBank, fMethod, fType, q].filter(Boolean).length
-  const clearAll      = () => { setFCat(''); setFBank(''); setFMethod(''); setFType(''); setQ('') }
-
-  const src = SRC[dataSource] ?? SRC.demo
+function CategorySummary({ rows }) {
+  const categories = useMemo(() => groupByCategory(rows), [rows])
+  const total = categories.reduce((sum, category) => sum + category.amount, 0)
+  if (!categories.length) return null
 
   return (
-    <div className="flex flex-col gap-3">
-
-      {/* ── Filter panel ── */}
-      <div className="rounded-2xl border shadow-sm" style={{ background: '#ffffff', borderColor: '#e8e6df', padding: '12px 14px 14px' }}>
-        {/* Row 1: search + month */}
-        <div className="flex gap-2 mb-2">
-          <div className="flex items-center gap-2 rounded-[10px] border px-3 py-[9px] min-w-0"
-               style={{ background: '#f0efe9', borderColor: '#e8e6df', flex: '1.4' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0">
-              <circle cx="11" cy="11" r="7" stroke="#9ba5c2" strokeWidth="1.8"/>
-              <path d="M21 21l-4.35-4.35" stroke="#9ba5c2" strokeWidth="1.8" strokeLinecap="round"/>
-            </svg>
-            <input
-              type="text"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Buscar descripción..."
-              className="bg-transparent text-[13px] outline-none min-w-0 w-full"
-              style={{ color: '#1e2535' }}
-            />
-          </div>
-          <div className="relative" style={{ flex: 1 }}>
-            <select
-              value={fMonth}
-              onChange={e => setFMonth(e.target.value)}
-              className="w-full pl-3 pr-8 py-[9px] rounded-[10px] border text-[13px] outline-none appearance-none cursor-pointer"
-              style={{ background: '#f0efe9', borderColor: '#e8e6df', color: '#5d6888' }}>
-              {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                <path d="M6 9l6 6 6-6" stroke="#9ba5c2" strokeWidth="2.2" strokeLinecap="round"/>
-              </svg>
-            </div>
-          </div>
+    <section className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] overflow-hidden">
+      <div className="px-4 py-3.5 border-b border-[var(--line)] flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Distribución del mes</div>
+          <h2 className="text-[15px] font-bold mt-1">¿En qué se fue el dinero?</h2>
         </div>
-
-        {/* Row 2: category + bank */}
-        <div className="flex gap-2 mb-2">
-          <SelectFilter value={fCat}  onChange={setFCat}
-            options={CATEGORIES.map(c => ({ value: c.id, label: c.label }))} placeholder="Categoría"/>
-          <SelectFilter value={fBank} onChange={setFBank}
-            options={BANKS.map(b => ({ value: b.id, label: b.label }))} placeholder="Banco"/>
-        </div>
-
-        {/* Row 3: medio + tipo */}
-        <div className="flex gap-2 mb-2">
-          <SelectFilter value={fMethod} onChange={setFMethod}
-            options={PAYMENT_METHODS.map(m => ({ value: m.id, label: m.label }))} placeholder="Medio"/>
-          <SelectFilter value={fType} onChange={setFType}
-            options={[{ value: 'debito', label: 'Débito' }, { value: 'credito', label: 'Crédito' }]}
-            placeholder="Tipo"/>
-        </div>
-
-        {/* Row 4: clear + nuevo */}
-        <div className="flex gap-2 items-center mt-0.5">
-          {activeFilters > 0 && (
-            <button onClick={clearAll}
-              className="text-[12.5px] font-semibold underline underline-offset-2 shrink-0 px-1"
-              style={{ color: '#9ba5c2', background: 'none', border: 'none', cursor: 'pointer' }}>
-              Limpiar ({activeFilters})
-            </button>
-          )}
-          {onNew && (
-            <button onClick={onNew}
-              className="flex-1 flex items-center justify-center gap-2 py-[9px] px-4 rounded-[10px] text-[13px] font-bold text-white border-none cursor-pointer"
-              style={{ background: '#1e2535', boxShadow: '0 2px 8px rgba(30,37,53,.15)' }}>
-              <Icon name="plus" size={14}/> Nuevo gasto
-            </button>
-          )}
-        </div>
+        <div className="font-mono text-[13px] font-bold">{fmtCLP(total)}</div>
       </div>
-
-      {/* ── Summary row ── */}
-      <div className="flex items-center justify-between px-1">
-        <div className="text-[13px]" style={{ color: '#5d6888' }}>
-          <strong className="font-extrabold" style={{ color: '#1e2535' }}>{filtered.length} gastos</strong>
-          {' · '}{fmtCLP(total)}
-        </div>
-        <span className="text-[11px] font-bold px-2.5 py-[3px] rounded-full border" style={src.style}>
-          {src.text}
-        </span>
-      </div>
-
-      {/* ── Error state ── */}
-      {dataSource === 'error' && (
-        <div className="rounded-2xl border p-4"
-             style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.20)' }}>
-          <div className="flex items-center gap-3" style={{ color: '#ef4444' }}>
-            <Icon name="alert" size={16}/>
-            <div>
-              <div className="font-semibold text-[13px]">Error al conectar con Supabase</div>
-              <div className="text-[12px] mt-0.5">Revisa tu conexión o las variables de entorno.</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Empty state ── */}
-      {dataSource === 'supabase' && expenses.length === 0 && activeFilters === 0 && (
-        <div className="rounded-2xl border p-12 text-center shadow-sm"
-             style={{ background: '#ffffff', borderColor: '#e8e6df' }}>
-          <div className="text-[32px] mb-3">📭</div>
-          <div className="font-bold text-[14px]" style={{ color: '#1e2535' }}>Sin gastos registrados</div>
-          <div className="text-[12.5px] mt-1 mb-4" style={{ color: '#9ba5c2' }}>
-            Agrega tu primer gasto o envía un mensaje al bot de Telegram.
-          </div>
-          {onNew && (
-            <button onClick={onNew}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-[13px] font-bold text-white border-none cursor-pointer"
-              style={{ background: '#1e2535' }}>
-              <Icon name="plus" size={13}/> Registrar gasto
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── Desktop table (md+) ── */}
-      <div className="hidden md:block rounded-2xl border overflow-hidden shadow-sm"
-           style={{ background: '#ffffff', borderColor: '#e8e6df' }}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b" style={{ borderColor: '#e8e6df' }}>
-                {['Fecha','Descripción','Categoría','Medio','Banco','Monto','Estado',''].map((h, i) => (
-                  <th key={i}
-                    className={`py-3 px-4 text-[10.5px] font-bold tracking-[0.09em] uppercase ${i === 5 ? 'text-right' : 'text-left'}`}
-                    style={{ color: '#9ba5c2' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(e => {
-                const cat  = CATEGORIES.find(c => c.id === e.category) ?? CATEGORIES[0]
-                const bank = BANKS.find(b => b.id === e.bank)
-                return (
-                  <tr key={e.id}
-                    className="border-b last:border-b-0 group transition-colors hover:bg-[#f0efe9]"
-                    style={{ borderColor: '#e8e6df' }}>
-                    <td className="py-3 px-4 align-top">
-                      <div style={{ color: '#1e2535' }}>{relDate(e.date)}</div>
-                      <div className="text-[11px] font-mono mt-0.5" style={{ color: '#9ba5c2' }}>{timeOnly(e.date)}</div>
-                    </td>
-                    <td className="py-3 px-4 align-top">
-                      <div className="font-semibold text-[13.5px]" style={{ color: '#1e2535' }}>{e.description}</div>
-                      {e.notes && (
-                        <div className="text-[11.5px] mt-0.5 truncate max-w-[260px]" style={{ color: '#9ba5c2' }}>{e.notes}</div>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 align-top"><CatTag cat={cat}/></td>
-                    <td className="py-3 px-4 align-top">
-                      <PayTag type={e.type} method={e.method} installments={e.installments}/>
-                    </td>
-                    <td className="py-3 px-4 align-top text-[13px]" style={{ color: '#5d6888' }}>{bank?.label}</td>
-                    <td className="py-3 px-4 align-top text-right font-mono tabular-nums font-bold"
-                        style={{ color: '#1e2535' }}>
-                      {fmtCLP(e.amount)}
-                    </td>
-                    <td className="py-3 px-4 align-top">
-                      {e.status === 'revisar'
-                        ? <span className="text-[11px] font-bold px-2.5 py-[3px] rounded-full border"
-                                style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#92400e' }}>revisar</span>
-                        : <span className="text-[11px] font-bold px-2.5 py-[3px] rounded-full border"
-                                style={{ background: 'rgba(61,214,140,0.10)', borderColor: 'rgba(61,214,140,0.22)', color: '#28c47a' }}>registrado</span>}
-                    </td>
-                    <td className="py-2 pl-4 pr-3 align-top">
-                      <div className="flex items-center gap-1.5 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        {e.status === 'revisar' && (
-                          <button onClick={() => onToggleStatus(e.id)}
-                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg border text-[11.5px] font-semibold"
-                            style={{ background: 'rgba(61,214,140,0.10)', borderColor: 'rgba(61,214,140,0.22)', color: '#28c47a' }}>
-                            <Icon name="check" size={12}/>
-                          </button>
-                        )}
-                        <button onClick={() => onEdit(e)}
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg border text-[11.5px] font-semibold"
-                          style={{ background: '#f0efe9', borderColor: '#dddbd3', color: '#5d6888' }}>
-                          <Icon name="pencil" size={12}/>
-                        </button>
-                        <button onClick={() => onDelete(e.id)}
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg border text-[11.5px] font-semibold"
-                          style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.20)', color: '#ef4444' }}>
-                          <Icon name="trash" size={12}/>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div className="p-10 text-center text-[13px]" style={{ color: '#9ba5c2' }}>
-              Sin resultados para los filtros actuales.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Mobile cards ── */}
-      <div className="md:hidden flex flex-col gap-2.5">
-        {filtered.map(e => {
-          const cat  = CATEGORIES.find(c => c.id === e.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0]
-          const bank = BANKS.find(b => b.id === e.bank)
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 p-3">
+        {categories.map(category => {
+          const percentage = total > 0 ? Math.round(category.amount * 100 / total) : 0
           return (
-            <div key={e.id} className="rounded-2xl border overflow-hidden shadow-sm"
-                 style={{ background: '#ffffff', borderColor: '#e8e6df' }}>
-              {/* Main row */}
-              <div className="flex items-start gap-3" style={{ padding: '13px 14px 10px' }}>
-                <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center text-[18px] shrink-0 border"
-                     style={{ background: (cat.color ?? '#888') + '20', borderColor: '#e8e6df' }}>
-                  {cat.icon}
+            <div
+              key={category.id || category.label}
+              className="rounded-xl border p-3"
+              style={{
+                borderColor: translucent(category.color, '55'),
+                backgroundColor: translucent(category.color, '12'),
+              }}
+            >
+              <div className="flex items-start gap-2.5">
+                <div
+                  className="w-9 h-9 rounded-xl grid place-items-center text-[17px] shrink-0 border"
+                  style={{
+                    borderColor: translucent(category.color, '55'),
+                    backgroundColor: translucent(category.color, '22'),
+                  }}
+                >
+                  {category.icon || '•'}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="text-[13.5px] font-semibold truncate"
-                         style={{ maxWidth: '180px', color: '#1e2535' }}>
-                      {e.description}
-                    </div>
-                    <div className="text-[14px] font-extrabold tabular-nums whitespace-nowrap shrink-0"
-                         style={{ color: '#1e2535' }}>
-                      {fmtCLP(e.amount)}
-                    </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-[12px] font-semibold truncate">{category.label}</div>
+                    <div className="text-[10px] text-[var(--muted)]">{percentage}%</div>
                   </div>
-                  <div className="text-[11.5px] mt-[3px]" style={{ color: '#9ba5c2' }}>
-                    {relDate(e.date)} · {timeOnly(e.date)}{bank ? ` · ${bank.label}` : ''}
+                  <div className="font-mono text-[14px] font-bold mt-0.5">{fmtCLP(category.amount)}</div>
+                  <div className="text-[9.5px] text-[var(--muted)] mt-1">
+                    {category.count} {category.count === 1 ? 'movimiento' : 'movimientos'}
+                    {category.shared > 0 && <> · Nicol {fmtCLP(category.shared)}</>}
                   </div>
-                  <div className="flex gap-1.5 mt-[7px] flex-wrap">
-                    <CatTag cat={cat}/>
-                    <PayTag type={e.type} method={e.method} installments={e.installments}/>
-                    {e.status === 'revisar' && (
-                      <span className="text-[11px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-                            style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#92400e' }}>
-                        revisar
-                      </span>
-                    )}
+                  <div className="h-1.5 rounded-full bg-black/5 mt-2 overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${Math.max(3, percentage)}%`, backgroundColor: category.color || '#888880' }}
+                    />
                   </div>
                 </div>
-              </div>
-
-              {/* Actions footer */}
-              <div className="flex justify-end gap-1.5 border-t"
-                   style={{ padding: '9px 14px 11px', borderColor: '#e8e6df' }}>
-                {e.status === 'revisar' && (
-                  <ActBtn onClick={() => onToggleStatus(e.id)} variant="ok">
-                    <Icon name="check" size={13}/> Revisar
-                  </ActBtn>
-                )}
-                <ActBtn onClick={() => onEdit(e)} variant="edit">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                  </svg>
-                  Editar
-                </ActBtn>
-                <ActBtn onClick={() => onDelete(e.id)} variant="del">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                    <polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                    <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Eliminar
-                </ActBtn>
               </div>
             </div>
           )
         })}
-        {filtered.length === 0 && (
-          <div className="rounded-2xl border p-8 text-center text-[13px] shadow-sm"
-               style={{ background: '#ffffff', borderColor: '#e8e6df', color: '#9ba5c2' }}>
-            Sin resultados.
-          </div>
-        )}
       </div>
+    </section>
+  )
+}
+
+function StatusBadges({ row }) {
+  const source = SOURCE_META[row.source] || SOURCE_META.manual
+  const current = Number(row.installmentCurrent || 0)
+  const total = Number(row.installmentTotal || 0)
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+      <span className={`rounded-full px-2 py-1 text-[9.5px] font-bold ${source.className}`}>{source.label}</span>
+      <span
+        className="rounded-full px-2 py-1 text-[9.5px] font-bold border"
+        style={{
+          borderColor: translucent(row.category?.color, '55'),
+          backgroundColor: translucent(row.category?.color, '18'),
+          color: row.category?.color || '#666',
+        }}
+      >
+        {row.category?.icon || '•'} {row.category?.label || 'Otros'}
+      </span>
+      {row.isPending && <span className="rounded-full bg-amber-100 text-amber-900 px-2 py-1 text-[9.5px] font-bold">Pendiente</span>}
+      {row.reviewRequired && <span className="rounded-full bg-[var(--amber-soft)] text-[var(--amber-ink)] px-2 py-1 text-[9.5px] font-bold">Revisar</span>}
+      {!row.affectsTotal && <span className="rounded-full bg-slate-100 text-slate-600 px-2 py-1 text-[9.5px] font-bold">Fuera del total</span>}
+      {row.sharedWithNicol && <span className="rounded-full bg-violet-50 text-violet-700 px-2 py-1 text-[9.5px] font-bold">Compartido con Nicol</span>}
+      {current > 0 && total > 1 && (
+        <span className="rounded-full bg-[var(--ink)] text-[var(--bg)] px-2 py-1 text-[9.5px] font-bold font-mono">
+          Cuota {current}/{total}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function MovementCard({ row, onEdit, onDelete, onToggleStatus, onOpenBilling }) {
+  const category = row.category || FALLBACK_CATEGORY
+  const current = Number(row.installmentCurrent || 0)
+  const total = Number(row.installmentTotal || 0)
+  const hasInstallment = current > 0 && total > 1
+
+  return (
+    <article className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] overflow-hidden">
+      <div className="p-4 flex items-start gap-3">
+        <div
+          className="w-11 h-11 rounded-2xl grid place-items-center text-[20px] shrink-0 border"
+          style={{
+            borderColor: translucent(category.color, '55'),
+            backgroundColor: translucent(category.color, '20'),
+          }}
+        >
+          {category.icon || '•'}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-[13.5px] font-semibold leading-snug break-words">{row.description}</h3>
+              <div className="text-[10.5px] text-[var(--muted)] mt-1 leading-relaxed">
+                {row.date ? formatDate(row.date, true) : 'Fecha estimada por ciclo'}
+                {' · '}{row.bankLabel}
+                {row.cycleKey && <> · Ciclo {monthLabel(row.cycleKey)}</>}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="font-mono text-[15px] font-bold">{fmtCLP(row.amount)}</div>
+              <div className="text-[9.5px] text-[var(--muted)] mt-1">
+                {hasInstallment ? 'valor de esta cuota' : row.isPending ? 'por confirmar' : 'monto del gasto'}
+              </div>
+            </div>
+          </div>
+
+          <StatusBadges row={row}/>
+
+          {(row.notes || (hasInstallment && Number(row.originalAmount || 0) > row.amount)) && (
+            <div className="mt-3 rounded-xl bg-[var(--soft)] px-3 py-2 text-[10.5px] text-[var(--muted)] leading-relaxed">
+              {row.notes && <div>{row.notes}</div>}
+              {hasInstallment && Number(row.originalAmount || 0) > row.amount && (
+                <div className={row.notes ? 'mt-1' : ''}>
+                  Compra total: <strong className="text-[var(--ink)]">{fmtCLP(row.originalAmount)}</strong>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-[var(--line)] px-4 py-2.5 flex items-center justify-between gap-2">
+        <div className="text-[9.5px] text-[var(--muted)]">
+          {row.source === 'manual' && 'Registro creado manualmente o por Telegram'}
+          {row.source === 'card' && `Movimiento importado desde Facturación${row.dueDate ? ` · vence ${formatDate(row.dueDate, true)}` : ''}`}
+          {row.source === 'reconciled' && 'Registro manual conciliado con el movimiento bancario'}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {row.editable ? (
+            <>
+              {row.reviewRequired && (
+                <button type="button" onClick={() => onToggleStatus(row.rawId)}
+                  className="h-8 px-2.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-semibold flex items-center gap-1">
+                  <Icon name="check" size={12}/> Confirmar
+                </button>
+              )}
+              <button type="button" onClick={() => onEdit({
+                id: row.rawId,
+                amount: row.amount,
+                description: row.description,
+                category: row.category?.id || 'otros',
+                bank: BANKS.find(bank => bank.label === row.bankLabel)?.id || 'efectivo',
+                method: row.paymentLabel === 'Efectivo' ? 'efectivo' : 'tarjeta',
+                type: row.paymentLabel === 'Crédito' ? 'credito' : 'debito',
+                installments: row.installments,
+                status: row.status,
+                date: row.date,
+                notes: row.notes,
+              })}
+                className="w-8 h-8 rounded-lg bg-[var(--soft)] text-[var(--muted)] grid place-items-center" aria-label="Editar gasto">
+                <Icon name="pencil" size={13}/>
+              </button>
+              <button type="button" onClick={() => onDelete(row.rawId)}
+                className="w-8 h-8 rounded-lg bg-red-50 text-red-600 grid place-items-center" aria-label="Eliminar gasto">
+                <Icon name="trash" size={13}/>
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={onOpenBilling}
+              className="h-8 px-3 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[10px] font-semibold">
+              Ver facturación
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+export default function ExpensesList({
+  expenses,
+  creditCards = [],
+  onEdit,
+  onDelete,
+  onToggleStatus,
+  onNew,
+  onRefresh,
+  onOpenBilling,
+  dataSource = 'demo',
+}) {
+  const [cycles, setCycles] = useState([])
+  const [billingLoading, setBillingLoading] = useState(false)
+  const [billingError, setBillingError] = useState('')
+  const [selectedMonth, setSelectedMonth] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+
+  const loadBilling = async () => {
+    if (dataSource === 'demo') return
+    setBillingLoading(true)
+    setBillingError('')
+    try {
+      setCycles(await fetchBillingCycles())
+    } catch (error) {
+      console.error('fetchBillingCycles from ExpensesList:', error)
+      setBillingError(error.message || 'No fue posible cargar los movimientos de tarjetas.')
+    } finally {
+      setBillingLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (dataSource === 'supabase') loadBilling()
+  }, [dataSource])
+
+  const unified = useMemo(() => mergeRows(expenses, cycles, creditCards), [expenses, cycles, creditCards])
+
+  const months = useMemo(() => {
+    const keys = [...new Set(unified.rows.map(row => monthKey(row.effectiveDate)).filter(Boolean))]
+      .sort((a, b) => b.localeCompare(a))
+    return keys
+  }, [unified.rows])
+
+  useEffect(() => {
+    if (!months.length) return
+    if (selectedMonth && months.includes(selectedMonth)) return
+    const nowParts = new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      timeZone: 'America/Santiago',
+    }).formatToParts(new Date())
+    const year = nowParts.find(part => part.type === 'year')?.value
+    const month = nowParts.find(part => part.type === 'month')?.value
+    const current = year && month ? `${year}-${month}` : ''
+    setSelectedMonth(months.includes(current) ? current : months[0])
+  }, [months, selectedMonth])
+
+  const selectedRows = useMemo(() => unified.rows.filter(row => monthKey(row.effectiveDate) === selectedMonth), [unified.rows, selectedMonth])
+
+  const filteredRows = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase('es')
+    return selectedRows.filter(row => {
+      if (sourceFilter !== 'all' && row.source !== sourceFilter) return false
+      if (categoryFilter && row.category?.id !== categoryFilter && row.category?.label !== categoryFilter) return false
+      if (statusFilter === 'confirmed' && (row.isPending || row.reviewRequired || !row.affectsTotal)) return false
+      if (statusFilter === 'pending' && !row.isPending) return false
+      if (statusFilter === 'review' && !row.reviewRequired) return false
+      if (statusFilter === 'shared' && !row.sharedWithNicol) return false
+      if (normalizedSearch && !`${row.description} ${row.category?.label || ''} ${row.bankLabel}`.toLocaleLowerCase('es').includes(normalizedSearch)) return false
+      return true
+    })
+  }, [selectedRows, sourceFilter, categoryFilter, statusFilter, search])
+
+  const totals = useMemo(() => {
+    const confirmed = selectedRows.filter(row => row.affectsTotal && !row.isPending).reduce((sum, row) => sum + row.amount, 0)
+    const pending = selectedRows.filter(row => row.isPending || !row.affectsTotal).reduce((sum, row) => sum + row.amount, 0)
+    const shared = selectedRows.filter(row => row.sharedWithNicol).reduce((sum, row) => sum + row.amount, 0)
+    const manual = selectedRows.filter(row => row.source === 'manual' || row.source === 'reconciled').reduce((sum, row) => sum + row.amount, 0)
+    const cards = selectedRows.filter(row => row.source === 'card' || row.source === 'reconciled').reduce((sum, row) => sum + row.amount, 0)
+    const alerts = selectedRows.filter(row => row.isPending || row.reviewRequired).length
+    return { confirmed, pending, shared, manual, cards, alerts }
+  }, [selectedRows])
+
+  const availableCategories = useMemo(() => {
+    const map = new Map()
+    selectedRows.forEach(row => {
+      const category = row.category || FALLBACK_CATEGORY
+      map.set(category.id || category.label, category)
+    })
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, 'es'))
+  }, [selectedRows])
+
+  const groupedRows = useMemo(() => {
+    const groups = new Map()
+    filteredRows.forEach(row => {
+      const key = dateOnly(row.date) || `cycle:${row.cycleKey || selectedMonth}`
+      const current = groups.get(key) || {
+        key,
+        label: row.date ? formatDate(row.date) : 'Movimientos sin fecha confirmada',
+        rows: [],
+      }
+      current.rows.push(row)
+      groups.set(key, current)
+    })
+    return [...groups.values()].sort((a, b) => b.key.localeCompare(a.key))
+  }, [filteredRows, selectedMonth])
+
+  const refresh = async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all([onRefresh?.(), loadBilling()])
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const loading = dataSource === 'loading' || billingLoading
+  const error = dataSource === 'error' || Boolean(billingError)
+
+  return (
+    <div className="p-4 lg:p-6 max-w-6xl mx-auto pb-24">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Registro unificado</div>
+          <h1 className="text-[22px] font-bold tracking-tight mt-1">Gastos</h1>
+          <p className="text-[12px] text-[var(--muted)] mt-1 max-w-2xl">
+            Compras de tarjetas y registros manuales en una sola vista, sin contar coincidencias exactas dos veces.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onOpenBilling}
+            className="h-9 px-3 rounded-lg border border-[var(--line)] text-[11px] font-semibold hover:bg-[var(--hover)]">
+            Ver facturación
+          </button>
+          <button type="button" onClick={refresh} disabled={refreshing}
+            className="h-9 px-3 rounded-lg border border-[var(--line)] text-[11px] font-semibold flex items-center gap-1.5 disabled:opacity-50">
+            <Icon name="refresh" size={13}/>{refreshing ? 'Actualizando…' : 'Actualizar'}
+          </button>
+          {onNew && (
+            <button type="button" onClick={onNew}
+              className="h-9 px-3 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[11px] font-semibold flex items-center gap-1.5">
+              <Icon name="plus" size={13}/> Nuevo gasto
+            </button>
+          )}
+        </div>
+      </div>
+
+      {loading && (
+        <div className="mt-4 h-1 rounded-full bg-[var(--soft)] overflow-hidden">
+          <div className="h-full w-1/2 bg-[var(--ink)] animate-pulse rounded-full"/>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[11px] text-red-700">
+          Algunos datos no pudieron actualizarse. Los registros cargados siguen disponibles.
+          {billingError && <div className="mt-1 opacity-80">{billingError}</div>}
+        </div>
+      )}
+
+      {months.length > 0 && (
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-1 snap-x">
+          {months.map(key => {
+            const monthRows = unified.rows.filter(row => monthKey(row.effectiveDate) === key)
+            const monthTotal = monthRows.filter(row => row.affectsTotal && !row.isPending).reduce((sum, row) => sum + row.amount, 0)
+            const active = selectedMonth === key
+            return (
+              <button key={key} type="button" onClick={() => setSelectedMonth(key)}
+                className={`snap-start shrink-0 min-w-[158px] rounded-2xl border p-3 text-left transition-colors ${active
+                  ? 'bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]'
+                  : 'bg-[var(--bg-elev)] border-[var(--line)] hover:bg-[var(--hover)]'}`}>
+                <div className="text-[10px] font-semibold capitalize opacity-70">{monthLabel(key)}</div>
+                <div className="font-mono text-[15px] font-bold mt-1">{fmtCLP(monthTotal)}</div>
+                <div className="text-[9.5px] mt-1 opacity-60">{monthRows.length} movimientos</div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {selectedRows.length > 0 ? (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+            <SummaryCard label="Gasto confirmado" value={fmtCLP(totals.confirmed)} detail={`${selectedRows.length} movimientos en ${monthLabel(selectedMonth)}`} tone="dark"/>
+            <SummaryCard label="Movimientos de tarjetas" value={fmtCLP(totals.cards)} detail="Compras importadas desde CMR y Banco de Chile"/>
+            <SummaryCard label="Compartido con Nicol" value={fmtCLP(totals.shared)} detail="Monto base antes de aplicar su porcentaje" tone="violet"/>
+            <SummaryCard label="Pendiente y alertas" value={totals.alerts ? String(totals.alerts) : fmtCLP(totals.pending)} detail={totals.alerts ? `${fmtCLP(totals.pending)} todavía por confirmar o revisar` : 'Sin movimientos pendientes'} tone={totals.alerts || totals.pending ? 'warning' : 'default'}/>
+          </div>
+
+          {unified.duplicatesUnified > 0 && (
+            <div className="mt-3 rounded-xl bg-emerald-50 text-emerald-800 px-4 py-2.5 text-[10.5px]">
+              Gastito unificó {unified.duplicatesUnified} {unified.duplicatesUnified === 1 ? 'coincidencia exacta' : 'coincidencias exactas'} entre registros manuales y movimientos bancarios.
+            </div>
+          )}
+
+          <div className="mt-5"><CategorySummary rows={selectedRows}/></div>
+
+          <section className="mt-5 rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-3">
+            <div className="grid lg:grid-cols-[1fr_auto_auto_auto] gap-2">
+              <label className="relative block">
+                <Icon name="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"/>
+                <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar comercio, categoría o banco…"
+                  className="w-full h-10 rounded-xl border border-[var(--line)] bg-[var(--bg)] pl-9 pr-3 text-[11px] outline-none"/>
+              </label>
+              <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value)}
+                className="h-10 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] outline-none">
+                <option value="all">Todos los orígenes</option>
+                <option value="card">Tarjetas</option>
+                <option value="manual">Manuales</option>
+                <option value="reconciled">Conciliados</option>
+              </select>
+              <select value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}
+                className="h-10 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] outline-none">
+                <option value="">Todas las categorías</option>
+                {availableCategories.map(category => (
+                  <option key={category.id || category.label} value={category.id || category.label}>{category.icon || '•'} {category.label}</option>
+                ))}
+              </select>
+              <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}
+                className="h-10 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] outline-none">
+                <option value="all">Todos los estados</option>
+                <option value="confirmed">Confirmados</option>
+                <option value="pending">Pendientes</option>
+                <option value="review">Por revisar</option>
+                <option value="shared">Compartidos con Nicol</option>
+              </select>
+            </div>
+            <div className="mt-2 text-[10px] text-[var(--muted)]">
+              Mostrando <strong className="text-[var(--ink)]">{filteredRows.length}</strong> de {selectedRows.length} movimientos.
+            </div>
+          </section>
+
+          <div className="mt-4 space-y-5">
+            {groupedRows.map(group => (
+              <section key={group.key}>
+                <div className="flex items-center justify-between gap-3 px-1 mb-2">
+                  <h2 className="text-[11px] font-bold text-[var(--muted)] capitalize">{group.label}</h2>
+                  <div className="font-mono text-[10.5px] text-[var(--muted)]">
+                    {fmtCLP(group.rows.reduce((sum, row) => sum + row.amount, 0))}
+                  </div>
+                </div>
+                <div className="grid lg:grid-cols-2 gap-2.5">
+                  {group.rows.map(row => (
+                    <MovementCard
+                      key={row.id}
+                      row={row}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      onToggleStatus={onToggleStatus}
+                      onOpenBilling={onOpenBilling}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          {filteredRows.length === 0 && (
+            <div className="mt-5 rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-10 text-center">
+              <div className="text-[26px]">🔎</div>
+              <div className="text-[13px] font-semibold mt-3">No hay movimientos con estos filtros</div>
+              <button type="button" onClick={() => { setSourceFilter('all'); setCategoryFilter(''); setStatusFilter('all'); setSearch('') }}
+                className="mt-3 text-[11px] font-semibold underline">Limpiar filtros</button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="mt-8 rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-10 text-center">
+          <div className="text-[30px]">📭</div>
+          <h2 className="text-[14px] font-semibold mt-3">Todavía no hay gastos disponibles</h2>
+          <p className="text-[11px] text-[var(--muted)] mt-1">Registra un gasto manual o carga movimientos desde Facturación.</p>
+        </div>
+      )}
     </div>
   )
 }
