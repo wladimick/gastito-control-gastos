@@ -1,0 +1,40 @@
+name: Extender ayudas financieras
+
+on:
+  push:
+    branches:
+      - agent/tooltips-menu-lateral-20260805
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[skip tooltip extension]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/tooltips-menu-lateral-20260805
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Aplicar extensión
+        run: python scripts/extend_financial_tooltips.py
+
+      - name: Limpiar automatización temporal
+        run: |
+          rm -f scripts/extend_financial_tooltips.py
+          rm -f .github/workflows/extend-financial-tooltips.yml
+
+      - name: Confirmar cambios
+        run: |
+          git config user.name "Wladimick"
+          git config user.email "61322487+wladimick@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: extender ayudas a facturación y proyección [skip tooltip extension]"
+          git push origin HEAD:agent/tooltips-menu-lateral-20260805
