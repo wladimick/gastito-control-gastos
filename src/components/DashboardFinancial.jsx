@@ -24,7 +24,7 @@ function categoryFor(row) {
 }
 
 function Metric({label, value, detail, tone = 'default', onClick, info}) {
-  const help = info || financialHelpFor(label)
+  const help = info || financialHelpFor(label);
   const toneClass = tone === 'dark'
     ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
     : tone === 'danger'

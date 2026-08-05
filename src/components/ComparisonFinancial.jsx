@@ -25,7 +25,7 @@ function amount(list) {
 }
 
 function Metric({label, value, detail, tone = 'default', info}) {
-  const help = info || financialHelpFor(label)
+  const help = info || financialHelpFor(label);
   const toneClass = tone === 'dark'
     ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
     : tone === 'good'

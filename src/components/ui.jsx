@@ -120,7 +120,7 @@ export function Card({ children, className = '', padding = 'p-5' }) {
 }
 
 export function StatCard({ label, value, sub, accent, icon, tone = 'default', info }) {
-  const help = info || financialHelpFor(label)
+  const help = info || financialHelpFor(label);
   const toneClass = tone === 'dark'
     ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
     : tone === 'violet'
