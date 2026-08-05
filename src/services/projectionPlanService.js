@@ -248,7 +248,8 @@ export function buildProjectionPlan({
 
   const cycleMap = cyclesByDueMonth(billingCycles)
   const occurrenceMap = installmentOccurrencesByMonth(installmentDebts)
-  const receivableMap = scheduleOneOff(receivables, firstKey, monthKeys, includeReceivables)
+  const receivablesToInclude = (receivables || []).filter(item => item.reimbursement || includeReceivables)
+  const receivableMap = scheduleOneOff(receivablesToInclude, firstKey, monthKeys, true)
   const payableMap = scheduleOneOff(payables, firstKey, monthKeys, includePayables)
 
   let balance = startBalance
@@ -342,7 +343,9 @@ export function buildProjectionPlan({
   , null)
   const firstMonth = months[0] || null
   const overdueReceivables = (receivables || []).filter(item =>
-    item.status !== 'paid' && (!item.dueDate || dateOnly(item.dueDate) < dateOnly(now.toISOString()))
+    !item.reimbursement
+      && item.status !== 'paid'
+      && (!item.dueDate || dateOnly(item.dueDate) < dateOnly(now.toISOString()))
   )
   const overdueReceivableAmount = overdueReceivables.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   const knownCycleMonths = months.filter(month => month.knownCycles.length > 0).length

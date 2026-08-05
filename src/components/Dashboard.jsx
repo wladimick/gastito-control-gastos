@@ -1,1 +1,1 @@
-export { default } from './DashboardFinancial'
+export { default } from './DashboardWithReimbursements'
