@@ -4,6 +4,7 @@ import App from './App'
 import NicolCardAdmin from './components/NicolCardAdmin'
 import NicolPublicCyclesVisual from './components/NicolPublicCyclesVisual'
 import NicolRecurringAdmin from './components/NicolRecurringAdmin'
+import AppStatusOverlay from './components/AppStatusOverlay'
 import './index.css'
 
 const params = new URLSearchParams(window.location.search)
@@ -18,5 +19,6 @@ else if (nicolToken) content = <NicolPublicCyclesVisual token={nicolToken} />
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     {content}
+    <AppStatusOverlay />
   </React.StrictMode>,
 )
