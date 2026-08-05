@@ -28,22 +28,24 @@ as $$
   );
 $$;
 
-create or replace function public.refresh_billing_cycle_estimate()
-returns trigger
+create or replace function public.refresh_one_billing_cycle_estimate(p_cycle_id uuid)
+returns void
 language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
-declare
-  v_cycle_id uuid := coalesce(new.billing_cycle_id, old.billing_cycle_id);
 begin
+  if p_cycle_id is null then
+    return;
+  end if;
+
   update public.billing_cycles cycle
   set estimated_amount = greatest(
         cycle.reported_amount,
         coalesce((
           select sum(transaction.amount)
           from public.billing_transactions transaction
-          where transaction.billing_cycle_id = v_cycle_id
+          where transaction.billing_cycle_id = p_cycle_id
             and transaction.affects_cycle_total = true
         ), 0)
       ),
@@ -53,9 +55,30 @@ begin
         else cycle.reconciliation_status
       end,
       updated_at = now()
-  where cycle.id = v_cycle_id;
+  where cycle.id = p_cycle_id;
+end;
+$$;
 
-  return coalesce(new, old);
+create or replace function public.refresh_billing_cycle_estimate()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' then
+    perform public.refresh_one_billing_cycle_estimate(old.billing_cycle_id);
+    return old;
+  end if;
+
+  perform public.refresh_one_billing_cycle_estimate(new.billing_cycle_id);
+
+  if tg_op = 'UPDATE'
+     and old.billing_cycle_id is distinct from new.billing_cycle_id then
+    perform public.refresh_one_billing_cycle_estimate(old.billing_cycle_id);
+  end if;
+
+  return new;
 end;
 $$;
 
