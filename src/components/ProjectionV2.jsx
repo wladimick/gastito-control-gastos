@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Badge, Card } from './ui'
+import { Badge, Card, InfoTip } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
+import { financialHelpFor } from '../lib/financialHelp'
 import { CATEGORIES } from '../data'
 import { fetchBillingCycles } from '../services/billingCyclesService'
 import {
@@ -64,7 +65,8 @@ function confidenceMeta(value) {
   return { label: 'Monto proyectado', className: 'bg-slate-100 text-slate-700' }
 }
 
-function MetricCard({ label, value, detail, tone = 'default', icon }) {
+function MetricCard({ label, value, detail, tone = 'default', icon, info }) {
+  const help = info || financialHelpFor(label)
   const cls = tone === 'dark'
     ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
     : tone === 'warning'
@@ -75,7 +77,7 @@ function MetricCard({ label, value, detail, tone = 'default', icon }) {
   return (
     <div className={`rounded-2xl border p-4 min-h-[116px] ${cls}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[10px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>
+        <div className="flex items-center gap-1.5"><div className="text-[10px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div>
         {icon && <Icon name={icon} size={15} className="opacity-50"/>}
       </div>
       <div className="font-mono text-[22px] md:text-[25px] font-bold mt-3 tracking-tight">{value}</div>

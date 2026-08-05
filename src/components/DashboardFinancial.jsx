@@ -33,17 +33,26 @@ function Metric({label, value, detail, tone = 'default', onClick, info}) {
         ? 'bg-violet-50 text-violet-950 border-violet-100'
         : 'bg-[var(--bg-elev)] text-[var(--ink)] border-[var(--line)]'
 
-  const Element = onClick ? 'button' : 'div'
+  const interactiveProps = onClick ? {
+    role: 'button',
+    tabIndex: 0,
+    onClick,
+    onKeyDown: event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        onClick()
+      }
+    },
+  } : {}
   return (
-    <Element
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
-      className={`rounded-2xl border p-4 min-h-[112px] text-left w-full ${toneClass} ${onClick ? 'hover:-translate-y-0.5 transition-transform' : ''}`}
+    <div
+      {...interactiveProps}
+      className={`rounded-2xl border p-4 min-h-[112px] text-left w-full ${toneClass} ${onClick ? 'hover:-translate-y-0.5 transition-transform cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--ink)]/15' : ''}`}
     >
       <div className="flex items-center gap-1.5"><div className="text-[9.5px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div>
       <div className="font-mono text-[21px] md:text-[24px] font-bold mt-2 tracking-tight">{value}</div>
       <div className="text-[10px] opacity-65 mt-1 leading-relaxed">{detail}</div>
-    </Element>
+    </div>
   )
 }
 

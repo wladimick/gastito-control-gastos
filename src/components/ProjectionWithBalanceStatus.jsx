@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import ProjectionV2 from './ProjectionV2'
-import { Badge, Card } from './ui'
+import { Badge, Card, InfoTip } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
 
 const OVERRIDE_KEY = 'gastito_projection_balance_override'
@@ -95,7 +95,7 @@ export default function ProjectionWithBalanceStatus(props) {
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="text-[13px] font-bold">Punto de partida de la proyección</div>
+                <div className="flex items-center gap-1.5"><div className="text-[13px] font-bold">Punto de partida de la proyección</div><InfoTip content="Es el saldo desde el que comienza el cálculo futuro. Incluye cuentas operativas activas, pero no cupos de tarjetas ni cuentas marcadas como ahorro."/></div>
                 <Badge tone={override == null ? (needsReview ? 'warn' : 'ok') : 'info'}>
                   {override == null ? (needsReview ? 'Revisar saldos' : 'Saldos registrados') : 'Saldo temporal'}
                 </Badge>

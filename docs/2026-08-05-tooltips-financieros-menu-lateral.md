@@ -7,7 +7,7 @@
 
 - Se agrega un componente accesible de información que funciona con mouse, teclado y toque.
 - Los tooltips se muestran fuera de la card para evitar recortes por `overflow`.
-- Dashboard, Cuentas, Presupuestos, Recurrentes, Reportes y Comparación reconocen automáticamente sus métricas principales.
+- Dashboard, Cuentas, Presupuestos, Recurrentes, Facturación, Proyección, Reportes y Comparación reconocen automáticamente sus métricas principales.
 - `StatCard` también puede mostrar ayuda mediante su etiqueta o una explicación personalizada.
 - Los textos explican el dato en lenguaje cotidiano y aclaran qué incluye, qué excluye y cómo usarlo para decidir.
 
@@ -22,3 +22,5 @@
 ## Resultado esperado
 
 Las páginas largas ya no desplazan ni bloquean el menú lateral, y las métricas más relevantes muestran un icono `i` con una explicación breve antes de que el usuario tome una decisión financiera.
+
+- Las cards clicables del Dashboard usan navegación accesible sin anidar controles interactivos.
