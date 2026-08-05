@@ -1,36 +1,22 @@
-const KEY = 'gastito_billed_v1'
+const LEGACY_KEY = 'gastito_billed_v1'
 
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY) || '[]') } catch { return [] }
-}
-function persist(items) {
-  localStorage.setItem(KEY, JSON.stringify(items))
+function clearLegacyStorage() {
+  try { localStorage.removeItem(LEGACY_KEY) } catch {}
 }
 
+// Compatibilidad temporal con App.jsx. Los montos reales ahora provienen
+// exclusivamente de billing_cycles en Supabase.
 export function getBilledStatements() {
-  return load()
+  clearLegacyStorage()
+  return []
 }
 
-// cardId + cycleKey (YYYY-MM of payment month) form the unique key
-export function upsertBilledStatement(stmt) {
-  const items = load()
-  const idx = items.findIndex(s => s.cardId === stmt.cardId && s.cycleKey === stmt.cycleKey)
-  const now = new Date().toISOString()
-  if (idx >= 0) {
-    items[idx] = { ...items[idx], ...stmt, updatedAt: now }
-  } else {
-    items.push({
-      id: crypto.randomUUID(),
-      createdAt: now,
-      ...stmt,
-    })
-  }
-  persist(items)
-  return items
+export function upsertBilledStatement() {
+  clearLegacyStorage()
+  return []
 }
 
-export function deleteBilledStatement(cardId, cycleKey) {
-  const items = load().filter(s => !(s.cardId === cardId && s.cycleKey === cycleKey))
-  persist(items)
-  return items
+export function deleteBilledStatement() {
+  clearLegacyStorage()
+  return []
 }
