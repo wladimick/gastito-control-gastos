@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { Badge, Card } from './ui'
+import { financialHelpFor } from '../lib/financialHelp'
+import { Badge, Card, InfoTip } from './ui'
 import { Icon, fmtCLP, MES } from '../lib/helpers'
 import { CATEGORIES } from '../data'
 
@@ -10,7 +11,8 @@ function addMonths(key, offset) { const [y,m] = key.split('-').map(Number); cons
 function roundBudget(value) { if (!value) return 0; return Math.ceil(value / 5000) * 5000 }
 function sumByCategory(expenses, month) { return expenses.filter(item => keyFor(item.date) === month).reduce((map,item) => { const id = item.category || 'otros'; map[id] = (map[id] || 0) + Number(item.amount || 0); return map }, {}) }
 
-function Metric({ label, value, detail, tone='default' }) { const cls = tone==='dark'?'bg-[var(--ink)] text-[var(--bg)] border-transparent':tone==='warning'?'bg-[var(--amber-soft)] text-[var(--amber-ink)] border-transparent':tone==='danger'?'bg-red-50 text-red-800 border-red-100':'bg-[var(--bg-elev)] border-[var(--line)]'; return <div className={`rounded-2xl border p-4 min-h-[112px] ${cls}`}><div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-60">{label}</div><div className="font-mono text-[22px] font-bold mt-3">{value}</div><div className="text-[10px] opacity-65 mt-1.5">{detail}</div></div> }
+function Metric({label, value, detail, tone='default', info}) {
+  const help = info || financialHelpFor(label) const cls = tone==='dark'?'bg-[var(--ink)] text-[var(--bg)] border-transparent':tone==='warning'?'bg-[var(--amber-soft)] text-[var(--amber-ink)] border-transparent':tone==='danger'?'bg-red-50 text-red-800 border-red-100':'bg-[var(--bg-elev)] border-[var(--line)]'; return <div className={`rounded-2xl border p-4 min-h-[112px] ${cls}`}><div className="flex items-center gap-1.5"><div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div><div className="font-mono text-[22px] font-bold mt-3">{value}</div><div className="text-[10px] opacity-65 mt-1.5">{detail}</div></div> }
 
 export default function Budgets({ expenses = [], budgets = {}, setBudgets }) {
   const month = currentKey(); const [year,monthNumber] = month.split('-').map(Number)

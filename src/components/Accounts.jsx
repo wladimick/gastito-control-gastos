@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Badge, BankLogo, Card, Select } from './ui'
+import { financialHelpFor } from '../lib/financialHelp'
+import { Badge, BankLogo, Card, Select, InfoTip } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
 import { useBanks } from '../services/banksService'
 import { fetchBillingCycles } from '../services/billingCyclesService'
@@ -94,9 +95,10 @@ function CardForm({ initial, banks, onClose, onSave }) {
   </>
 }
 
-function Metric({ label, value, detail, tone = 'default' }) {
+function Metric({label, value, detail, tone = 'default', info}) {
+  const help = info || financialHelpFor(label)
   const cls = tone === 'dark' ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent' : tone === 'danger' ? 'bg-red-50 text-red-800 border-red-100' : tone === 'warning' ? 'bg-[var(--amber-soft)] text-[var(--amber-ink)] border-transparent' : 'bg-[var(--bg-elev)] border-[var(--line)]'
-  return <div className={`rounded-2xl border p-4 min-h-[116px] ${cls}`}><div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-60">{label}</div><div className="font-mono text-[23px] font-bold mt-3 tracking-tight">{value}</div><div className="text-[10.5px] opacity-65 mt-1.5 leading-relaxed">{detail}</div></div>
+  return <div className={`rounded-2xl border p-4 min-h-[116px] ${cls}`}><div className="flex items-center gap-1.5"><div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div><div className="font-mono text-[23px] font-bold mt-3 tracking-tight">{value}</div><div className="text-[10.5px] opacity-65 mt-1.5 leading-relaxed">{detail}</div></div>
 }
 
 export default function Accounts({

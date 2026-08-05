@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Badge, Card } from './ui'
+import { financialHelpFor } from '../lib/financialHelp'
+import { Badge, Card, InfoTip } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
 import { CATEGORIES } from '../data'
 import { fetchBillingCycles } from '../services/billingCyclesService'
@@ -22,7 +23,8 @@ function categoryFor(row) {
   return row.categoryMeta || CATEGORIES.find(category => category.id === row.category) || FALLBACK_CATEGORY
 }
 
-function Metric({ label, value, detail, tone = 'default', onClick }) {
+function Metric({label, value, detail, tone = 'default', onClick, info}) {
+  const help = info || financialHelpFor(label)
   const toneClass = tone === 'dark'
     ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
     : tone === 'danger'
@@ -38,7 +40,7 @@ function Metric({ label, value, detail, tone = 'default', onClick }) {
       onClick={onClick}
       className={`rounded-2xl border p-4 min-h-[112px] text-left w-full ${toneClass} ${onClick ? 'hover:-translate-y-0.5 transition-transform' : ''}`}
     >
-      <div className="text-[9.5px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>
+      <div className="flex items-center gap-1.5"><div className="text-[9.5px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div>
       <div className="font-mono text-[21px] md:text-[24px] font-bold mt-2 tracking-tight">{value}</div>
       <div className="text-[10px] opacity-65 mt-1 leading-relaxed">{detail}</div>
     </Element>

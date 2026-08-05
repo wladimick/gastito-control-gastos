@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
-import { Badge, Card } from './ui'
+import { financialHelpFor } from '../lib/financialHelp'
+import { Badge, Card, InfoTip } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
 import { CATEGORIES } from '../data'
 import {
@@ -23,7 +24,8 @@ function amount(list) {
   return list.reduce((sum, row) => sum + Number(row.amount || 0), 0)
 }
 
-function Metric({ label, value, detail, tone = 'default' }) {
+function Metric({label, value, detail, tone = 'default', info}) {
+  const help = info || financialHelpFor(label)
   const toneClass = tone === 'dark'
     ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
     : tone === 'good'
@@ -33,7 +35,7 @@ function Metric({ label, value, detail, tone = 'default' }) {
         : 'bg-[var(--bg-elev)] border-[var(--line)]'
   return (
     <div className={`rounded-2xl border p-4 min-h-[108px] ${toneClass}`}>
-      <div className="text-[9.5px] uppercase tracking-[.12em] font-bold opacity-60">{label}</div>
+      <div className="flex items-center gap-1.5"><div className="text-[9.5px] uppercase tracking-[.12em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div>
       <div className="font-mono text-[21px] font-bold mt-2">{value}</div>
       <div className="text-[9.5px] opacity-65 mt-1 leading-relaxed">{detail}</div>
     </div>

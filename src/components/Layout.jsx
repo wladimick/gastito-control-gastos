@@ -99,14 +99,14 @@ export default function Layout({
   }
 
   return (
-    <div className="min-h-screen flex bg-[var(--bg)] text-[var(--ink)]">
-      <aside className="hidden lg:flex flex-col w-64 border-r border-[#222220] sticky top-0 h-screen shrink-0 bg-[#0F0F0E]">
-        <div className="px-5 pt-6 pb-5 border-b border-[#222220]">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col w-64 border-r border-[#222220] h-dvh overflow-hidden bg-[#0F0F0E]">
+        <div className="px-5 pt-6 pb-5 border-b border-[#222220] shrink-0">
           <GastitoLogo light size="sm"/>
           <div className="text-[11px] text-[#525250] mt-2 leading-none pl-0.5">Control financiero personal</div>
         </div>
 
-        <nav className="px-3 py-3 flex-1 overflow-y-auto flex flex-col gap-3">
+        <nav className="px-3 py-3 min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] flex flex-col gap-3">
           {navGroups.map((group, groupIndex) => (
             <div key={groupIndex} className="flex flex-col gap-0.5">
               {group.label && <div className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-[0.14em] text-[#484846]">{group.label}</div>}
@@ -128,7 +128,7 @@ export default function Layout({
         </nav>
 
         {onSignOut && (
-          <div className="px-3 pt-0 pb-2 border-t border-[#222220] mt-1">
+          <div className="px-3 pt-0 pb-2 border-t border-[#222220] mt-1 shrink-0">
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-[11px] text-[#525250] truncate max-w-[140px]">{userEmail}</span>
               <button type="button" onClick={onSignOut} className="text-[11px] text-[#525250] hover:text-white flex items-center gap-1 transition shrink-0">
@@ -138,7 +138,7 @@ export default function Layout({
           </div>
         )}
 
-        <div className="px-3 pb-4">
+        <div className="px-3 pb-4 shrink-0">
           <button type="button" onClick={onOpenChat} className="w-full flex items-center gap-3 rounded-xl border border-[#222220] p-3 text-left hover:bg-white/5 transition">
             <div className={`w-8 h-8 rounded-lg grid place-items-center text-white ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[#2A2A28]'}`}><Icon name="bot" size={16}/></div>
             <div className="flex-1 min-w-0">
@@ -152,7 +152,7 @@ export default function Layout({
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="min-h-screen min-w-0 flex flex-col lg:ml-64">
         <header className="sticky top-0 z-30 bg-[var(--bg)]/88 backdrop-blur-xl border-b border-[var(--line)]">
           <div className="px-4 md:px-7 py-3 flex items-center gap-3 max-w-[1600px] w-full mx-auto">
             <button type="button" onClick={() => setOpenMobile(true)} className="lg:hidden w-9 h-9 grid place-items-center rounded-lg border border-[var(--line)] bg-[var(--bg-elev)]">
