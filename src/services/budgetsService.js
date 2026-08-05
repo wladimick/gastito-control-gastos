@@ -1,5 +1,6 @@
 import { supabase, isConfigured } from '../lib/supabase'
 import { CATEGORIES } from '../data'
+import { reportDataHealth, reportMutationError } from '../lib/appEvents'
 
 let _catMapP = null
 async function catMap() {
@@ -18,13 +19,15 @@ async function catMap() {
   return _catMapP
 }
 
-// Returns { [localCategoryId]: amount } — same shape as BUDGETS in data.js
-// Reads permanent budgets (month IS NULL)
 export async function fetchBudgets() {
   if (!isConfigured) return null
   const { data, error } = await supabase
     .from('budgets').select('amount, categories(label)').is('month', null)
-  if (error) throw error
+  if (error) {
+    reportDataHealth('budgets', 'error', 'No fue posible cargar los presupuestos.')
+    throw error
+  }
+  reportDataHealth('budgets', 'complete')
   const result = {}
   for (const row of (data ?? [])) {
     const cat = CATEGORIES.find(c => c.label === row.categories?.label)
@@ -33,23 +36,28 @@ export async function fetchBudgets() {
   return result
 }
 
-// Upserts a single category budget (select → insert or update, avoids NULL unique conflict)
 export async function upsertBudget(localCategoryId, amount, userId) {
-  const { fwd } = await catMap()
-  const catId = fwd[localCategoryId]
-  if (!catId) return
+  try {
+    const { fwd } = await catMap()
+    const catId = fwd[localCategoryId]
+    if (!catId) throw new Error('La categoría no tiene equivalencia en Supabase.')
 
-  const { data: existing } = await supabase
-    .from('budgets').select('id')
-    .eq('user_id', userId).eq('category_id', catId).is('month', null)
-    .maybeSingle()
+    const { data: existing, error: lookupError } = await supabase
+      .from('budgets').select('id')
+      .eq('user_id', userId).eq('category_id', catId).is('month', null)
+      .maybeSingle()
+    if (lookupError) throw lookupError
 
-  if (existing) {
-    const { error } = await supabase.from('budgets').update({ amount }).eq('id', existing.id)
-    if (error) throw error
-  } else {
-    const { error } = await supabase.from('budgets')
-      .insert({ user_id: userId, category_id: catId, amount, month: null })
-    if (error) throw error
+    if (existing) {
+      const { error } = await supabase.from('budgets').update({ amount }).eq('id', existing.id)
+      if (error) throw error
+    } else {
+      const { error } = await supabase.from('budgets')
+        .insert({ user_id: userId, category_id: catId, amount, month: null })
+      if (error) throw error
+    }
+  } catch (error) {
+    reportMutationError('Guardar presupuesto', error)
+    throw error
   }
 }
