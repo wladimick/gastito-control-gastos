@@ -16,6 +16,7 @@ import UserProfile from './components/UserProfile'
 import Savings from './components/Savings'
 import Accounts from './components/Accounts'
 import Projection from './components/Projection'
+import Reimbursements from './components/Reimbursements'
 import Billing from './components/Billing'
 import BotChat from './components/BotChat'
 import { Icon } from './lib/helpers'
@@ -41,6 +42,7 @@ import { fetchGoals, createGoal, updateGoal, removeGoal, addMovement } from './s
 import { fetchAccounts, createAccount, updateAccount, removeAccount } from './services/accountsService'
 import { fetchMyCards, createCard, updateCard, removeCard } from './services/creditCardsService'
 import { getBilledStatements, upsertBilledStatement, deleteBilledStatement } from './services/billedStatementsService'
+import { fetchReimbursements, createReimbursement, updateReimbursement, patchReimbursement, removeReimbursement, reimbursementToReceivable } from './services/reimbursementsService'
 import Login, { NewPasswordForm } from './components/Login'
 
 const IS_REAL = isConfigured
@@ -90,6 +92,7 @@ export default function App() {
     setSavingsGoals([])
     setAccounts([])
     setCreditCards([])
+    setReimbursements([])
   }
   // ────────────────────────────────────────────────────────────
 
@@ -138,6 +141,16 @@ export default function App() {
     fetchPayables()
       .then(data => { if (data) setPayablesList(data) })
       .catch(err  => console.error('fetchPayables:', err))
+  }, [session])
+
+  // ── Company reimbursements ───────────────────────────────────
+  const [reimbursements, setReimbursements] = useState([])
+
+  useEffect(() => {
+    if (!IS_REAL || !session) return
+    fetchReimbursements()
+      .then(data => setReimbursements(data || []))
+      .catch(err => console.error('fetchReimbursements:', err))
   }, [session])
 
   // ── User settings (for salary day, etc.) ─────────────────────
@@ -469,6 +482,28 @@ export default function App() {
     } catch (err) { console.error('onMarkPayablePaid:', err); alert(err.message) }
   }
 
+  // ── Reimbursements CRUD ───────────────────────────────────────
+  const onCreateReimbursement = async item => {
+    const created = await createReimbursement(item, session.user.id)
+    setReimbursements(prev => [created, ...prev])
+  }
+
+  const onUpdateReimbursement = async item => {
+    const updated = await updateReimbursement(item)
+    setReimbursements(prev => prev.map(row => row.id === updated.id ? updated : row))
+  }
+
+  const onPatchReimbursement = async (id, patch) => {
+    const updated = await patchReimbursement(id, patch)
+    setReimbursements(prev => prev.map(row => row.id === id ? updated : row))
+  }
+
+  const onDeleteReimbursement = async id => {
+    if (!window.confirm('¿Eliminar esta rendición?')) return
+    await removeReimbursement(id)
+    setReimbursements(prev => prev.filter(row => row.id !== id))
+  }
+
   // ── Savings CRUD ─────────────────────────────────────────────
   const onCreateGoal = async (goal) => {
     const created = await createGoal(goal, session.user.id)
@@ -617,6 +652,12 @@ export default function App() {
     audit('unparsed', id, 'Mensaje descartado')
   }
 
+  const reimbursementReceivables = reimbursements
+    .filter(item => ['submitted', 'approved'].includes(item.status))
+    .map(reimbursementToReceivable)
+  const combinedReceivables = [...receivablesList, ...reimbursementReceivables]
+  const openReimbursements = reimbursements.filter(item => ['pending', 'submitted', 'approved'].includes(item.status)).length
+
   // ── Loading / Login screens ──────────────────────────────────
   if (!authReady) {
     return (
@@ -634,7 +675,8 @@ export default function App() {
               onSignOut={IS_REAL ? handleSignOut : undefined}
               userEmail={session?.user?.email}
               isSuperAdmin={userRole === 'super_admin'}
-              unparsedCount={unparsed.length}>
+              unparsedCount={unparsed.length}
+              reimbursementCount={openReimbursements}>
         {view === 'dashboard' && (
           <Dashboard
             expenses={expenses}
@@ -642,7 +684,7 @@ export default function App() {
             budgets={budgets}
             recurring={recurringList}
             income={incomeList}
-            receivables={receivablesList}
+            receivables={combinedReceivables}
             installmentDebts={installmentDebts}
             botStatus={botStatus}
             lastBotMessage={lastBotMessage}
@@ -698,6 +740,16 @@ export default function App() {
             userId={session.user.id}
           />
         )}
+        {view === 'reimbursements' && (
+          <Reimbursements
+            items={reimbursements}
+            expenses={expenses}
+            onCreate={onCreateReimbursement}
+            onUpdate={onUpdateReimbursement}
+            onPatch={onPatchReimbursement}
+            onDelete={onDeleteReimbursement}
+          />
+        )}
         {view === 'recurring' && (
           <Recurring
             recurring={recurringList}
@@ -738,7 +790,7 @@ export default function App() {
           recurringList={recurringList}
           incomeList={incomeList}
           accounts={accounts}
-          receivables={receivablesList}
+          receivables={combinedReceivables}
           payables={payablesList}
           userSettings={userSettings}
         />}
@@ -747,7 +799,7 @@ export default function App() {
             accounts={accounts}
             recurringList={recurringList}
             incomeList={incomeList}
-            receivables={receivablesList}
+            receivables={combinedReceivables}
             payables={payablesList}
             installmentDebts={installmentDebts}
             expenses={expenses}

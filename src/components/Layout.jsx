@@ -23,6 +23,7 @@ const BASE_NAV_GROUPS = [
       { id: 'accounts', label: 'Cuentas y flujo', icon: 'wallet', short: 'Cuentas' },
       { id: 'budgets', label: 'Presupuestos', icon: 'target', short: 'Presup.' },
       { id: 'recurring', label: 'Recurrentes', icon: 'repeat', short: 'Recurr.' },
+      { id: 'reimbursements', label: 'Rendiciones', icon: 'cash', short: 'Rend.', badge: 0 },
       { id: 'projection', label: 'Proyección', icon: 'trend', short: 'Proyec.' },
       { id: 'savings', label: 'Ahorros', icon: 'savings', short: 'Ahorros' },
     ],
@@ -54,10 +55,14 @@ const FINANCIAL_VIEWS = new Set([
   'recurring', 'projection', 'reports', 'comparison',
 ])
 
-function buildNavGroups(isSuperAdmin, unparsedCount) {
+function buildNavGroups(isSuperAdmin, unparsedCount, reimbursementCount) {
   const groups = BASE_NAV_GROUPS.map(group => ({
     ...group,
-    items: group.items.map(item => item.id === 'unparsed' ? { ...item, badge: unparsedCount || 0 } : item),
+    items: group.items.map(item => {
+      if (item.id === 'unparsed') return { ...item, badge: unparsedCount || 0 }
+      if (item.id === 'reimbursements') return { ...item, badge: reimbursementCount || 0 }
+      return item
+    }),
   }))
 
   const systemItems = [
@@ -81,9 +86,10 @@ export default function Layout({
   userEmail,
   isSuperAdmin,
   unparsedCount,
+  reimbursementCount,
 }) {
   const [openMobile, setOpenMobile] = useState(false)
-  const navGroups = buildNavGroups(isSuperAdmin, unparsedCount)
+  const navGroups = buildNavGroups(isSuperAdmin, unparsedCount, reimbursementCount)
   const allNav = navGroups.flatMap(group => group.items)
   const currentItem = allNav.find(item => item.id === view)
   const currentLabel = currentItem?.label || 'Control'
