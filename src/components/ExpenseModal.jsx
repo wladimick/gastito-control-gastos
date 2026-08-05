@@ -3,6 +3,26 @@ import { Icon, fmtCLP } from '../lib/helpers'
 import { PAYMENT_METHODS, CATEGORIES } from '../data'
 import { useBanks } from '../services/banksService'
 
+// datetime-local no incluye zona horaria. Convertimos el ISO de Supabase a la
+// hora local del dispositivo y, al guardar, lo transformamos nuevamente a ISO.
+function toLocalDateTimeParts(value) {
+  const parsed = value ? new Date(value) : new Date()
+  const date = Number.isNaN(parsed.getTime()) ? new Date() : parsed
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  const local = shifted.toISOString()
+  return {
+    date: local.slice(0, 10),
+    time: local.slice(11, 16),
+  }
+}
+
+function localDateTimeToIso(datePart, timePart) {
+  if (!datePart) return new Date().toISOString()
+  const safeTime = /^\d{2}:\d{2}$/.test(timePart || '') ? timePart : '00:00'
+  const parsed = new Date(`${datePart}T${safeTime}:00`)
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString()
+}
+
 // ── Chevron SVG ───────────────────────────────────────────────
 function Chevron({ color = '#9ba5c2' }) {
   return (
@@ -99,8 +119,8 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
 
   const isNew = expense.id === null
   const cat   = CATEGORIES.find(c => c.id === form.category) ?? CATEGORIES.find(c => c.id === 'otros') ?? CATEGORIES[0]
-  const setF     = (k, v) => setForm(p => ({ ...p, [k]: v }))
-  const dateInput = new Date(form.date).toISOString().slice(0, 16)
+  const setF  = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  const localDateTime = toLocalDateTimeParts(form.date)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
@@ -160,22 +180,50 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
             <TxtInput value={form.description} onChange={e => setF('description', e.target.value)}/>
           </div>
 
-          {/* Categoría + fecha */}
-          <div className="grid grid-cols-2 gap-2.5 overflow-x-hidden">
-            <div className="min-w-0">
-              <FieldLabel>Categoría</FieldLabel>
-              <StyledSelect value={form.category} onChange={v => setF('category', v)}>
-                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-              </StyledSelect>
+          {/* Categoría */}
+          <div>
+            <FieldLabel>Categoría</FieldLabel>
+            <StyledSelect value={form.category} onChange={v => setF('category', v)}>
+              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </StyledSelect>
+          </div>
+
+          {/* Fecha y hora local */}
+          <div className="rounded-[12px] border p-3" style={{ background: '#faf9f6', borderColor: '#e8e6df' }}>
+            <div className="flex items-center justify-between gap-3 mb-2.5">
+              <div>
+                <FieldLabel>Fecha y hora</FieldLabel>
+                <div className="text-[11px] -mt-1" style={{ color: '#9ba5c2' }}>
+                  Hora local de este dispositivo
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setF('date', new Date().toISOString())}
+                className="shrink-0 rounded-lg border px-3 py-2 text-[11px] font-semibold"
+                style={{ background: '#ffffff', borderColor: '#dddbd3', color: '#5d6888' }}>
+                Usar ahora
+              </button>
             </div>
-            <div className="min-w-0 overflow-hidden">
-              <FieldLabel>Fecha y hora</FieldLabel>
-              <TxtInput
-                type="datetime-local"
-                value={dateInput}
-                onChange={e => setF('date', new Date(e.target.value).toISOString())}
-                style={{ overflow: 'hidden', minWidth: 0 }}
-              />
+            <div className="grid grid-cols-[1.25fr_.75fr] gap-2.5">
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold mb-1" style={{ color: '#9ba5c2' }}>Fecha</div>
+                <TxtInput
+                  type="date"
+                  value={localDateTime.date}
+                  onChange={e => setF('date', localDateTimeToIso(e.target.value, localDateTime.time))}
+                  style={{ minWidth: 0 }}
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold mb-1" style={{ color: '#9ba5c2' }}>Hora</div>
+                <TxtInput
+                  type="time"
+                  value={localDateTime.time}
+                  onChange={e => setF('date', localDateTimeToIso(localDateTime.date, e.target.value))}
+                  style={{ minWidth: 0 }}
+                />
+              </div>
             </div>
           </div>
 
