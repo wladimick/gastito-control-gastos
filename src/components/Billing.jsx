@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { InfoTip } from './ui'
+import { financialHelpFor } from '../lib/financialHelp'
 import { Icon, fmtCLP } from '../lib/helpers'
 import { fetchBillingCycles } from '../services/billingCyclesService'
 
@@ -158,7 +160,8 @@ function downloadCSV(cycles, cards) {
   URL.revokeObjectURL(url)
 }
 
-function SummaryCard({ label, value, detail, tone = 'default', badge = '' }) {
+function SummaryCard({ label, value, detail, tone = 'default', badge = '', info }) {
+  const help = info || financialHelpFor(label)
   const toneClass = tone === 'dark'
     ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
     : tone === 'warning'
@@ -170,7 +173,7 @@ function SummaryCard({ label, value, detail, tone = 'default', badge = '' }) {
   return (
     <div className={`rounded-2xl border p-4 min-h-[112px] ${toneClass}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[10px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>
+        <div className="flex items-center gap-1.5"><div className="text-[10px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div>
         {badge && (
           <span className="rounded-full border border-current/15 px-2 py-0.5 text-[9px] font-semibold opacity-70">
             {badge}

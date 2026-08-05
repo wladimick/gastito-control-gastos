@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { Badge, Card, Select } from './ui'
+import { financialHelpFor } from '../lib/financialHelp'
+import { Badge, Card, Select, InfoTip } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
 import { CATEGORIES } from '../data'
 import { useBanks } from '../services/banksService'
@@ -14,7 +15,8 @@ function todayStart(){const d=new Date();return new Date(d.getFullYear(),d.getMo
 function nextMovement(item,currentMonth){const today=todayStart();const day=Math.max(1,Number(item.dayOfMonth||1));const charged=item.lastChargedMonth===currentMonth;let date=new Date(today.getFullYear(),today.getMonth(),day);if(charged)date=new Date(today.getFullYear(),today.getMonth()+1,day);return{date,overdue:!charged&&date<today}}
 function shortDate(date){return new Intl.DateTimeFormat('es-CL',{day:'2-digit',month:'short'}).format(date)}
 function catFor(id){return CATEGORIES.find(item=>item.id===id)||CATEGORIES.find(item=>item.id==='otros')}
-function Metric({label,value,detail,tone='default'}){const cls=tone==='dark'?'bg-[var(--ink)] text-[var(--bg)] border-transparent':tone==='danger'?'bg-red-50 text-red-800 border-red-100':tone==='warning'?'bg-[var(--amber-soft)] text-[var(--amber-ink)] border-transparent':'bg-[var(--bg-elev)] border-[var(--line)]';return <div className={`rounded-2xl border p-4 min-h-[110px] ${cls}`}><div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-60">{label}</div><div className="font-mono text-[22px] font-bold mt-3">{value}</div><div className="text-[10px] opacity-65 mt-1.5">{detail}</div></div>}
+function Metric({label,value,detail,tone='default', info}) {
+  const help = info || financialHelpFor(label); const cls=tone==='dark'?'bg-[var(--ink)] text-[var(--bg)] border-transparent':tone==='danger'?'bg-red-50 text-red-800 border-red-100':tone==='warning'?'bg-[var(--amber-soft)] text-[var(--amber-ink)] border-transparent':'bg-[var(--bg-elev)] border-[var(--line)]';return <div className={`rounded-2xl border p-4 min-h-[110px] ${cls}`}><div className="flex items-center gap-1.5"><div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div><div className="font-mono text-[22px] font-bold mt-3">{value}</div><div className="text-[10px] opacity-65 mt-1.5">{detail}</div></div>}
 function Field({label,children,hint}){return <label className="block"><span className="block text-[9.5px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1.5">{label}</span>{children}{hint&&<span className="block text-[9px] text-[var(--muted)] mt-1">{hint}</span>}</label>}
 function Modal({title,onClose,children}){return <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4"><div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/><div className="relative w-full md:max-w-[560px] max-h-[92vh] overflow-y-auto rounded-t-2xl md:rounded-2xl bg-[var(--bg-elev)] border border-[var(--line)] shadow-2xl"><div className="sticky top-0 z-10 px-4 py-3.5 border-b border-[var(--line)] bg-[var(--bg-elev)] flex items-center justify-between"><div className="text-[14px] font-bold">{title}</div><button onClick={onClose} className="w-8 h-8 rounded-lg border border-[var(--line)] grid place-items-center"><Icon name="x" size={13}/></button></div>{children}</div></div>}
 

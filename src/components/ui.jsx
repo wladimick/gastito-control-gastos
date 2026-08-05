@@ -1,6 +1,115 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { financialHelpFor } from '../lib/financialHelp'
 import { Icon, fmtCLP } from '../lib/helpers'
 import { CATEGORIES } from '../data'
+
+
+export function InfoTip({ content, label = 'Explicar este dato' }) {
+  const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState({ left: 12, top: 12, above: false })
+  const triggerRef = useRef(null)
+  const tooltipRef = useRef(null)
+  const tooltipId = useRef(`gastito-help-${Math.random().toString(36).slice(2)}`)
+
+  const updatePosition = () => {
+    const trigger = triggerRef.current
+    if (!trigger || typeof window === 'undefined') return
+    const rect = trigger.getBoundingClientRect()
+    const width = Math.min(288, window.innerWidth - 24)
+    const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + rect.width / 2 - width / 2))
+    const above = window.innerHeight - rect.bottom < 170 && rect.top > 180
+    setPosition({
+      left,
+      top: above ? rect.top - 8 : rect.bottom + 8,
+      above,
+      width,
+    })
+  }
+
+  useEffect(() => {
+    if (!open) return undefined
+    updatePosition()
+
+    const closeOnOutside = event => {
+      if (triggerRef.current?.contains(event.target) || tooltipRef.current?.contains(event.target)) return
+      setOpen(false)
+    }
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    const reposition = () => updatePosition()
+
+    document.addEventListener('pointerdown', closeOnOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
+    }
+  }, [open])
+
+  if (!content) return null
+
+  const toggle = event => {
+    event.preventDefault()
+    event.stopPropagation()
+    setOpen(value => !value)
+  }
+
+  const tooltip = open && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          ref={tooltipRef}
+          id={tooltipId.current}
+          role="tooltip"
+          className="fixed z-[140] rounded-xl border border-[#2A2A28] bg-[#151514] px-3.5 py-3 text-left text-white shadow-2xl"
+          style={{
+            left: position.left,
+            top: position.top,
+            width: position.width,
+            transform: position.above ? 'translateY(-100%)' : 'none',
+          }}
+        >
+          <div className="text-[9px] uppercase tracking-[0.12em] text-white/50 font-bold">¿Qué significa?</div>
+          <div className="mt-1.5 text-[11px] leading-relaxed text-white/88 normal-case tracking-normal font-normal">{content}</div>
+        </div>,
+        document.body,
+      )
+    : null
+
+  return (
+    <>
+      <span
+        ref={triggerRef}
+        role="button"
+        tabIndex={0}
+        aria-label={label}
+        aria-expanded={open}
+        aria-describedby={open ? tooltipId.current : undefined}
+        onClick={toggle}
+        onPointerDown={event => event.stopPropagation()}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={event => {
+          if (!tooltipRef.current?.contains(event.relatedTarget)) setOpen(false)
+        }}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') toggle(event)
+          if (event.key === 'Escape') setOpen(false)
+        }}
+        className="inline-grid w-[17px] h-[17px] shrink-0 place-items-center rounded-full border border-current/25 text-[10px] font-bold leading-none opacity-65 hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-current/20 cursor-help normal-case tracking-normal"
+      >
+        i
+      </span>
+      {tooltip}
+    </>
+  )
+}
 
 export function Card({ children, className = '', padding = 'p-5' }) {
   return (
@@ -10,7 +119,8 @@ export function Card({ children, className = '', padding = 'p-5' }) {
   )
 }
 
-export function StatCard({ label, value, sub, accent, icon, tone = 'default' }) {
+export function StatCard({ label, value, sub, accent, icon, tone = 'default', info }) {
+  const help = info || financialHelpFor(label);
   const toneClass = tone === 'dark'
     ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
     : tone === 'violet'
@@ -19,7 +129,7 @@ export function StatCard({ label, value, sub, accent, icon, tone = 'default' }) 
   return (
     <Card padding="p-4 md:p-5" className={toneClass}>
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[10px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>
+        <div className="flex items-center gap-1.5"><div className="text-[10px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>{help && <InfoTip content={help}/>}</div>
         {icon && <div className="opacity-55"><Icon name={icon} size={15}/></div>}
       </div>
       <div className="mt-3 font-mono text-[24px] md:text-[28px] font-semibold tracking-tight leading-none">{value}</div>
