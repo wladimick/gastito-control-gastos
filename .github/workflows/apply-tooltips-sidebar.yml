@@ -1,0 +1,42 @@
+name: Aplicar tooltips y menú lateral
+
+on:
+  push:
+    branches:
+      - agent/tooltips-menu-lateral-20260805
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[skip tooltip workflow]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: agent/tooltips-menu-lateral-20260805
+          fetch-depth: 0
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Aplicar cambios
+        run: python scripts/apply_tooltips_sidebar.py
+
+      - name: Limpiar automatización temporal
+        run: |
+          rm -f scripts/apply_tooltips_sidebar.py
+          rm -f .github/workflows/apply-tooltips-sidebar.yml
+
+      - name: Confirmar cambios
+        run: |
+          git config user.name "Wladimick"
+          git config user.email "61322487+wladimick@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: agregar ayudas financieras y corregir menú [skip tooltip workflow]"
+          git push origin HEAD:agent/tooltips-menu-lateral-20260805
