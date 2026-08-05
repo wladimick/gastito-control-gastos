@@ -1,0 +1,33 @@
+name: Corregir sintaxis de tooltips v2
+
+on:
+  push:
+    branches:
+      - agent/tooltips-menu-lateral-20260805
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, '[skip tooltip fix v2]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/tooltips-menu-lateral-20260805
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/fix_tooltip_syntax_v2.py
+      - run: |
+          rm -f scripts/fix_tooltip_syntax_v2.py
+          rm -f .github/workflows/fix-tooltip-syntax-v2.yml
+      - run: |
+          git config user.name "Wladimick"
+          git config user.email "61322487+wladimick@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: completar sintaxis de ayudas financieras [skip tooltip fix v2]"
+          git push origin HEAD:agent/tooltips-menu-lateral-20260805
