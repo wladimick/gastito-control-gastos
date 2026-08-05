@@ -89,6 +89,14 @@ Gastito incluye un flujo especial para compartir gastos con una segunda persona 
 
 El enlace público funciona como una **capability URL**: cualquier persona que conozca el token puede consultar el contenido compartido. El token no debe guardarse en el repositorio, capturas públicas, analítica ni logs.
 
+### Rendiciones de empresa
+
+- Vinculación de gastos manuales o movimientos bancarios con una rendición.
+- Estados por rendir, rendido, aprobado, reembolsado, no rendir y rechazado.
+- Fechas límite, pago esperado y alertas de atraso.
+- Sugerencias de posibles gastos laborales sin creación automática.
+- Rendiciones enviadas incorporadas como dinero por cobrar en los cálculos financieros.
+
 ### Telegram
 
 - Vinculación de una cuenta de Telegram con un usuario de Supabase.
@@ -109,6 +117,7 @@ El enlace público funciona como una **capability URL**: cualquier persona que c
 | Planificación | Cuentas y flujo | Saldos, reservas, tarjetas y dinero libre. |
 | Planificación | Presupuestos | Límites por categoría y ritmo de gasto. |
 | Planificación | Recurrentes | Gastos fijos, ingresos, por cobrar y por pagar. |
+| Planificación | Rendiciones | Gastos pagados personalmente y reembolsos pendientes de empresa. |
 | Planificación | Proyección | Escenarios futuros, riesgos y simulación de compras. |
 | Planificación | Ahorros | Metas y movimientos de ahorro. |
 | Análisis | Reportes | Resumen y composición de un período seleccionado. |
