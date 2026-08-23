@@ -86,6 +86,17 @@ async function mpFetch(path: string, accessToken: string, init: RequestInit = {}
   return body
 }
 
+async function getAccessToken(supabase: any) {
+  const envToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN') || ''
+  if (envToken) return envToken
+  const { data, error } = await supabase.rpc('get_mercadopago_access_token')
+  if (error) {
+    console.warn('No se pudo consultar mercadopago_access_token en Vault:', error.message)
+    return ''
+  }
+  return typeof data === 'string' ? data : ''
+}
+
 async function authorize(req: Request, supabase: any) {
   const cronToken = req.headers.get('x-gastito-cron-token') || ''
   if (cronToken) {
@@ -169,7 +180,7 @@ Deno.serve(async (req: Request) => {
     if (runError) throw runError
     runId = run.id
 
-    const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN') || ''
+    const accessToken = await getAccessToken(supabase)
     if (!accessToken) {
       await supabase.from('mercadopago_sync_config').update({
         credential_state: 'missing', status: 'credentials_missing', last_error: null, updated_at: new Date().toISOString(),
@@ -252,8 +263,7 @@ Deno.serve(async (req: Request) => {
           let categoryId: string | null = null
           let reviewStatus = 'verified'
           if (classification === 'expense' || classification === 'fee') {
-            const categoryDescription = classification === 'fee' ? 'Costos financieros' : merchant
-            const { data: inferred } = await supabase.rpc('infer_expense_category_id', { p_user_id: userId, p_description: categoryDescription })
+            const { data: inferred } = await supabase.rpc('infer_expense_category_id', { p_user_id: userId, p_description: merchant || description })
             categoryId = inferred || null
             if (categoryId) {
               const { data: cat } = await supabase.from('categories').select('label').eq('id', categoryId).maybeSingle()
