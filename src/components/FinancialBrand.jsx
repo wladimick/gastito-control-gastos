@@ -26,6 +26,14 @@ const BRAND = {
     accent: '#003B7A',
     fallback: 'BCh',
   },
+  bancoestado: {
+    label: 'BancoEstado',
+    bg: '#FFFFFF',
+    fg: '#005BAA',
+    border: '#DCE5EE',
+    accent: '#F58220',
+    fallback: 'BE',
+  },
   paypal: {
     label: 'PayPal',
     bg: '#F2F6FF',
@@ -66,6 +74,7 @@ export function brandForCard(card) {
   const key = String(card?.bank || card?.bankId || card?.bank_id || card?.name || '').toLowerCase()
   if (key.includes('falabella') || key.includes('cmr')) return 'falabella'
   if (key.includes('bchile') || key.includes('banco de chile') || key.includes('chile')) return 'bchile'
+  if (key.includes('bancoestado') || key.includes('banco estado') || key.includes('cuenta rut')) return 'bancoestado'
   return 'accounts'
 }
 
