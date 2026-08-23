@@ -8,6 +8,7 @@ import MercadoPagoAdmin from './components/MercadoPagoAdmin'
 import MercadoPagoCredentials from './components/MercadoPagoCredentials'
 import ReceivablesAdmin from './components/ReceivablesAdmin'
 import PayPalIncomeAdmin from './components/PayPalIncomeAdmin'
+import SalarySlipsPage from './components/SalarySlipsPage'
 import AppStatusOverlay from './components/AppStatusOverlay'
 import './index.css'
 
@@ -18,9 +19,11 @@ const mercadoPagoAdminMode = params.get('mercadopago-admin')
 const mercadoPagoCredentialsMode = params.get('mercadopago-credentials')
 const receivablesMode = params.get('me-deben')
 const paypalMode = params.get('paypal-admin')
+const salaryMode = params.get('liquidaciones')
 
 let content = <App />
-if (paypalMode === '1') content = <PayPalIncomeAdmin />
+if (salaryMode === '1') content = <SalarySlipsPage />
+else if (paypalMode === '1') content = <PayPalIncomeAdmin />
 else if (receivablesMode === '1') content = <ReceivablesAdmin />
 else if (mercadoPagoCredentialsMode === '1') content = <MercadoPagoCredentials />
 else if (mercadoPagoAdminMode === '1') content = <MercadoPagoAdmin />
