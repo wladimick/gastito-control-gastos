@@ -4,15 +4,18 @@ import App from './App'
 import NicolCardAdmin from './components/NicolCardAdmin'
 import NicolPublicCyclesVisual from './components/NicolPublicCyclesVisual'
 import NicolRecurringAdmin from './components/NicolRecurringAdmin'
+import MercadoPagoAdmin from './components/MercadoPagoAdmin'
 import AppStatusOverlay from './components/AppStatusOverlay'
 import './index.css'
 
 const params = new URLSearchParams(window.location.search)
 const nicolToken = params.get('nicol')
 const nicolAdminMode = params.get('nicol-admin')
+const mercadoPagoAdminMode = params.get('mercadopago-admin')
 
 let content = <App />
-if (nicolAdminMode === 'recurrentes') content = <NicolRecurringAdmin />
+if (mercadoPagoAdminMode === '1') content = <MercadoPagoAdmin />
+else if (nicolAdminMode === 'recurrentes') content = <NicolRecurringAdmin />
 else if (nicolAdminMode === '1') content = <NicolCardAdmin />
 else if (nicolToken) content = <NicolPublicCyclesVisual token={nicolToken} />
 
