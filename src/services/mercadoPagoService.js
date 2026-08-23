@@ -5,7 +5,7 @@ export async function fetchMercadoPagoStatus() {
   const [{ data: config, error: configError }, { data: runs, error: runsError }] = await Promise.all([
     supabase
       .from('mercadopago_sync_config')
-      .select('id, account_id, enabled, credential_state, status, mp_user_id, lookback_days, last_requested_at, last_sync_at, last_success_at, last_error, last_report_task_id, last_report_file, last_balance, last_balance_at, updated_at')
+      .select('id, account_id, enabled, credential_state, status, mp_user_id, lookback_days, last_requested_at, last_sync_at, last_success_at, last_error, last_report_task_id, last_report_file, last_balance, reserved_partition_balance, last_balance_at, updated_at')
       .maybeSingle(),
     supabase
       .from('mercadopago_sync_runs')
