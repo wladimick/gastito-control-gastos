@@ -7,6 +7,7 @@ import NicolRecurringAdmin from './components/NicolRecurringAdmin'
 import MercadoPagoAdmin from './components/MercadoPagoAdmin'
 import MercadoPagoCredentials from './components/MercadoPagoCredentials'
 import ReceivablesAdmin from './components/ReceivablesAdmin'
+import PayPalIncomeAdmin from './components/PayPalIncomeAdmin'
 import AppStatusOverlay from './components/AppStatusOverlay'
 import './index.css'
 
@@ -16,9 +17,11 @@ const nicolAdminMode = params.get('nicol-admin')
 const mercadoPagoAdminMode = params.get('mercadopago-admin')
 const mercadoPagoCredentialsMode = params.get('mercadopago-credentials')
 const receivablesMode = params.get('me-deben')
+const paypalMode = params.get('paypal-admin')
 
 let content = <App />
-if (receivablesMode === '1') content = <ReceivablesAdmin />
+if (paypalMode === '1') content = <PayPalIncomeAdmin />
+else if (receivablesMode === '1') content = <ReceivablesAdmin />
 else if (mercadoPagoCredentialsMode === '1') content = <MercadoPagoCredentials />
 else if (mercadoPagoAdminMode === '1') content = <MercadoPagoAdmin />
 else if (nicolAdminMode === 'recurrentes') content = <NicolRecurringAdmin />
