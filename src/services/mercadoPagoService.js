@@ -50,7 +50,7 @@ export async function fetchMercadoPagoMovements({ limit = 100, reviewOnly = fals
 
 export async function runMercadoPagoSync() {
   if (!isConfigured || !supabase) return null
-  const { data, error } = await supabase.functions.invoke('mercadopago-sync', { body: {} })
+  const { data, error } = await supabase.functions.invoke('mercadopago-sync-browser', { body: {} })
   if (error) throw error
   return data
 }
