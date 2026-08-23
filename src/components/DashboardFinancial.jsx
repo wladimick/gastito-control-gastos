@@ -6,10 +6,10 @@ import { CATEGORIES } from '../data'
 import { fetchBillingCycles } from '../services/billingCyclesService'
 import { fetchMercadoPagoStatus } from '../services/mercadoPagoService'
 import { fetchExternalIncomeSources } from '../services/externalIncomeService'
+import { fetchPayables } from '../services/recurringService'
 import {
   billingCycleAmount,
   dateOnlyCL,
-  dayOfMonthCL,
   formatDateCL,
   isCyclePending,
   monthKeyCL,
@@ -121,21 +121,24 @@ export default function DashboardFinancial({
   const [cycleError, setCycleError] = useState('')
   const [mpStatus, setMpStatus] = useState(null)
   const [externalSources, setExternalSources] = useState([])
+  const [loadedPayables, setLoadedPayables] = useState([])
   const [syncLoading, setSyncLoading] = useState(true)
 
   const loadDashboard = async () => {
     setLoadingCycles(true)
     setSyncLoading(true)
     setCycleError('')
-    const [cycleResult, mpResult, externalResult] = await Promise.allSettled([
+    const [cycleResult, mpResult, externalResult, payableResult] = await Promise.allSettled([
       fetchBillingCycles(),
       fetchMercadoPagoStatus(),
       fetchExternalIncomeSources(),
+      fetchPayables(),
     ])
     if (cycleResult.status === 'fulfilled') setCycles(cycleResult.value || [])
     else setCycleError(cycleResult.reason?.message || 'No fue posible cargar Facturación.')
     if (mpResult.status === 'fulfilled') setMpStatus(mpResult.value)
     if (externalResult.status === 'fulfilled') setExternalSources(externalResult.value || [])
+    if (payableResult.status === 'fulfilled') setLoadedPayables(payableResult.value || [])
     setLoadingCycles(false)
     setSyncLoading(false)
   }
@@ -144,12 +147,12 @@ export default function DashboardFinancial({
 
   const today = todayDateOnlyCL()
   const currentMonth = monthKeyCL()
-  const todayDay = dayOfMonthCL()
   const cardMap = useMemo(() => new Map(creditCards.map(card => [card.id, card])), [creditCards])
 
   const activeAccounts = accounts.filter(account => account.active !== false)
   const totalAccountBalance = activeAccounts.reduce((sum, account) => sum + Number(account.balance || 0), 0)
-  const pendingPayables = payables.filter(item => item.status !== 'paid')
+  const payablesData = payables.length ? payables : loadedPayables
+  const pendingPayables = payablesData.filter(item => item.status !== 'paid')
   const reservedCommitments = pendingPayables.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   const freeBalance = totalAccountBalance - reservedCommitments
 
@@ -162,20 +165,22 @@ export default function DashboardFinancial({
     .filter(cycle => !cycle.dueDate || dateOnlyCL(cycle.dueDate) >= today)
     .sort((a, b) => String(a.dueDate || '').localeCompare(String(b.dueDate || ''))), [cycles, today])
 
-  const nextDueDate = upcomingCycles[0]?.dueDate || ''
-  const nextCycles = upcomingCycles.filter(cycle => cycle.dueDate === nextDueDate)
+  const nextCycleMonth = upcomingCycles[0]?.dueDate ? dateOnlyCL(upcomingCycles[0].dueDate).slice(0, 7) : ''
+  const nextCycles = upcomingCycles.filter(cycle => cycle.dueDate && dateOnlyCL(cycle.dueDate).slice(0, 7) === nextCycleMonth)
   const nextCardPayment = nextCycles.reduce((sum, cycle) => sum + billingCycleAmount(cycle), 0)
   const nextSharedBase = nextCycles.reduce((sum, cycle) => sum + Number(cycle.sharedAmount || 0), 0)
+  const nextDueDetail = nextCycles.length
+    ? nextCycles.map(cycle => formatDateCL(cycle.dueDate)).join(' · ')
+    : 'Sin vencimientos próximos'
 
-  const directRecurringPending = recurring
+  const directRecurringBase = recurring
     .filter(item => item.active !== false && item.kind === 'expense')
     .filter(item => item.type !== 'credito' && !item.comisionBancaria)
-    .filter(item => Number(item.dayOfMonth || 1) >= todayDay)
     .reduce((sum, item) => sum + Number(item.amount || 0), 0)
 
   const recurringIncome = income.filter(item => item.active !== false).reduce((sum, item) => sum + Number(item.amount || 0), 0)
   const receivablePending = receivables.filter(item => item.status !== 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0)
-  const freeAfterCommitments = freeBalance - nextCardPayment - directRecurringPending
+  const freeAfterCards = freeBalance - nextCardPayment
 
   const monthExpenses = expenses.filter(expense => monthKeyCL(expense.date) === currentMonth)
   const monthSpend = monthExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
@@ -219,11 +224,11 @@ export default function DashboardFinancial({
         <Metric label="Saldo en cuentas" value={fmtCLP(totalAccountBalance)} detail={`${activeAccounts.length} cuentas activas · incluye reservas`} onClick={() => setView?.('accounts')}/>
         <Metric label="Reserva comprometida" value={fmtCLP(reservedCommitments)} detail={pendingPayables.length ? pendingPayables.map(item => item.personName || item.name).join(', ') : 'Sin reservas comprometidas'} tone={reservedCommitments ? 'violet' : 'default'} onClick={() => setView?.('accounts')}/>
         <Metric label="Dinero realmente libre" value={fmtCLP(freeBalance)} detail="Saldo total menos dinero reservado para obligaciones" tone="dark" onClick={() => setView?.('accounts')}/>
-        <Metric label="Libre tras próximos pagos" value={fmtCLP(freeAfterCommitments)} detail="Libre menos próxima tarjeta y fijos directos pendientes" tone={freeAfterCommitments < 0 ? 'danger' : 'green'} onClick={() => setView?.('projection')}/>
+        <Metric label="Libre tras tarjetas próximas" value={fmtCLP(freeAfterCards)} detail="Antes de considerar ingresos que llegarán durante el mes" tone={freeAfterCards < 0 ? 'danger' : 'green'} onClick={() => setView?.('projection')}/>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Metric label="Próximo pago tarjetas" value={loadingCycles ? '…' : fmtCLP(nextCardPayment)} detail={nextDueDate ? `Vence ${formatDateCL(nextDueDate)}` : 'Sin vencimientos próximos'} onClick={() => setView?.('billing')}/>
+        <Metric label="Tarjetas · próximo mes" value={loadingCycles ? '…' : fmtCLP(nextCardPayment)} detail={nextDueDetail} onClick={() => setView?.('billing')}/>
         <Metric label={`Gastado · ${monthLabelCL(currentMonth, true)}`} value={fmtCLP(monthSpend)} detail={`${monthExpenses.length} movimientos registrados`} onClick={() => setView?.('expenses')}/>
         <Metric label="Por cobrar" value={fmtCLP(receivablePending)} detail="Préstamos, cuentas compartidas y otros cobros" onClick={() => openExternal('?me-deben=1')}/>
         <Metric label="Ingresos mensuales" value={fmtCLP(recurringIncome)} detail="No incluye Shopify/PayPal ni cobros pendientes" onClick={() => setView?.('recurring')}/>
@@ -238,7 +243,7 @@ export default function DashboardFinancial({
           <div className="p-1.5">
             <SyncRow icon="cash" title="Mercado Pago" value={syncLoading ? '…' : fmtCLP(mpAvailable)} detail={mpDetail} status={mpStatus?.status === 'ok' ? 'ok' : 'pending'} onClick={() => openExternal('?mercadopago-admin=1')}/>
             <SyncRow icon="cash" title="Shopify Partners · PayPal" value={shopify ? usd(shopify.current_balance) : '—'} detail={shopify?.next_expected_date ? `Próximo estimado ${formatDateCL(shopify.next_expected_date)} · trimestral` : 'Ingreso externo trimestral'} status="manual" onClick={() => openExternal('?paypal-admin=1')}/>
-            <SyncRow icon="users" title="Me deben" value={fmtCLP(receivablePending)} detail="Boris, Diever, Nicol y otros cobros pendientes" status={receivablePending > 0 ? 'pending' : 'ok'} onClick={() => openExternal('?me-deben=1')}/>
+            <SyncRow icon="users" title="Me deben" value={fmtCLP(receivablePending)} detail="Préstamos, cuentas compartidas y cobros pendientes" status={receivablePending > 0 ? 'pending' : 'ok'} onClick={() => openExternal('?me-deben=1')}/>
             <SyncRow icon="wallet" title="Cuentas y reservas" value={fmtCLP(freeBalance)} detail={`${fmtCLP(reservedCommitments)} comprometidos · ${fmtCLP(reserveAccounts)} en cuentas de ahorro`} status="ok" onClick={() => setView?.('accounts')}/>
           </div>
         </Card>
@@ -269,7 +274,7 @@ export default function DashboardFinancial({
         </Card>
 
         <div className="flex flex-col gap-3">
-          <Metric label="Fijos directos pendientes" value={fmtCLP(directRecurringPending)} detail="No incluye cargos que llegarán dentro de una tarjeta" onClick={() => setView?.('recurring')}/>
+          <Metric label="Fijos directos mensuales" value={fmtCLP(directRecurringBase)} detail="Base mensual fuera de tarjetas; agua y luz pueden variar" onClick={() => setView?.('recurring')}/>
           <Metric label="Compartido con Nicol" value={fmtCLP(nextSharedBase || monthShared)} detail={nextSharedBase ? 'Base compartida del próximo vencimiento' : 'Base compartida del mes'} tone="violet" onClick={() => setView?.('billing')}/>
           <Card padding="p-4" className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3"><div className={`w-9 h-9 rounded-xl grid place-items-center ${botStatus === 'online' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><Icon name="bot" size={16}/></div><div><div className="text-[12px] font-semibold">Bot de Gastito {botStatus === 'online' ? 'conectado' : 'requiere revisión'}</div><div className="text-[9.5px] text-[var(--muted)] mt-0.5">Registro rápido para movimientos que todavía no llegan por una integración.</div></div></div>
