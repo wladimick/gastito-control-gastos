@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Icon } from '../lib/helpers'
 import { GastitoLogo } from './Brand'
+import FinancialBrand from './FinancialBrand'
 
 const BASE_NAV_GROUPS = [
   {
@@ -13,9 +14,9 @@ const BASE_NAV_GROUPS = [
     label: 'Dinero',
     items: [
       { id: 'accounts', label: 'Cuentas y flujo', icon: 'wallet', short: 'Cuentas' },
-      { id: 'mercadopago', label: 'Mercado Pago', icon: 'cash', short: 'MP', href: '?mercadopago-admin=1' },
-      { id: 'receivables', label: 'Me deben', icon: 'users', short: 'Cobros', href: '?me-deben=1' },
-      { id: 'paypal', label: 'Shopify / PayPal', icon: 'cash', short: 'PayPal', href: '?paypal-admin=1' },
+      { id: 'mercadopago', label: 'Mercado Pago', brand: 'mercadopago', short: 'MP', href: '?mercadopago-admin=1' },
+      { id: 'receivables', label: 'Me deben', brand: 'receivables', short: 'Cobros', href: '?me-deben=1' },
+      { id: 'paypal', label: 'Shopify / PayPal', brand: 'paypal', short: 'PayPal', href: '?paypal-admin=1' },
     ],
   },
   {
@@ -84,6 +85,11 @@ function buildNavGroups(isSuperAdmin, unparsedCount, reimbursementCount) {
 
 const MOBILE_PRIMARY = ['dashboard', 'expenses', 'billing', 'accounts']
 
+function NavIcon({ item, size = 16 }) {
+  if (item.brand) return <FinancialBrand brand={item.brand} size="sm"/>
+  return <span className="w-7 h-7 grid place-items-center shrink-0"><Icon name={item.icon} size={size}/></span>
+}
+
 export default function Layout({
   view,
   setView,
@@ -117,21 +123,21 @@ export default function Layout({
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col w-64 border-r border-[#222220] h-dvh overflow-hidden bg-[#0F0F0E]">
         <div className="px-5 pt-6 pb-5 border-b border-[#222220] shrink-0">
           <GastitoLogo light size="sm"/>
-          <div className="text-[11px] text-[#525250] mt-2 leading-none pl-0.5">Control financiero personal</div>
+          <div className="text-[10px] text-[#525250] mt-2 leading-none pl-0.5">Control financiero personal</div>
         </div>
 
         <nav className="px-3 py-3 min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] flex flex-col gap-3">
           {navGroups.map((group, groupIndex) => (
             <div key={groupIndex} className="flex flex-col gap-0.5">
-              {group.label && <div className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-[0.14em] text-[#484846]">{group.label}</div>}
+              {group.label && <div className="px-3 pt-1.5 pb-1 text-[9px] uppercase tracking-[0.14em] text-[#484846]">{group.label}</div>}
               {group.items.map(item => (
                 <button key={item.id} type="button" onClick={() => openNavItem(item)}
-                  className={`group flex items-center justify-between px-3 py-2 rounded-lg text-[13px] transition ${view === item.id
+                  className={`group flex items-center justify-between px-2.5 py-1.5 rounded-xl text-[12px] transition ${view === item.id
                     ? 'bg-white text-[#0F0F0E]'
                     : 'text-[#A0A09A] hover:bg-white/8 hover:text-white'}`}>
-                  <span className="flex items-center gap-2.5"><Icon name={item.icon} size={16}/><span>{item.label}</span></span>
+                  <span className="flex items-center gap-2 min-w-0"><NavIcon item={item}/><span className="truncate">{item.label}</span></span>
                   {item.badge > 0 && (
-                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${view === item.id ? 'bg-black/10 text-[#0F0F0E]' : 'bg-[#2A2A28] text-[#A0A09A]'}`}>
+                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${view === item.id ? 'bg-black/10 text-[#0F0F0E]' : 'bg-[#2A2A28] text-[#A0A09A]'}`}>
                       {item.badge}
                     </span>
                   )}
@@ -144,9 +150,9 @@ export default function Layout({
         {onSignOut && (
           <div className="px-3 pt-0 pb-2 border-t border-[#222220] mt-1 shrink-0">
             <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-[11px] text-[#525250] truncate max-w-[140px]">{userEmail}</span>
-              <button type="button" onClick={onSignOut} className="text-[11px] text-[#525250] hover:text-white flex items-center gap-1 transition shrink-0">
-                <Icon name="x" size={11}/>Salir
+              <span className="text-[10px] text-[#525250] truncate max-w-[140px]">{userEmail}</span>
+              <button type="button" onClick={onSignOut} className="text-[10px] text-[#525250] hover:text-white flex items-center gap-1 transition shrink-0">
+                <Icon name="x" size={10}/>Salir
               </button>
             </div>
           </div>
@@ -156,8 +162,8 @@ export default function Layout({
           <button type="button" onClick={onOpenChat} className="w-full flex items-center gap-3 rounded-xl border border-[#222220] p-3 text-left hover:bg-white/5 transition">
             <div className={`w-8 h-8 rounded-lg grid place-items-center text-white ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[#2A2A28]'}`}><Icon name="bot" size={16}/></div>
             <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-medium leading-none text-white">Bot @gastito</div>
-              <div className="text-[11px] text-[#525250] mt-1 leading-none flex items-center gap-1.5">
+              <div className="text-[11px] font-medium leading-none text-white">Bot @gastito</div>
+              <div className="text-[10px] text-[#525250] mt-1 leading-none flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[#484846]'}`}/>
                 {botStatus === 'online' ? 'Conectado' : 'Desconectado'}
               </div>
@@ -173,22 +179,22 @@ export default function Layout({
               <Icon name="menu" size={18}/>
             </button>
             <div className="min-w-0">
-              <div className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--muted)] leading-none">{breadcrumb || 'Sección'}</div>
-              <h1 className="text-[18px] md:text-[21px] font-semibold tracking-tight leading-tight mt-1.5">{currentLabel}</h1>
+              <div className="text-[9px] uppercase tracking-[0.14em] text-[var(--muted)] leading-none">{breadcrumb || 'Sección'}</div>
+              <h1 className="text-[17px] md:text-[20px] font-semibold tracking-tight leading-tight mt-1.5">{currentLabel}</h1>
             </div>
 
             <div className="ml-auto flex items-center gap-2">
               {FINANCIAL_VIEWS.has(view) && (
                 <div className="hidden sm:flex h-9 items-center gap-2 px-2.5 rounded-xl border border-[var(--line)] bg-[var(--bg-elev)]">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"/>
-                  <span className="text-[10.5px] font-medium text-[var(--ink-2)]">Datos conciliados</span>
+                  <span className="text-[10px] font-medium text-[var(--ink-2)]">Datos conciliados</span>
                 </div>
               )}
               <div className="hidden md:flex items-center gap-2 px-2.5 h-9 border border-[var(--line)] rounded-xl bg-[var(--bg-elev)]">
                 <span className={`w-1.5 h-1.5 rounded-full ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[var(--muted)]'}`}/>
-                <span className="text-[11px] text-[var(--ink-2)]">Bot {botStatus === 'online' ? 'activo' : 'off'}</span>
+                <span className="text-[10px] text-[var(--ink-2)]">Bot {botStatus === 'online' ? 'activo' : 'off'}</span>
               </div>
-              <button type="button" onClick={onOpenChat} className="h-9 px-3 inline-flex items-center gap-2 rounded-xl bg-[var(--ink)] text-[var(--bg)] text-[11px] font-semibold hover:opacity-90">
+              <button type="button" onClick={onOpenChat} className="h-9 px-3 inline-flex items-center gap-2 rounded-xl bg-[var(--ink)] text-[var(--bg)] text-[10.5px] font-semibold hover:opacity-90">
                 <Icon name="send" size={13}/><span className="hidden sm:inline">Probar bot</span>
               </button>
             </div>
@@ -204,14 +210,14 @@ export default function Layout({
             {MOBILE_PRIMARY.map(id => {
               const item = allNav.find(entry => entry.id === id)
               return (
-                <button key={id} type="button" onClick={() => setView(id)} className={`relative flex flex-col items-center gap-1 py-1.5 rounded-lg text-[10px] ${view === id ? 'text-[var(--ink)] bg-[var(--hover)]' : 'text-[var(--muted)]'}`}>
-                  <Icon name={item.icon} size={20}/><span className="leading-none">{item.short}</span>
+                <button key={id} type="button" onClick={() => setView(id)} className={`relative flex flex-col items-center gap-1 py-1.5 rounded-lg text-[9.5px] ${view === id ? 'text-[var(--ink)] bg-[var(--hover)]' : 'text-[var(--muted)]'}`}>
+                  <Icon name={item.icon} size={19}/><span className="leading-none">{item.short}</span>
                   {item.badge > 0 && <span className="absolute top-0.5 right-1/4 w-1.5 h-1.5 rounded-full bg-[var(--amber-ink)]"/>}
                 </button>
               )
             })}
-            <button type="button" onClick={() => setOpenMobile(true)} className={`relative flex flex-col items-center gap-1 py-1.5 rounded-lg text-[10px] ${!MOBILE_PRIMARY.includes(view) ? 'text-[var(--ink)] bg-[var(--hover)]' : 'text-[var(--muted)]'}`}>
-              <Icon name="more" size={20}/><span className="leading-none">Más</span>
+            <button type="button" onClick={() => setOpenMobile(true)} className={`relative flex flex-col items-center gap-1 py-1.5 rounded-lg text-[9.5px] ${!MOBILE_PRIMARY.includes(view) ? 'text-[var(--ink)] bg-[var(--hover)]' : 'text-[var(--muted)]'}`}>
+              <Icon name="more" size={19}/><span className="leading-none">Más</span>
               {allNav.some(item => item.badge > 0 && !MOBILE_PRIMARY.includes(item.id)) && <span className="absolute top-0.5 right-1/4 w-1.5 h-1.5 rounded-full bg-[var(--amber-ink)]"/>}
             </button>
           </div>
@@ -221,7 +227,7 @@ export default function Layout({
       {openMobile && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpenMobile(false)}/>
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[#0F0F0E] border-r border-[#222220] p-4 overflow-y-auto">
+          <div className="absolute left-0 top-0 bottom-0 w-[282px] bg-[#0F0F0E] border-r border-[#222220] p-4 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <GastitoLogo light size="sm"/>
               <button type="button" onClick={() => setOpenMobile(false)} className="w-8 h-8 grid place-items-center rounded-lg border border-[#222220] text-[#A0A09A]"><Icon name="x" size={16}/></button>
@@ -229,11 +235,11 @@ export default function Layout({
             <nav className="flex flex-col gap-3">
               {navGroups.map((group, groupIndex) => (
                 <div key={groupIndex} className="flex flex-col gap-0.5">
-                  {group.label && <div className="px-3 pt-1 pb-1 text-[10px] uppercase tracking-[0.14em] text-[#484846]">{group.label}</div>}
+                  {group.label && <div className="px-3 pt-1 pb-1 text-[9px] uppercase tracking-[0.14em] text-[#484846]">{group.label}</div>}
                   {group.items.map(item => (
-                    <button key={item.id} type="button" onClick={() => { openNavItem(item); setOpenMobile(false) }} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm ${view === item.id ? 'bg-white text-[#0F0F0E]' : 'text-[#A0A09A] hover:bg-white/8 hover:text-white'}`}>
-                      <span className="flex items-center gap-3"><Icon name={item.icon} size={17}/><span>{item.label}</span></span>
-                      {item.badge > 0 && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#2A2A28] text-[#A0A09A]">{item.badge}</span>}
+                    <button key={item.id} type="button" onClick={() => { openNavItem(item); setOpenMobile(false) }} className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-[12px] ${view === item.id ? 'bg-white text-[#0F0F0E]' : 'text-[#A0A09A] hover:bg-white/8 hover:text-white'}`}>
+                      <span className="flex items-center gap-2.5 min-w-0"><NavIcon item={item} size={16}/><span className="truncate">{item.label}</span></span>
+                      {item.badge > 0 && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#2A2A28] text-[#A0A09A]">{item.badge}</span>}
                     </button>
                   ))}
                 </div>
