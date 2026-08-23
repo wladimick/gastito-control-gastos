@@ -21,6 +21,7 @@ import {
 const FALLBACK_CATEGORY = CATEGORIES.find(category => category.id === 'otros') || {
   id: 'otros', label: 'Otros', icon: '•', color: '#888880',
 }
+const HEADER_BTN = 'h-9 inline-flex items-center justify-center gap-1.5 px-3 rounded-xl text-[10px] font-semibold transition'
 
 function categoryFor(row) {
   return row.categoryMeta || CATEGORIES.find(category => category.id === row.category) || FALLBACK_CATEGORY
@@ -29,7 +30,7 @@ function categoryFor(row) {
 function Metric({ label, value, detail, tone = 'default', onClick, info }) {
   const help = info || financialHelpFor(label)
   const toneClass = tone === 'dark'
-    ? 'bg-[var(--ink)] text-[var(--bg)] border-transparent'
+    ? 'bg-slate-100 text-slate-950 border-slate-200'
     : tone === 'danger'
       ? 'bg-red-50 text-red-800 border-red-100'
       : tone === 'violet'
@@ -53,14 +54,14 @@ function Metric({ label, value, detail, tone = 'default', onClick, info }) {
   return (
     <div
       {...interactiveProps}
-      className={`rounded-2xl border p-3.5 min-h-[104px] text-left w-full ${toneClass} ${onClick ? 'hover:-translate-y-0.5 transition-transform cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--ink)]/15' : ''}`}
+      className={`rounded-2xl border p-3.5 min-h-[100px] text-left w-full ${toneClass} ${onClick ? 'hover:-translate-y-0.5 transition-transform cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--ink)]/15' : ''}`}
     >
       <div className="flex items-center gap-1.5">
         <div className="text-[9px] uppercase tracking-[0.12em] font-bold opacity-60">{label}</div>
         {help && <InfoTip content={help}/>} 
       </div>
-      <div className="font-mono text-[19px] md:text-[22px] font-bold mt-2 tracking-tight">{value}</div>
-      <div className="text-[9.5px] opacity-65 mt-1 leading-relaxed">{detail}</div>
+      <div className="font-mono text-[18px] md:text-[21px] font-bold mt-2 tracking-tight leading-tight">{value}</div>
+      <div className="text-[9px] opacity-65 mt-1 leading-relaxed">{detail}</div>
     </div>
   )
 }
@@ -73,7 +74,7 @@ function CycleRow({ cycle, card }) {
 
   return (
     <div className="relative grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center px-4 py-3 border-b border-[var(--line)] last:border-b-0 overflow-hidden">
-      <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: meta.bg === '#F1F1EE' ? '#171715' : meta.bg }}/>
+      <span className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: meta.accent || meta.bg }}/>
       <FinancialBrand brand={brand} size="md"/>
       <div className="min-w-0">
         <div className="text-[11.5px] font-semibold truncate">{card?.name || meta.label}{card?.lastFour ? ` ···· ${card.lastFour}` : ''}</div>
@@ -99,7 +100,7 @@ function SyncRow({ brand, icon, title, value, detail, status, onClick }) {
       type="button"
       onClick={onClick}
       className="w-full grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center p-3 text-left rounded-xl hover:bg-[var(--hover)] transition"
-      style={meta ? { background: `linear-gradient(90deg, ${meta.bg}28, transparent 42%)` } : undefined}
+      style={meta ? { background: `linear-gradient(90deg, ${(meta.accent || meta.bg)}20, transparent 42%)` } : undefined}
     >
       {brand ? <FinancialBrand brand={brand} size="md"/> : <div className="w-9 h-9 rounded-xl bg-[var(--soft)] grid place-items-center"><Icon name={icon} size={16}/></div>}
       <div className="min-w-0">
@@ -227,9 +228,9 @@ export default function DashboardFinancial({
           <h1 className="text-[21px] md:text-[22px] font-bold tracking-tight mt-1">Dashboard</h1>
           <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Dinero libre, reservas, cobros, tarjetas y fuentes sincronizadas. Los USD de PayPal se mantienen separados hasta retirarlos.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={loadDashboard} className="h-8 px-3 rounded-lg border border-[var(--line)] text-[10px] font-semibold hover:bg-[var(--hover)]"><Icon name="refresh" size={12}/> Actualizar</button>
-          <button type="button" onClick={() => setView?.('billing')} className="h-8 px-3 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[10px] font-semibold">Facturación</button>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <button type="button" onClick={loadDashboard} className={`${HEADER_BTN} min-w-[112px] border border-[var(--line)] bg-[var(--bg-elev)] hover:bg-[var(--hover)]`}><Icon name="refresh" size={12}/>Actualizar</button>
+          <button type="button" onClick={() => setView?.('billing')} className={`${HEADER_BTN} min-w-[112px] bg-[var(--ink)] text-[var(--bg)]`}>Facturación</button>
         </div>
       </div>
 
@@ -301,7 +302,7 @@ export default function DashboardFinancial({
           <Metric label="Compartido con Nicol" value={fmtCLP(nextSharedBase || monthShared)} detail={nextSharedBase ? 'Base compartida del próximo vencimiento' : 'Base compartida del mes'} tone="violet" onClick={() => setView?.('billing')}/>
           <Card padding="p-3.5" className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0"><div className={`w-8 h-8 rounded-xl grid place-items-center shrink-0 ${botStatus === 'online' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><Icon name="bot" size={15}/></div><div className="min-w-0"><div className="text-[11px] font-semibold truncate">Bot de Gastito {botStatus === 'online' ? 'conectado' : 'requiere revisión'}</div><div className="text-[8.5px] text-[var(--muted)] mt-0.5 truncate">Registro rápido para lo que aún no llega por integración.</div></div></div>
-            <button type="button" onClick={openChat} className="h-8 px-3 rounded-lg border border-[var(--line)] text-[9.5px] font-semibold hover:bg-[var(--hover)] shrink-0">Abrir</button>
+            <button type="button" onClick={openChat} className={`${HEADER_BTN} min-w-[76px] border border-[var(--line)] bg-[var(--bg-elev)] hover:bg-[var(--hover)] shrink-0`}>Abrir</button>
           </Card>
         </div>
       </div>
