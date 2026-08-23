@@ -40,6 +40,7 @@ export async function fetchMercadoPagoMovements({ limit = 100, reviewOnly = fals
       review_status, report_file, expense_id,
       category:categories(id, label, icon, color)
     `)
+    .neq('review_status', 'ignored')
     .order('occurred_at', { ascending: false })
     .limit(limit)
   if (reviewOnly) query = query.eq('review_status', 'review_required')
