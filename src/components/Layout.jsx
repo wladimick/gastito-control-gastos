@@ -10,7 +10,16 @@ const BASE_NAV_GROUPS = [
     ],
   },
   {
-    label: 'Movimientos',
+    label: 'Dinero',
+    items: [
+      { id: 'accounts', label: 'Cuentas y flujo', icon: 'wallet', short: 'Cuentas' },
+      { id: 'mercadopago', label: 'Mercado Pago', icon: 'cash', short: 'MP', href: '?mercadopago-admin=1' },
+      { id: 'receivables', label: 'Me deben', icon: 'users', short: 'Cobros', href: '?me-deben=1' },
+      { id: 'paypal', label: 'Shopify / PayPal', icon: 'cash', short: 'PayPal', href: '?paypal-admin=1' },
+    ],
+  },
+  {
+    label: 'Gastos y tarjetas',
     items: [
       { id: 'expenses', label: 'Gastos', icon: 'list', short: 'Gastos' },
       { id: 'billing', label: 'Facturación', icon: 'card', short: 'Factur.' },
@@ -20,12 +29,17 @@ const BASE_NAV_GROUPS = [
   {
     label: 'Planificación',
     items: [
-      { id: 'accounts', label: 'Cuentas y flujo', icon: 'wallet', short: 'Cuentas' },
-      { id: 'budgets', label: 'Presupuestos', icon: 'target', short: 'Presup.' },
       { id: 'recurring', label: 'Recurrentes', icon: 'repeat', short: 'Recurr.' },
+      { id: 'budgets', label: 'Presupuestos', icon: 'target', short: 'Presup.' },
       { id: 'reimbursements', label: 'Rendiciones', icon: 'cash', short: 'Rend.', badge: 0 },
       { id: 'projection', label: 'Proyección', icon: 'trend', short: 'Proyec.' },
       { id: 'savings', label: 'Ahorros', icon: 'savings', short: 'Ahorros' },
+    ],
+  },
+  {
+    label: 'Compartidos',
+    items: [
+      { id: 'nicol', label: 'Gastos con Nicol', icon: 'users', short: 'Nicol', href: '?nicol-admin=recurrentes' },
     ],
   },
   {
@@ -33,12 +47,6 @@ const BASE_NAV_GROUPS = [
     items: [
       { id: 'reports', label: 'Reportes', icon: 'chart', short: 'Reportes' },
       { id: 'comparison', label: 'Comparación', icon: 'scale', short: 'Compar.' },
-    ],
-  },
-  {
-    label: 'Compartidos',
-    items: [
-      { id: 'nicol', label: 'Gastos con Nicol', icon: 'users', short: 'Nicol', href: '?nicol-admin=recurrentes' },
     ],
   },
   {
@@ -74,7 +82,7 @@ function buildNavGroups(isSuperAdmin, unparsedCount, reimbursementCount) {
   return groups
 }
 
-const MOBILE_PRIMARY = ['dashboard', 'expenses', 'billing', 'budgets']
+const MOBILE_PRIMARY = ['dashboard', 'expenses', 'billing', 'accounts']
 
 export default function Layout({
   view,
