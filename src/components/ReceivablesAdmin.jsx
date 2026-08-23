@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fmtCLP } from '../lib/helpers'
+import FinancialBrand from './FinancialBrand'
 
 function formatDate(value, withTime = false) {
   if (!value) return 'Sin fecha'
@@ -14,7 +15,20 @@ function todayKey() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
 }
 
-const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:border-slate-500'
+const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10.5px] focus:outline-none focus:border-slate-500'
+
+function PersonAvatar({ name }) {
+  const initials = String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()
+  return <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-700 border border-violet-100 grid place-items-center text-[10px] font-bold shrink-0">{initials}</div>
+}
+
+function Kpi({ label, value, detail, dark = false }) {
+  return <div className={`rounded-2xl border p-3.5 ${dark ? 'bg-[#171715] text-white border-[#171715]' : 'bg-white border-slate-200'}`}>
+    <div className="text-[9px] uppercase tracking-wider opacity-55 font-bold">{label}</div>
+    <div className="mt-2 font-mono text-[19px] md:text-[21px] font-bold tracking-tight">{value}</div>
+    <div className="mt-1 text-[9px] opacity-60 leading-relaxed">{detail}</div>
+  </div>
+}
 
 export default function ReceivablesAdmin() {
   const [session, setSession] = useState(null)
@@ -174,50 +188,53 @@ export default function ReceivablesAdmin() {
     finally { setBusy(null) }
   }
 
-  if (!ready) return <div className="min-h-screen grid place-items-center text-sm text-slate-500">Cargando…</div>
-  if (!session) return <div className="min-h-screen bg-[#f7f6f2] grid place-items-center p-6"><div className="max-w-md w-full rounded-3xl border border-slate-200 bg-white p-6"><h1 className="text-xl font-bold">Me deben · Gastito</h1><p className="mt-2 text-sm text-slate-500">Primero inicia sesión en Gastito.</p><a href="/" className="mt-5 inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">Ir a Gastito</a></div></div>
+  if (!ready) return <div className="min-h-screen grid place-items-center text-[11px] text-slate-500">Cargando…</div>
+  if (!session) return <div className="min-h-screen bg-[#f7f6f2] grid place-items-center p-5"><div className="max-w-md w-full rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-3"><FinancialBrand brand="receivables"/><h1 className="text-[18px] font-bold">Me deben · Gastito</h1></div><p className="mt-3 text-[11px] text-slate-500">Primero inicia sesión en Gastito.</p><a href="/" className="mt-4 inline-flex rounded-xl bg-slate-900 px-3 py-2 text-[10px] font-semibold text-white">Ir a Gastito</a></div></div>
 
   return <div className="min-h-screen bg-[#f7f6f2] text-slate-900">
-    <div className="mx-auto max-w-5xl p-4 md:p-8 space-y-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-[.16em] font-bold text-slate-400">Gastito · Cuentas por cobrar</div>
-          <h1 className="mt-1 text-3xl font-bold">Me deben</h1>
-          <p className="mt-1 text-sm text-slate-500">Préstamos, cuentas compartidas y pagos pendientes. Puedes conciliarlos con transferencias de Mercado Pago.</p>
+    <div className="mx-auto max-w-5xl p-4 md:p-7 space-y-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <FinancialBrand brand="receivables" size="lg"/>
+          <div className="min-w-0">
+            <div className="text-[9px] uppercase tracking-[.14em] font-bold text-slate-400">Gastito · Cuentas por cobrar</div>
+            <h1 className="mt-0.5 text-[21px] md:text-[22px] font-bold tracking-tight">Me deben</h1>
+            <p className="mt-0.5 text-[10px] text-slate-500">Préstamos, cuentas compartidas y pagos pendientes.</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a href="/?mercadopago-admin=1" className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold">Mercado Pago</a>
-          <a href="/" className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold">Volver a Gastito</a>
-          <button onClick={() => setFormOpen(v => !v)} className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">+ Nueva deuda</button>
+          <a href="/?mercadopago-admin=1" className="inline-flex items-center gap-2 rounded-xl border border-[#F0D800] bg-[#FFF9C9] px-3 py-2 text-[10px] font-semibold"><FinancialBrand brand="mercadopago" size="sm"/>Mercado Pago</a>
+          <a href="/" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-semibold">Volver</a>
+          <button onClick={() => setFormOpen(v => !v)} className="rounded-xl bg-slate-900 px-3 py-2 text-[10px] font-semibold text-white">+ Nueva deuda</button>
         </div>
       </div>
 
-      {message && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{message}</div>}
+      {message && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-900">{message}</div>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-2xl bg-slate-900 text-white p-4"><div className="text-[10px] uppercase tracking-wider opacity-60 font-bold">Pendiente total</div><div className="mt-3 font-mono text-2xl font-bold">{fmtCLP(pendingTotal)}</div><div className="mt-2 text-xs opacity-60">Dinero que todavía falta recibir</div></div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Personas</div><div className="mt-3 font-mono text-2xl font-bold">{groups.filter(([,items]) => items.some(i => i.status !== 'paid')).length}</div><div className="mt-2 text-xs text-slate-500">Con deuda pendiente</div></div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Ya pagado</div><div className="mt-3 font-mono text-2xl font-bold">{fmtCLP(paidTotal)}</div><div className="mt-2 text-xs text-slate-500">Historial conservado</div></div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Transferencias disponibles</div><div className="mt-3 font-mono text-2xl font-bold">{availableTransfers.length}</div><div className="mt-2 text-xs text-slate-500">Entradas de Mercado Pago sin asignar</div></div>
+        <Kpi label="Pendiente total" value={fmtCLP(pendingTotal)} detail="Dinero que falta recibir" dark/>
+        <Kpi label="Personas" value={groups.filter(([,items]) => items.some(i => i.status !== 'paid')).length} detail="Con deuda pendiente"/>
+        <Kpi label="Ya pagado" value={fmtCLP(paidTotal)} detail="Historial conservado"/>
+        <Kpi label="Transferencias MP" value={availableTransfers.length} detail="Entradas sin asignar"/>
       </div>
 
-      {formOpen && <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="font-semibold">Nueva cuenta por cobrar</div>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+      {formOpen && <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+        <div className="text-[11px] font-semibold">Nueva cuenta por cobrar</div>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2.5">
           <input className={INPUT} placeholder="Persona, ej. Boris" value={form.person} onChange={e => setForm(v => ({...v, person:e.target.value}))}/>
           <input className={INPUT} placeholder="Concepto, ej. Préstamo" value={form.name} onChange={e => setForm(v => ({...v, name:e.target.value}))}/>
           <input type="number" className={INPUT} placeholder="Monto" value={form.amount} onChange={e => setForm(v => ({...v, amount:e.target.value}))}/>
           <input type="date" className={INPUT} value={form.dueDate} onChange={e => setForm(v => ({...v, dueDate:e.target.value}))}/>
         </div>
-        <div className="mt-3 flex justify-end"><button disabled={!form.person.trim() || Number(form.amount) <= 0 || busy === 'new'} onClick={createReceivable} className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">Guardar</button></div>
+        <div className="mt-3 flex justify-end"><button disabled={!form.person.trim() || Number(form.amount) <= 0 || busy === 'new'} onClick={createReceivable} className="rounded-xl bg-slate-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-40">Guardar</button></div>
       </div>}
 
-      {loading ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400">Cargando cuentas por cobrar…</div> : groups.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400">No hay cuentas por cobrar.</div> : groups.map(([person, items]) => {
+      {loading ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[10px] text-slate-400">Cargando cuentas por cobrar…</div> : groups.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[10px] text-slate-400">No hay cuentas por cobrar.</div> : groups.map(([person, items]) => {
         const personPending = items.reduce((sum, item) => item.status === 'paid' ? sum : sum + Math.max(Number(item.amount) - Number(allocationByReceivable[item.id] || 0), 0), 0)
-        return <section key={person} className="rounded-3xl border border-slate-200 bg-white overflow-hidden">
-          <div className="p-4 md:p-5 border-b border-slate-100 flex items-center justify-between gap-3">
-            <div><div className="text-xl font-bold">{person}</div><div className="text-xs text-slate-500 mt-1">{items.length} concepto{items.length === 1 ? '' : 's'}</div></div>
-            <div className="text-right"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Pendiente</div><div className="font-mono text-xl font-bold">{fmtCLP(personPending)}</div></div>
+        return <section key={person} className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+          <div className="p-3.5 border-b border-slate-100 flex items-center justify-between gap-3 bg-gradient-to-r from-violet-50/70 to-white">
+            <div className="flex items-center gap-2.5 min-w-0"><PersonAvatar name={person}/><div className="min-w-0"><div className="text-[13px] font-bold truncate">{person}</div><div className="text-[8.5px] text-slate-500 mt-0.5">{items.length} concepto{items.length === 1 ? '' : 's'}</div></div></div>
+            <div className="text-right"><div className="text-[8.5px] uppercase tracking-wider text-slate-400 font-bold">Pendiente</div><div className="font-mono text-[16px] font-bold">{fmtCLP(personPending)}</div></div>
           </div>
           <div className="divide-y divide-slate-100">
             {items.map(item => {
@@ -225,38 +242,38 @@ export default function ReceivablesAdmin() {
               const remaining = item.status === 'paid' ? 0 : Math.max(Number(item.amount) - allocated, 0)
               const overdue = item.status !== 'paid' && item.due_date && String(item.due_date).slice(0,10) < today
               const itemAllocations = allocations.filter(a => a.receivable_id === item.id)
-              return <div key={item.id} className="p-4 md:p-5">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              return <div key={item.id} className="p-3.5">
+                <div className="flex flex-col gap-2.5 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="font-semibold">{item.name}</div>
-                      {item.status === 'paid' ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Pagado</span> : overdue ? <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">Vencido</span> : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Pendiente</span>}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="text-[10.5px] font-semibold">{item.name}</div>
+                      {item.status === 'paid' ? <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-700">Pagado</span> : overdue ? <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[8px] font-semibold text-red-700">Vencido</span> : <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[8px] font-semibold text-amber-700">Pendiente</span>}
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">{item.due_date ? `Fecha: ${formatDate(item.due_date)}` : 'Sin fecha acordada'}{allocated > 0 ? ` · ${fmtCLP(allocated)} conciliado` : ''}</div>
-                    {item.notes && <div className="mt-2 text-xs text-slate-500 leading-relaxed">{item.notes}</div>}
-                    {itemAllocations.length > 0 && <div className="mt-2 text-[11px] text-emerald-700">{itemAllocations.map(a => `${fmtCLP(a.amount)} · ${formatDate(a.paid_at, true)}`).join(' · ')}</div>}
+                    <div className="mt-0.5 text-[8.5px] text-slate-500">{item.due_date ? `Fecha: ${formatDate(item.due_date)}` : 'Sin fecha acordada'}{allocated > 0 ? ` · ${fmtCLP(allocated)} conciliado` : ''}</div>
+                    {item.notes && <div className="mt-1.5 text-[9px] text-slate-500 leading-relaxed">{item.notes}</div>}
+                    {itemAllocations.length > 0 && <div className="mt-1.5 text-[8.5px] text-emerald-700">{itemAllocations.map(a => `${fmtCLP(a.amount)} · ${formatDate(a.paid_at, true)}`).join(' · ')}</div>}
                   </div>
                   <div className="md:text-right shrink-0">
-                    <div className="font-mono text-xl font-bold">{fmtCLP(item.amount)}</div>
-                    {item.status !== 'paid' && allocated > 0 && <div className="text-xs text-slate-500 mt-1">Falta {fmtCLP(remaining)}</div>}
+                    <div className="font-mono text-[16px] font-bold">{fmtCLP(item.amount)}</div>
+                    {item.status !== 'paid' && allocated > 0 && <div className="text-[8.5px] text-slate-500 mt-0.5">Falta {fmtCLP(remaining)}</div>}
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {item.status === 'paid' ? <button disabled={busy === item.id} onClick={() => reopen(item)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Reabrir</button> : <button disabled={busy === item.id} onClick={() => markPaid(item)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Marcar pagado</button>}
-                  <button onClick={() => setLinking(linking === item.id ? null : item.id)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Relacionar transferencia MP</button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {item.status === 'paid' ? <button disabled={busy === item.id} onClick={() => reopen(item)} className="rounded-xl border border-slate-200 px-3 py-1.5 text-[9px] font-semibold">Reabrir</button> : <button disabled={busy === item.id} onClick={() => markPaid(item)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[9px] font-semibold text-white">Marcar pagado</button>}
+                  <button onClick={() => setLinking(linking === item.id ? null : item.id)} className="inline-flex items-center gap-1.5 rounded-xl border border-[#F0D800] bg-[#FFFBE0] px-3 py-1.5 text-[9px] font-semibold"><FinancialBrand brand="mercadopago" size="sm"/>Relacionar MP</button>
                 </div>
 
-                {linking === item.id && <div className="mt-3 rounded-2xl bg-slate-50 p-3">
-                  <div className="text-xs font-semibold">Selecciona una transferencia entrante</div>
+                {linking === item.id && <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                  <div className="text-[9.5px] font-semibold">Selecciona una transferencia entrante</div>
                   <div className="mt-2 flex flex-col md:flex-row gap-2">
                     <select className={`${INPUT} flex-1`} value={selectedTransfer[item.id] || ''} onChange={e => setSelectedTransfer(v => ({...v, [item.id]:e.target.value}))}>
                       <option value="">Seleccionar…</option>
                       {availableTransfers.map(t => <option key={t.id} value={t.id}>{formatDate(t.occurred_at, true)} · {fmtCLP(t.available)} disponible · {t.merchant || t.description || 'Transferencia'}</option>)}
                     </select>
-                    <button disabled={!selectedTransfer[item.id] || busy === item.id} onClick={() => linkTransfer(item)} className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">Aplicar</button>
+                    <button disabled={!selectedTransfer[item.id] || busy === item.id} onClick={() => linkTransfer(item)} className="rounded-xl bg-slate-900 px-3 py-2 text-[9.5px] font-semibold text-white disabled:opacity-40">Aplicar</button>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-500">Gastito aplicará automáticamente el menor valor entre lo que falta por cobrar y lo que queda disponible en la transferencia. La misma transferencia puede cubrir varias deudas.</div>
+                  <div className="mt-1.5 text-[8.5px] text-slate-500">Gastito aplica automáticamente el menor valor entre lo pendiente y lo disponible en la transferencia.</div>
                 </div>}
               </div>
             })}
