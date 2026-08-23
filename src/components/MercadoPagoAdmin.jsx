@@ -19,6 +19,8 @@ const CLASS_LABEL = {
   other: 'Revisar',
 }
 
+const BTN = 'h-9 inline-flex items-center justify-center rounded-xl px-3 text-[10px] font-semibold transition disabled:opacity-50'
+
 function formatDate(value) {
   if (!value) return '—'
   return new Intl.DateTimeFormat('es-CL', {
@@ -34,16 +36,16 @@ function StatusBadge({ status }) {
     syncing: ['Sincronizando', 'bg-blue-50 text-blue-700 border-blue-200'],
     credentials_missing: ['Falta credencial', 'bg-amber-50 text-amber-800 border-amber-200'],
     error: ['Error', 'bg-red-50 text-red-700 border-red-200'],
-    idle: ['En espera', 'bg-white/70 text-slate-700 border-black/10'],
+    idle: ['En espera', 'bg-white/85 text-slate-700 border-black/10'],
   }
-  const [label, cls] = map[status] || [status || 'Sin configurar', 'bg-white/70 text-slate-700 border-black/10']
-  return <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[9.5px] font-semibold ${cls}`}>{label}</span>
+  const [label, cls] = map[status] || [status || 'Sin configurar', 'bg-white/85 text-slate-700 border-black/10']
+  return <span className={`h-8 inline-flex items-center rounded-full border px-2.5 text-[9.5px] font-semibold ${cls}`}>{label}</span>
 }
 
 function Kpi({ label, value, detail, accent = false }) {
-  return <div className={`rounded-2xl border p-3.5 ${accent ? 'border-[#F0D800] bg-[#FFF9C9]' : 'border-slate-200 bg-white'}`}>
+  return <div className={`rounded-2xl border p-3.5 ${accent ? 'border-[#EAD400] bg-[#FFF9D7]' : 'border-slate-200 bg-white'}`}>
     <div className="text-[9px] uppercase tracking-[.11em] text-slate-400 font-bold">{label}</div>
-    <div className="mt-2 font-mono text-[19px] md:text-[21px] font-bold tracking-tight">{value}</div>
+    <div className="mt-2 font-mono text-[18px] md:text-[20px] font-bold tracking-tight leading-tight break-words">{value}</div>
     <div className="mt-1 text-[9px] text-slate-500 leading-relaxed">{detail}</div>
   </div>
 }
@@ -113,7 +115,7 @@ export default function MercadoPagoAdmin() {
       <div className="max-w-md w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-3"><FinancialBrand brand="mercadopago"/><div className="text-[18px] font-bold">Mercado Pago · Gastito</div></div>
         <p className="mt-3 text-[11px] text-slate-500">Primero inicia sesión en Gastito y luego vuelve a esta página.</p>
-        <a href="/" className="mt-4 inline-flex rounded-xl bg-slate-900 px-3 py-2 text-[10.5px] font-semibold text-white">Ir a Gastito</a>
+        <a href="/" className={`${BTN} mt-4 bg-slate-900 text-white`}>Ir a Gastito</a>
       </div>
     </div>
   )
@@ -135,12 +137,14 @@ export default function MercadoPagoAdmin() {
                 <p className="mt-0.5 text-[10px] text-slate-700/75">Saldo, reservas y movimientos conciliados automáticamente.</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <StatusBadge status={status?.status}/>
-              <a href="/" className="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-[10px] font-semibold">Volver</a>
-              <button onClick={syncNow} disabled={syncing} className="rounded-xl bg-[#171715] px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-50">
-                {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
-              </button>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <a href="/" className={`${BTN} min-w-[104px] border border-black/10 bg-white/85 text-slate-900`}>Volver</a>
+                <button onClick={syncNow} disabled={syncing} className={`${BTN} min-w-[138px] bg-[#171715] text-white`}>
+                  {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -154,14 +158,14 @@ export default function MercadoPagoAdmin() {
           <Kpi label="Por revisar" value={status?.reviewCount ?? 0} detail="Movimientos ambiguos"/>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-3.5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3.5 flex items-center justify-between gap-3">
           <div>
             <div className="text-[11px] font-semibold">Sincronización automática</div>
             <div className="text-[9px] text-slate-500 mt-0.5">Credencial {status?.credential_state === 'configured' ? 'configurada' : status?.credential_state === 'invalid' ? 'inválida' : 'pendiente'} · cron horario</div>
           </div>
           <button
             onClick={async () => { await setMercadoPagoEnabled(!status?.enabled); await load() }}
-            className={`rounded-xl px-3 py-2 text-[10px] font-semibold ${status?.enabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}
+            className={`${BTN} min-w-[104px] ${status?.enabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}
           >
             {status?.enabled ? 'Activada' : 'Desactivada'}
           </button>
@@ -183,7 +187,7 @@ export default function MercadoPagoAdmin() {
                 const isCredit = Number(item.net_credit_amount || 0) > 0
                 const amount = isCredit ? Number(item.net_credit_amount || 0) : Number(item.net_debit_amount || 0)
                 return <div key={item.id} className="px-3.5 py-3 flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-[#FFF8B5] grid place-items-center shrink-0"><img src="https://cdn.simpleicons.org/mercadopago/00B1EA" alt="" className="w-4 h-4"/></div>
+                  <FinancialBrand brand="mercadopago" size="sm"/>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <div className="text-[10.5px] font-semibold truncate">{item.merchant || item.description || 'Mercado Pago'}</div>
