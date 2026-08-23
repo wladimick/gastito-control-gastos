@@ -3,9 +3,10 @@ import React from 'react'
 const BRAND = {
   mercadopago: {
     label: 'Mercado Pago',
-    bg: '#FFE600',
+    bg: '#FFFFFF',
     fg: '#009EE3',
-    border: '#F0D800',
+    border: '#E6E7E3',
+    accent: '#FFE600',
     image: 'https://cdn.simpleicons.org/mercadopago/00B1EA',
     fallback: 'MP',
   },
@@ -14,6 +15,7 @@ const BRAND = {
     bg: '#35A936',
     fg: '#FFFFFF',
     border: '#2D922F',
+    accent: '#35A936',
     fallback: 'CMR',
   },
   bchile: {
@@ -21,6 +23,7 @@ const BRAND = {
     bg: '#003B7A',
     fg: '#FFFFFF',
     border: '#003366',
+    accent: '#003B7A',
     fallback: 'BCh',
   },
   paypal: {
@@ -28,6 +31,7 @@ const BRAND = {
     bg: '#F2F6FF',
     fg: '#003087',
     border: '#DCE6FA',
+    accent: '#003087',
     image: 'https://cdn.simpleicons.org/paypal/003087',
     fallback: 'P',
   },
@@ -36,6 +40,7 @@ const BRAND = {
     bg: '#F1F8EC',
     fg: '#5E8E3E',
     border: '#DCEACC',
+    accent: '#7AB55C',
     image: 'https://cdn.simpleicons.org/shopify/7AB55C',
     fallback: 'S',
   },
@@ -44,6 +49,7 @@ const BRAND = {
     bg: '#F4F0FF',
     fg: '#6D4CC7',
     border: '#E3D9FF',
+    accent: '#7C5CCE',
     fallback: '$',
   },
   accounts: {
@@ -51,6 +57,7 @@ const BRAND = {
     bg: '#F1F1EE',
     fg: '#171715',
     border: '#E2E2DD',
+    accent: '#171715',
     fallback: '$',
   },
 }
@@ -75,7 +82,7 @@ export default function FinancialBrand({ brand = 'accounts', size = 'md', label 
   return (
     <span className={`inline-flex items-center gap-2 min-w-0 ${className}`}>
       <span
-        className={`${box} shrink-0 grid place-items-center overflow-hidden border`}
+        className={`${box} shrink-0 grid place-items-center overflow-hidden border shadow-[0_1px_0_rgba(0,0,0,0.03)]`}
         style={{ backgroundColor: meta.bg, color: meta.fg, borderColor: meta.border }}
         aria-label={meta.label}
       >
