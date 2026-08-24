@@ -112,13 +112,14 @@ function LinkPanel({ link, percentage, setPercentage, generatedUrl, onGenerate, 
       </div>
 
       {generatedUrl ? (
-        <div className="relative rounded-2xl border border-violet-200 bg-white/90 p-3.5">
+        <div className="relative overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-white/95 via-violet-50 to-fuchsia-100/85 p-3.5 shadow-sm shadow-violet-950/10">
+          <div className="pointer-events-none absolute -right-8 -bottom-10 h-28 w-28 rounded-full bg-fuchsia-300/30 blur-2xl" aria-hidden="true" />
           <div className="flex items-center justify-between gap-3 mb-2">
             <div className="text-[10px] uppercase tracking-[0.1em] text-violet-700 font-bold">Enlace listo para enviar</div>
-            <span className="text-[10px] font-semibold text-emerald-700">Solo lectura</span>
+            <span className="rounded-full bg-emerald-100/90 px-2 py-1 text-[10px] font-semibold text-emerald-800">Solo lectura</span>
           </div>
-          <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2 text-[11px] break-all font-mono text-slate-700">{generatedUrl}</div>
-          <button onClick={copy} className="mt-2 h-9 px-3 rounded-lg bg-violet-700 text-white text-[11px] font-semibold hover:bg-violet-800">
+          <div className="relative rounded-xl border border-violet-200/80 bg-white/75 px-3 py-2.5 text-[11px] break-all font-mono text-slate-700">{generatedUrl}</div>
+          <button onClick={copy} className="relative mt-2 h-9 px-3 rounded-lg bg-gradient-to-r from-violet-700 to-fuchsia-700 text-white text-[11px] font-semibold shadow-sm shadow-violet-700/25 hover:from-violet-800 hover:to-fuchsia-800">
             {copied ? 'Enlace copiado' : 'Copiar enlace'}
           </button>
         </div>

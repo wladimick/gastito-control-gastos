@@ -227,6 +227,31 @@ function CategorySummary({ rows }) {
   )
 }
 
+function TransactionFilters({ categories, categoryFilter, onCategoryChange, sortBy, onSortChange }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 mt-3 border-t border-[var(--line)]">
+      <label>
+        <span className="block text-[10px] uppercase tracking-[0.1em] font-bold text-[var(--muted)] mb-1">Categoría</span>
+        <select value={categoryFilter} onChange={event => onCategoryChange(event.target.value)}
+          className="w-full h-10 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] outline-none focus:border-violet-400">
+          <option value="">Todas las categorías</option>
+          {categories.map(category => <option key={category.id} value={category.id}>{category.icon || '•'} {category.label}</option>)}
+        </select>
+      </label>
+      <label>
+        <span className="block text-[10px] uppercase tracking-[0.1em] font-bold text-[var(--muted)] mb-1">Ordenar por</span>
+        <select value={sortBy} onChange={event => onSortChange(event.target.value)}
+          className="w-full h-10 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] outline-none focus:border-violet-400">
+          <option value="date-desc">Fecha: más reciente</option>
+          <option value="date-asc">Fecha: más antigua</option>
+          <option value="amount-desc">Monto: mayor a menor</option>
+          <option value="amount-asc">Monto: menor a mayor</option>
+        </select>
+      </label>
+    </div>
+  )
+}
+
 function InstallmentBadges({ item }) {
   const current = Number(item.installmentCurrent || 0)
   const total = Number(item.installmentTotal || 0)
@@ -321,6 +346,8 @@ function TransactionRow({ item, percentage }) {
 export default function NicolPublicCyclesVisual({ token }) {
   const [state, setState] = useState({ loading: true, data: null, error: '' })
   const [selectedKey, setSelectedKey] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [sortBy, setSortBy] = useState('date-desc')
 
   useEffect(() => {
     if (!supabase) {
@@ -360,9 +387,27 @@ export default function NicolPublicCyclesVisual({ token }) {
   )
   const cycle = cycles[selectedIndex] || null
   const percentage = Number(state.data?.percentage || 0)
+  const categories = useMemo(() => {
+    const unique = new Map()
+    for (const item of cycle?.transactions || []) {
+      const category = categoryFor(item)
+      unique.set(category.id || category.label, category)
+    }
+    return [...unique.values()].sort((a, b) => a.label.localeCompare(b.label, 'es'))
+  }, [cycle])
+  const filteredTransactions = useMemo(() => {
+    const items = (cycle?.transactions || []).filter(item => !categoryFilter || categoryFor(item).id === categoryFilter)
+    return [...items].sort((left, right) => {
+      if (sortBy === 'amount-desc') return Number(right.amount || 0) - Number(left.amount || 0)
+      if (sortBy === 'amount-asc') return Number(left.amount || 0) - Number(right.amount || 0)
+      const leftDate = String(left.date || '')
+      const rightDate = String(right.date || '')
+      return sortBy === 'date-asc' ? leftDate.localeCompare(rightDate) : rightDate.localeCompare(leftDate)
+    })
+  }, [categoryFilter, cycle, sortBy])
   const categorySummary = useMemo(
-    () => buildCategorySummary(cycle?.transactions || [], percentage),
-    [cycle, percentage],
+    () => buildCategorySummary(filteredTransactions, percentage),
+    [filteredTransactions, percentage],
   )
 
   const move = direction => {
@@ -398,7 +443,7 @@ export default function NicolPublicCyclesVisual({ token }) {
                     <div>
                       <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Detalle del ciclo</div>
                       <div className="text-[12px] text-[var(--muted)] mt-0.5">
-                        {(cycle.transactions || []).length} conceptos compartidos
+                        {filteredTransactions.length} de {(cycle.transactions || []).length} conceptos compartidos
                       </div>
                     </div>
                     {cycle.isUpcoming && (
@@ -406,16 +451,24 @@ export default function NicolPublicCyclesVisual({ token }) {
                     )}
                   </div>
 
-                  {(cycle.transactions || []).length > 0 ? (
+                  <TransactionFilters
+                    categories={categories}
+                    categoryFilter={categoryFilter}
+                    onCategoryChange={setCategoryFilter}
+                    sortBy={sortBy}
+                    onSortChange={setSortBy}
+                  />
+
+                  {filteredTransactions.length > 0 ? (
                     <div className="divide-y divide-[var(--line)]">
-                      {cycle.transactions.map(item => (
+                      {filteredTransactions.map(item => (
                         <TransactionRow key={item.id} item={item} percentage={percentage} />
                       ))}
                     </div>
                   ) : (
                     <div className="px-5 py-10 text-center">
-                      <div className="text-[14px] font-semibold">Sin gastos compartidos</div>
-                      <p className="text-[11.5px] text-[var(--muted)] mt-1">Por ahora no hay movimientos asignados a este ciclo.</p>
+                      <div className="text-[14px] font-semibold">Sin resultados con este filtro</div>
+                      <p className="text-[11.5px] text-[var(--muted)] mt-1">Prueba otra categoría para ver los movimientos compartidos.</p>
                     </div>
                   )}
                 </section>
