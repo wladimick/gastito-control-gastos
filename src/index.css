@@ -19,12 +19,27 @@
   --amber-soft:  oklch(0.94 0.06 80);
   --radius-card: 16px;
   --radius-control: 12px;
+  --card-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.94) 54%, rgba(253, 246, 255, 0.92) 100%);
+  --card-line: #E1E6F0;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-6: 24px;
   --space-8: 32px;
+}
+
+/*
+ * Shared elevated surface. The selector deliberately only applies to the
+ * existing rounded card surface token (not inputs or compact controls), so
+ * every standard card shares the new soft gradient while status/brand cards
+ * keep their semantic color.
+ */
+[class*="rounded-2xl"][class*="bg-[var(--bg-elev)]"] {
+  background-color: var(--bg-elev);
+  background-image: var(--card-gradient);
+  border-color: var(--card-line);
+  box-shadow: 0 1px 0 rgba(20, 20, 18, 0.02), 0 12px 28px rgba(79, 70, 229, 0.035);
 }
 
 * {
