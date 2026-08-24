@@ -193,7 +193,40 @@ Deno.serve(async (req: Request) => {
 
         let categoryId: string | null = null
         let reviewStatus = classification === 'other' ? 'review_required' : 'verified'
-        if (classification === 'expense' || classification === 'fee') {
+
+        const merchantNormalized = norm(merchant)
+        if (merchantNormalized) {
+          const { data: savedRule } = await supabase
+            .from('mercadopago_category_rules')
+            .select('category_id')
+            .eq('user_id', userId)
+            .eq('merchant_normalized', merchantNormalized)
+            .eq('active', true)
+            .maybeSingle()
+          if (savedRule?.category_id) categoryId = savedRule.category_id
+        }
+
+        if (!categoryId && (classification === 'transfer_in' || classification === 'transfer_out')) {
+          const { data: transferCategory } = await supabase
+            .from('categories')
+            .select('id')
+            .is('user_id', null)
+            .eq('label', 'Transferencias')
+            .maybeSingle()
+          categoryId = transferCategory?.id || null
+        }
+
+        if (!categoryId && classification === 'income' && ['cashback', 'asset_management'].includes(norm(description))) {
+          const { data: savingsCategory } = await supabase
+            .from('categories')
+            .select('id')
+            .is('user_id', null)
+            .eq('label', 'Ahorro')
+            .maybeSingle()
+          categoryId = savingsCategory?.id || null
+        }
+
+        if (!categoryId && (classification === 'expense' || classification === 'fee')) {
           const { data: inferred } = await supabase.rpc('infer_expense_category_id', { p_user_id: userId, p_description: merchant })
           categoryId = inferred || null
           if (categoryId) {
@@ -201,6 +234,8 @@ Deno.serve(async (req: Request) => {
             if (!cat || cat.label === 'Otros') reviewStatus = 'review_required'
           } else reviewStatus = 'review_required'
         }
+
+        if (categoryId && classification !== 'other') reviewStatus = 'verified'
 
         const { data: movement, error: movementError } = await supabase.from('mercadopago_movements').insert({
           user_id: userId, account_id: config.account_id, movement_key: movementKey, source_id: sourceId,
