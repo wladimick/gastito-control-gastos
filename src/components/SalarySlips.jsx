@@ -52,7 +52,7 @@ function Metric({ label, value, detail, tone = 'default' }) {
   </div>
 }
 
-export default function SalarySlips({ salarySlips = [] }) {
+export default function SalarySlips({ salarySlips = [], previsionalAccounts = [], afcContributions = [], afcSimulations = [] }) {
   const sorted = useMemo(() => [...salarySlips].sort((a, b) => salaryPeriodKey(b).localeCompare(salaryPeriodKey(a))), [salarySlips])
   const stats = useMemo(() => salaryStats(salarySlips), [salarySlips])
   const contributions = useMemo(() => salaryContributionStats(salarySlips), [salarySlips])
@@ -61,6 +61,16 @@ export default function SalarySlips({ salarySlips = [] }) {
   const nextCash = addSalaryMonths(currentCash, 1)
   const nextSalary = salaryForCashMonth(salarySlips, nextCash)
   const missing = useMemo(() => missingPeriods(salarySlips), [salarySlips])
+  const afp = previsionalAccounts.find(item => item.accountType === 'afp_mandatory')
+  const afc = previsionalAccounts.find(item => item.accountType === 'afc_cic')
+  const afcTotals = afcContributions.reduce((acc, item) => {
+    acc.worker += Number(item.workerContribution || 0)
+    acc.employer += Number(item.employerPersonalContribution || 0)
+    acc.total += Number(item.workerContribution || 0) + Number(item.employerPersonalContribution || 0)
+    return acc
+  }, { worker: 0, employer: 0, total: 0 })
+  const cicSimulation = afcSimulations.find(item => item.fundingType === 'CIC')
+  const fcsSimulation = afcSimulations.find(item => item.fundingType === 'FCS')
 
   return <div className="max-w-5xl mx-auto pb-20 flex flex-col gap-4">
     <div>
@@ -83,7 +93,35 @@ export default function SalarySlips({ salarySlips = [] }) {
     <Card padding="p-4">
       <div className="flex items-end justify-between gap-3 mb-3">
         <div>
-          <div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Previsión documentada</div>
+          <div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Patrimonio previsional</div>
+          <div className="text-[12px] font-semibold mt-0.5">Saldos y evidencia oficial</div>
+        </div>
+        <div className="text-[8.5px] text-[var(--muted)] text-right">AFP real · AFC por simulación</div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-4">
+        <Metric label="AFP UNO · obligatoria" value={fmtCLP(afp?.balance || 0)} detail={afp ? `Fondo ${afp.fundCode || '—'} ${afp.fundAllocationPercent || 0}% · ${afp.fundUnits || 0} cuotas` : 'Sin saldo registrado'} tone="blue"/>
+        <Metric label="AFC · CIC implícita" value={fmtCLP(afc?.balance || 0)} detail="Derivada de simulación oficial · no cartola directa"/>
+        <Metric label="AFC acreditado · 12 meses" value={fmtCLP(afcTotals.total)} detail={`Trabajador ${fmtCLP(afcTotals.worker)} · empleador CIC ${fmtCLP(afcTotals.employer)}`} tone="green"/>
+        <Metric label="Remuneración prom. AFC" value={fmtCLP(cicSimulation?.averageRemuneration || 0)} detail="Base usada por simulación 24/08/2026"/>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[9px]">
+        {cicSimulation && <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] p-3">
+          <div className="font-semibold">Simulación con CIC</div>
+          <div className="text-[var(--muted)] mt-1">Beneficios {fmtCLP(cicSimulation.totalBenefit)} · aporte AFP asociado {fmtCLP(cicSimulation.totalAfpContribution)}.</div>
+          <div className="text-[var(--muted)] mt-1">El último pago es residual; por eso Gastito usa el total como saldo CIC implícito, marcado como estimación.</div>
+        </div>}
+        {fcsSimulation && <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] p-3">
+          <div className="font-semibold">Escenario Fondo Solidario</div>
+          <div className="text-[var(--muted)] mt-1">Beneficios simulados {fmtCLP(fcsSimulation.totalBenefit)} · aporte AFP {fmtCLP(fcsSimulation.totalAfpContribution)}.</div>
+          <div className="text-[var(--muted)] mt-1">Es cobertura condicional; no se contabiliza como patrimonio actual.</div>
+        </div>}
+      </div>
+    </Card>
+
+    <Card padding="p-4">
+      <div className="flex items-end justify-between gap-3 mb-3">
+        <div>
+          <div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Previsión desde liquidaciones</div>
           <div className="text-[12px] font-semibold mt-0.5">{contributions.months} liquidaciones con detalle previsional</div>
         </div>
         <div className="text-[8.5px] text-[var(--muted)] text-right">No reemplaza cartola AFP/AFC</div>
