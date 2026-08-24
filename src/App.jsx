@@ -7,6 +7,10 @@ import Budgets from './components/Budgets'
 import Recurring from './components/Recurring'
 import Installments from './components/Installments'
 import Reports from './components/Reports'
+import SpendingInsights from './components/SpendingInsights'
+import EmploymentProfile from './components/EmploymentProfile'
+import SalaryWorkspace from './components/SalaryWorkspace'
+import PrevisionalOverview from './components/PrevisionalOverview'
 import Comparison from './components/Comparison'
 import UnparsedMessages from './components/UnparsedMessages'
 import TelegramSettings from './components/TelegramSettings'
@@ -695,6 +699,10 @@ export default function App() {
             billedStatements={billedStatements}
           />
         )}
+        {view === 'employment' && <EmploymentProfile/>}
+        {view === 'salary' && <SalaryWorkspace/>}
+        {view === 'previsional' && <PrevisionalOverview setView={navigate}/>}
+        {view === 'spending' && <SpendingInsights expenses={expenses} setView={navigate}/>}
         {view === 'expenses' && (
           <>
             {expensesSource === 'loading' && (
