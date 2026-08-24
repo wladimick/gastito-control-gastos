@@ -7,6 +7,8 @@ import {
   fetchMercadoPagoStatus,
   runMercadoPagoSync,
   setMercadoPagoEnabled,
+  fetchMercadoPagoCategories,
+  updateMercadoPagoMovementCategory,
 } from '../services/mercadoPagoService'
 
 const CLASS_LABEL = {
@@ -55,6 +57,8 @@ export default function MercadoPagoAdmin() {
   const [authReady, setAuthReady] = useState(false)
   const [status, setStatus] = useState(null)
   const [movements, setMovements] = useState([])
+  const [categories, setCategories] = useState([])
+  const [savingCategory, setSavingCategory] = useState('')
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState('')
@@ -72,12 +76,14 @@ export default function MercadoPagoAdmin() {
     if (!session) return
     setLoading(true)
     try {
-      const [nextStatus, nextMovements] = await Promise.all([
+      const [nextStatus, nextMovements, nextCategories] = await Promise.all([
         fetchMercadoPagoStatus(),
         fetchMercadoPagoMovements({ limit: 80 }),
+        fetchMercadoPagoCategories(),
       ])
       setStatus(nextStatus)
       setMovements(nextMovements)
+      setCategories(nextCategories)
     } catch (error) {
       setMessage(error?.message || 'No fue posible cargar Mercado Pago.')
     } finally {
@@ -106,6 +112,26 @@ export default function MercadoPagoAdmin() {
       setMessage(error?.message || 'Falló la sincronización.')
     } finally {
       setSyncing(false)
+    }
+  }
+
+
+  const changeCategory = async (item, categoryId) => {
+    if (!categoryId || categoryId === item.category?.id) return
+    setSavingCategory(item.id)
+    setMessage('')
+    try {
+      await updateMercadoPagoMovementCategory(item, categoryId)
+      const category = categories.find(entry => entry.id === categoryId) || null
+      setMovements(current => current.map(row => row.id === item.id
+        ? { ...row, category, review_status: 'verified' }
+        : row
+      ))
+      setMessage(`Categoría actualizada para ${item.merchant || item.description || 'movimiento'}. Gastito recordará esta regla para futuras sincronizaciones.`)
+    } catch (error) {
+      setMessage(error?.message || 'No fue posible actualizar la categoría.')
+    } finally {
+      setSavingCategory('')
     }
   }
 
@@ -194,7 +220,22 @@ export default function MercadoPagoAdmin() {
                       <span className="text-[8px] rounded-full bg-slate-100 px-1.5 py-0.5 text-slate-600">{CLASS_LABEL[item.classification] || item.classification}</span>
                       {item.review_status === 'review_required' && <span className="text-[8px] rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">Revisar</span>}
                     </div>
-                    <div className="mt-0.5 text-[8.5px] text-slate-500">{formatDate(item.occurred_at)}{item.category?.label ? ` · ${item.category.label}` : ''}</div>
+                    <div className="mt-0.5 text-[8.5px] text-slate-500">{formatDate(item.occurred_at)}</div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <select
+                        value={item.category?.id || ''}
+                        disabled={savingCategory === item.id}
+                        onChange={event => changeCategory(item, event.target.value)}
+                        className="h-8 max-w-[190px] rounded-lg border border-slate-200 bg-white px-2 text-[9px] font-medium text-slate-700 outline-none focus:ring-1 focus:ring-[#3483FA] disabled:opacity-50"
+                        aria-label={`Categoría de ${item.merchant || item.description || 'movimiento'}`}
+                      >
+                        <option value="">Sin categoría</option>
+                        {categories.map(category => (
+                          <option key={category.id} value={category.id}>{category.icon ? `${category.icon} ` : ''}{category.label}</option>
+                        ))}
+                      </select>
+                      {savingCategory === item.id && <span className="text-[8px] text-slate-400">Guardando…</span>}
+                    </div>
                   </div>
                   <div className={`font-mono text-[11px] font-bold ${isCredit ? 'text-emerald-700' : 'text-slate-900'}`}>{isCredit ? '+' : '−'}{fmtCLP(amount)}</div>
                 </div>
