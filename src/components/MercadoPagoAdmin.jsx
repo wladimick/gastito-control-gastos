@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fmtCLP } from '../lib/helpers'
 import FinancialBrand from './FinancialBrand'
+import { categoryLabel, uniqueCategoryOptions } from '../lib/categoryOptions'
 import {
   fetchMercadoPagoMovements,
   fetchMercadoPagoStatus,
@@ -52,6 +53,14 @@ function Kpi({ label, value, detail, accent = false }) {
   </div>
 }
 
+function movementLabel(item) {
+  const raw = String(item.merchant || item.description || '').trim()
+  if (/^asset_management$/i.test(raw)) return 'Movimiento de inversión'
+  if (/^cashback$/i.test(raw)) return 'Cashback'
+  if (/^\d+$/.test(raw)) return 'Transferencia recibida'
+  return raw || 'Movimiento de Mercado Pago'
+}
+
 export default function MercadoPagoAdmin() {
   const [session, setSession] = useState(null)
   const [authReady, setAuthReady] = useState(false)
@@ -59,6 +68,7 @@ export default function MercadoPagoAdmin() {
   const [movements, setMovements] = useState([])
   const [categories, setCategories] = useState([])
   const [savingCategory, setSavingCategory] = useState('')
+  const [editingCategory, setEditingCategory] = useState('')
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState('')
@@ -98,6 +108,7 @@ export default function MercadoPagoAdmin() {
     acc.out += Number(item.net_debit_amount || 0)
     return acc
   }, { in: 0, out: 0 }), [movements])
+  const categoryOptions = useMemo(() => uniqueCategoryOptions(categories), [categories])
 
   const syncNow = async () => {
     setSyncing(true)
@@ -127,6 +138,7 @@ export default function MercadoPagoAdmin() {
         ? { ...row, category, review_status: 'verified' }
         : row
       ))
+      setEditingCategory('')
       setMessage(`Categoría actualizada para ${item.merchant || item.description || 'movimiento'}. Gastito recordará esta regla para futuras sincronizaciones.`)
     } catch (error) {
       setMessage(error?.message || 'No fue posible actualizar la categoría.')
@@ -175,7 +187,7 @@ export default function MercadoPagoAdmin() {
           </div>
         </section>
 
-        {message && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-900">{message}</div>}
+        {message && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-900">{message}</div>}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Kpi label="Disponible" value={status?.last_balance == null ? '—' : fmtCLP(available)} detail={status?.last_balance_at ? `Actualizado ${formatDate(status.last_balance_at)}` : 'Esperando conciliación'} accent/>
@@ -184,9 +196,13 @@ export default function MercadoPagoAdmin() {
           <Kpi label="Por revisar" value={status?.reviewCount ?? 0} detail="Movimientos ambiguos"/>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-3.5 flex items-center justify-between gap-3">
+        <details className="rounded-2xl border border-slate-200 bg-white p-3.5 group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+            <div><div className="text-[11px] font-semibold">Sincronización automática</div><div className="text-[9px] text-slate-500 mt-0.5">Estado y configuración de Mercado Pago</div></div>
+            <span className="text-[10px] font-semibold text-slate-600 group-open:hidden">Ver detalle</span><span className="hidden text-[10px] font-semibold text-slate-600 group-open:inline">Ocultar</span>
+          </summary>
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
           <div>
-            <div className="text-[11px] font-semibold">Sincronización automática</div>
             <div className="text-[9px] text-slate-500 mt-0.5">Credencial {status?.credential_state === 'configured' ? 'configurada' : status?.credential_state === 'invalid' ? 'inválida' : 'pendiente'} · cron horario</div>
           </div>
           <button
@@ -195,7 +211,8 @@ export default function MercadoPagoAdmin() {
           >
             {status?.enabled ? 'Activada' : 'Desactivada'}
           </button>
-        </div>
+          </div>
+        </details>
 
         <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
           <div className="p-3.5 border-b border-slate-100 flex items-center justify-between gap-3">
@@ -205,8 +222,8 @@ export default function MercadoPagoAdmin() {
             </div>
             <div className="hidden sm:flex"><FinancialBrand brand="mercadopago" size="sm"/></div>
           </div>
-          {loading ? <div className="p-8 text-center text-[10px] text-slate-400">Cargando movimientos…</div> : movements.length === 0 ? (
-            <div className="p-8 text-center text-[10px] text-slate-400">Aún no hay movimientos importados.</div>
+          {loading ? <div className="p-8 text-center text-[10px] text-slate-400" aria-busy="true">Cargando movimientos…</div> : movements.length === 0 ? (
+            <div className="p-8 text-center"><div className="text-[11px] font-semibold text-slate-700">Aún no hay movimientos importados</div><div className="mt-1 text-[9.5px] text-slate-500">Sincroniza Mercado Pago para traer tus movimientos. Si ya lo hiciste, vuelve a intentarlo en unos minutos.</div><button type="button" onClick={syncNow} disabled={syncing} className={`${BTN} mt-4 bg-slate-900 text-white`}>{syncing ? 'Sincronizando…' : 'Sincronizar ahora'}</button></div>
           ) : (
             <div className="divide-y divide-slate-100">
               {movements.map(item => {
@@ -216,24 +233,27 @@ export default function MercadoPagoAdmin() {
                   <FinancialBrand brand="mercadopago" size="sm"/>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <div className="text-[10.5px] font-semibold truncate">{item.merchant || item.description || 'Mercado Pago'}</div>
+                      <div className="text-[10.5px] font-semibold truncate" title={item.merchant || item.description || undefined}>{movementLabel(item)}</div>
                       <span className="text-[8px] rounded-full bg-slate-100 px-1.5 py-0.5 text-slate-600">{CLASS_LABEL[item.classification] || item.classification}</span>
                       {item.review_status === 'review_required' && <span className="text-[8px] rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">Revisar</span>}
                     </div>
                     <div className="mt-0.5 text-[8.5px] text-slate-500">{formatDate(item.occurred_at)}</div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <select
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {editingCategory === item.id ? <select
+                        autoFocus
                         value={item.category?.id || ''}
                         disabled={savingCategory === item.id}
                         onChange={event => changeCategory(item, event.target.value)}
-                        className="h-8 max-w-[190px] rounded-lg border border-slate-200 bg-white px-2 text-[9px] font-medium text-slate-700 outline-none focus:ring-1 focus:ring-[#3483FA] disabled:opacity-50"
-                        aria-label={`Categoría de ${item.merchant || item.description || 'movimiento'}`}
+                        className="h-10 max-w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-medium text-slate-700 outline-none focus:ring-2 focus:ring-[#3483FA]/30 disabled:opacity-50"
+                        aria-label={`Categoría de ${movementLabel(item)}`}
                       >
                         <option value="">Sin categoría</option>
-                        {categories.map(category => (
-                          <option key={category.id} value={category.id}>{category.icon ? `${category.icon} ` : ''}{category.label}</option>
-                        ))}
-                      </select>
+                        {categoryOptions.map(category => <option key={category.id} value={category.id}>{category.icon ? `${category.icon} ` : ''}{categoryLabel(category)}</option>)}
+                      </select> : <>
+                        <span className="inline-flex h-7 items-center rounded-full bg-slate-100 px-2 text-[9px] font-semibold text-slate-700">{item.category ? `${item.category.icon || '•'} ${categoryLabel(item.category)}` : 'Sin categoría'}</span>
+                        <button type="button" onClick={() => setEditingCategory(item.id)} className="h-8 px-2 text-[9px] font-semibold text-[#3483FA] hover:underline">Cambiar categoría</button>
+                      </>}
+                      {editingCategory === item.id && <button type="button" onClick={() => setEditingCategory('')} className="h-8 px-2 text-[9px] font-semibold text-slate-500">Cancelar</button>}
                       {savingCategory === item.id && <span className="text-[8px] text-slate-400">Guardando…</span>}
                     </div>
                   </div>
@@ -244,7 +264,7 @@ export default function MercadoPagoAdmin() {
           )}
         </div>
 
-        {status?.last_error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-[9px] text-red-700"><strong>Último error:</strong> {status.last_error}</div>}
+        {status?.last_error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-800"><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="text-[10px] font-semibold">La última sincronización no terminó</div><div className="text-[9px] mt-0.5">Puedes intentar sincronizar nuevamente. Tus movimientos anteriores se conservan.</div></div><button type="button" onClick={syncNow} disabled={syncing} className={`${BTN} bg-red-700 text-white`}>{syncing ? 'Reintentando…' : 'Reintentar'}</button></div><details className="mt-2 text-[8.5px] text-red-700"><summary className="cursor-pointer underline">Ver detalle técnico</summary><div className="mt-1 break-words">{status.last_error}</div></details></div>}
       </div>
     </div>
   )

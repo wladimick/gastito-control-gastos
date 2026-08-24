@@ -83,7 +83,7 @@ export default function SalarySlips({ salarySlips = [], previsionalAccounts = []
     <div>
       <div className="text-[9.5px] uppercase tracking-[.13em] text-[var(--muted)] font-bold">Ingresos · Tibox</div>
       <h1 className="text-[21px] md:text-[22px] font-bold mt-1">Liquidaciones de sueldo</h1>
-      <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Gastito separa el período de la liquidación de la fecha bancaria en que realmente recibiste el dinero. Si aún no existe liquidación, la proyección usa el promedio de las últimas 3 disponibles.</p>
+      <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Aquí ves cuánto recibiste y cuándo llegó a tu cuenta. La proyección usa el promedio reciente solo si todavía no hay una liquidación real.</p>
     </div>
 
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -97,7 +97,13 @@ export default function SalarySlips({ salarySlips = [], previsionalAccounts = []
       <strong>Falta documentación:</strong> {missing.map(monthLabel).join(', ')}. Ese período no se inventa; queda ausente del historial y no se usa como valor real de liquidación.
     </div>}
 
-    <Card padding="p-4">
+    <Card padding="p-0" className="overflow-hidden">
+      <details className="group">
+        <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3">
+          <div><div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Patrimonio previsional</div><div className="text-[12px] font-semibold mt-0.5">Ver saldos y respaldo oficial</div></div>
+          <span className="text-[13px] text-[var(--muted)] group-open:rotate-45 transition-transform">+</span>
+        </summary>
+        <div className="border-t border-[var(--line)] p-4">
       <div className="flex items-end justify-between gap-3 mb-3">
         <div>
           <div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Patrimonio previsional</div>
@@ -128,9 +134,17 @@ export default function SalarySlips({ salarySlips = [], previsionalAccounts = []
           <div className="text-[var(--muted)] mt-1">Es cobertura condicional; no se contabiliza como patrimonio actual.</div>
         </div>}
       </div>
+        </div>
+      </details>
     </Card>
 
-    <Card padding="p-4">
+    <Card padding="p-0" className="overflow-hidden">
+      <details className="group">
+        <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3">
+          <div><div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Descuentos previsionales</div><div className="text-[12px] font-semibold mt-0.5">Ver cálculo desde liquidaciones</div></div>
+          <span className="text-[13px] text-[var(--muted)] group-open:rotate-45 transition-transform">+</span>
+        </summary>
+        <div className="border-t border-[var(--line)] p-4">
       <div className="flex items-end justify-between gap-3 mb-3">
         <div>
           <div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Previsión desde liquidaciones</div>
@@ -146,6 +160,8 @@ export default function SalarySlips({ salarySlips = [], previsionalAccounts = []
         <Metric label="CIC esperada documentada" value={fmtCLP(contributions.afcExpectedCic)} detail="0,6% trabajador + 1,6% empleador · sin rentabilidad"/>
         <Metric label="Fondo solidario" value={fmtCLP(contributions.afcEmployerFcs)} detail="0,8% empleador · no es saldo personal"/>
       </div>
+        </div>
+      </details>
     </Card>
 
     <Card padding="p-0" className="overflow-hidden">
@@ -162,10 +178,8 @@ export default function SalarySlips({ salarySlips = [], previsionalAccounts = []
               {item.actualPaymentDate && <Badge tone="info" className="!text-[8px] !px-1.5 !py-0.5">Abono verificado</Badge>}
               {item.overtimeAmount > 0 && <Badge tone="info" className="!text-[8px] !px-1.5 !py-0.5">Horas extra {fmtCLP(item.overtimeAmount)}</Badge>}
             </div>
-            <div className="text-[9px] text-[var(--muted)] mt-1">Haberes {fmtCLP(item.grossAmount)} · descuentos {fmtCLP(item.legalDeductions)} · base pagada {fmtCLP(item.baseSalaryPaid)}</div>
-            <div className="text-[8.5px] text-[var(--muted)] mt-1">{item.pensionProvider || 'AFP'} {item.pensionRatePercent ? `${item.pensionRatePercent}%` : ''} {fmtCLP(item.pensionAmount)} · {item.healthProvider || 'Salud'} {item.healthRatePercent ? `${item.healthRatePercent}%` : ''} {fmtCLP(item.healthAmount)} · AFC {fmtCLP(item.unemploymentAmount)}</div>
-            <div className="text-[8px] text-[var(--muted)] mt-0.5">Base prev./salud {fmtCLP(item.pensionHealthBase || item.grossAmount)} · base cesantía {fmtCLP(item.unemploymentBase || item.grossAmount)}{item.ufValue ? ` · UF ${item.ufValue.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}</div>
-            <div className="text-[8.5px] text-[var(--muted)] mt-1">{item.sourceFile || 'Liquidación'}{paymentEvidenceLabel(item)}</div>
+            <div className="text-[9px] text-[var(--muted)] mt-1">{item.sourceFile || 'Liquidación'}{paymentEvidenceLabel(item)}</div>
+            <details className="mt-2 text-[8.5px] text-[var(--muted)]"><summary className="cursor-pointer font-semibold underline">Ver desglose de haberes y descuentos</summary><div className="mt-2 leading-relaxed">Haberes {fmtCLP(item.grossAmount)} · descuentos {fmtCLP(item.legalDeductions)} · base pagada {fmtCLP(item.baseSalaryPaid)}<br/>{item.pensionProvider || 'AFP'} {item.pensionRatePercent ? `${item.pensionRatePercent}%` : ''} {fmtCLP(item.pensionAmount)} · {item.healthProvider || 'Salud'} {item.healthRatePercent ? `${item.healthRatePercent}%` : ''} {fmtCLP(item.healthAmount)} · AFC {fmtCLP(item.unemploymentAmount)}<br/>Base prev./salud {fmtCLP(item.pensionHealthBase || item.grossAmount)} · base cesantía {fmtCLP(item.unemploymentBase || item.grossAmount)}{item.ufValue ? ` · UF ${item.ufValue.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}</div></details>
           </div>
           <div className="font-mono text-[15px] font-bold whitespace-nowrap">{fmtCLP(item.netAmount)}</div>
         </div>)}

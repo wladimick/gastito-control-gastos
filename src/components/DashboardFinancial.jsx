@@ -66,6 +66,38 @@ function Metric({ label, value, detail, tone = 'default', onClick, info }) {
   )
 }
 
+function CashFlowSummary({ available, cards, bills, remaining, onClick }) {
+  const commitments = Math.max(0, cards) + Math.max(0, bills)
+  const base = Math.max(commitments, 1)
+  const cardWidth = Math.round((Math.max(0, cards) / base) * 100)
+  const billWidth = Math.max(0, 100 - cardWidth)
+
+  return (
+    <button type="button" onClick={onClick} className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4 text-left w-full hover:bg-[var(--hover)] transition focus:outline-none focus:ring-2 focus:ring-[var(--ink)]/15">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[9px] uppercase tracking-[.12em] text-[var(--muted)] font-bold">Próximos pagos</div>
+          <div className="text-[12px] font-semibold mt-0.5">Así se mueve tu dinero disponible</div>
+        </div>
+        <Icon name="trend" size={16}/>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-4 text-[9px]">
+        <div><div className="text-[var(--muted)]">Hoy</div><div className="font-mono text-[13px] font-bold mt-1">{fmtCLP(available)}</div></div>
+        <div><div className="text-[var(--muted)]">Por pagar</div><div className="font-mono text-[13px] font-bold mt-1">−{fmtCLP(commitments)}</div></div>
+        <div><div className="text-[var(--muted)]">Después</div><div className={`font-mono text-[13px] font-bold mt-1 ${remaining < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{fmtCLP(remaining)}</div></div>
+      </div>
+      {commitments > 0 && <div className="mt-3">
+        <div className="h-2 rounded-full overflow-hidden bg-[var(--soft)] flex" aria-label={`Próximos pagos: ${fmtCLP(cards)} en tarjetas y ${fmtCLP(bills)} en cuentas`}>
+          {cards > 0 && <span className="bg-violet-400" style={{ width: `${cardWidth}%` }}/>}
+          {bills > 0 && <span className="bg-amber-400" style={{ width: `${billWidth}%` }}/>}
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[8.5px] text-[var(--muted)]"><span>● Tarjetas {fmtCLP(cards)}</span><span>● Cuentas {fmtCLP(bills)}</span></div>
+      </div>}
+      <div className="text-[9px] font-semibold mt-3 underline">Abrir proyección</div>
+    </button>
+  )
+}
+
 function CycleRow({ cycle, card }) {
   const amount = billingCycleAmount(cycle)
   const attention = Number(cycle.reviewCount || 0) + Number(cycle.pendingCount || 0)
@@ -126,6 +158,7 @@ function isReservedPayable(item) {
 
 export default function DashboardFinancial({
   expenses = [],
+  dataState = 'ready',
   setView,
   recurring = [],
   income = [],
@@ -220,13 +253,24 @@ export default function DashboardFinancial({
 
   const openExternal = query => window.location.assign(`${window.location.pathname}${query}`)
 
+  if (dataState === 'loading') {
+    return (
+      <div className="flex flex-col gap-4 pb-20" aria-busy="true" aria-label="Cargando posición financiera">
+        <div className="space-y-2"><div className="h-3 w-28 rounded bg-[var(--soft)] animate-pulse"/><div className="h-7 w-52 rounded bg-[var(--soft)] animate-pulse"/><div className="h-3 w-full max-w-xl rounded bg-[var(--soft)] animate-pulse"/></div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[0, 1, 2, 3, 4, 5, 6, 7].map(item => <div key={item} className="h-[100px] rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] animate-pulse"/>)}</div>
+        <div className="grid lg:grid-cols-2 gap-4">{[0, 1].map(item => <div key={item} className="h-48 rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] animate-pulse"/>)}</div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4 pb-20">
+      {dataState === 'partial' && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-800">Algunos datos no pudieron actualizarse. Conservamos lo disponible y evitamos presentar ceros como resultado final.</div>}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <div className="text-[9.5px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Tu posición hoy</div>
           <h1 className="text-[21px] md:text-[22px] font-bold tracking-tight mt-1">Dashboard</h1>
-          <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Dinero libre, reservas, cobros, tarjetas y fuentes sincronizadas. Los USD de PayPal se mantienen separados hasta retirarlos.</p>
+          <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Primero: cuánto puedes usar hoy y qué pagos ya vienen. Los USD de PayPal se mantienen separados hasta retirarlos.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex">
           <button type="button" onClick={loadDashboard} className={`${HEADER_BTN} min-w-[112px] border border-[var(--line)] bg-[var(--bg-elev)] hover:bg-[var(--hover)]`}><Icon name="refresh" size={12}/>Actualizar</button>
@@ -243,19 +287,27 @@ export default function DashboardFinancial({
         {totalAttention > 0 && <span>· {totalAttention} movimientos de tarjeta por revisar</span>}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Metric label="Saldo total" value={fmtCLP(totalAccountBalance)} detail={`${activeAccounts.length} cuentas · incluye dinero reservado`} onClick={() => setView?.('accounts')}/>
-        <Metric label="Reserva real" value={fmtCLP(reservedCommitments)} detail={reservedPayables.length ? reservedPayables.map(item => item.personName || item.person_name || item.name).join(', ') : 'Sin dinero reservado'} tone={reservedCommitments ? 'violet' : 'default'} onClick={() => setView?.('accounts')}/>
-        <Metric label="Dinero libre" value={fmtCLP(freeBalance)} detail="Saldo total menos reservas comprometidas" tone="dark" onClick={() => setView?.('accounts')}/>
-        <Metric label="Libre tras próximos pagos" value={fmtCLP(freeAfterNearTerm)} detail="Resta tarjetas del próximo mes y cuentas por pagar ya conocidas" tone={freeAfterNearTerm < 0 ? 'danger' : 'green'} onClick={() => setView?.('projection')}/>
+      <div className="grid md:grid-cols-[.8fr_1.2fr] gap-3">
+        <Metric label="Dinero disponible hoy" value={fmtCLP(freeBalance)} detail="Saldo total menos reservas comprometidas" tone="dark" onClick={() => setView?.('accounts')}/>
+        <CashFlowSummary available={freeBalance} cards={nextCardPayment} bills={upcomingBillsTotal} remaining={freeAfterNearTerm} onClick={() => setView?.('projection')}/>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Metric label="Tarjetas · próximo mes" value={loadingCycles ? '…' : fmtCLP(nextCardPayment)} detail={nextDueDetail} onClick={() => setView?.('billing')}/>
-        <Metric label="Cuentas próximas" value={fmtCLP(upcomingBillsTotal)} detail={upcomingBills.length ? upcomingBills.map(item => item.name).join(' · ') : 'Sin cuentas pendientes'} onClick={() => setView?.('recurring')}/>
-        <Metric label="Por cobrar" value={fmtCLP(receivablePending)} detail="Préstamos, cuentas compartidas y otros cobros" onClick={() => openExternal('?me-deben=1')}/>
-        <Metric label="Ingresos mensuales" value={fmtCLP(recurringIncome)} detail="No incluye Shopify/PayPal ni cobros pendientes" onClick={() => setView?.('recurring')}/>
-      </div>
+      <details className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] group">
+        <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 text-[11px] font-semibold">
+          <span>Ver saldos, reservas y compromisos</span>
+          <span className="text-[9px] text-[var(--muted)] group-open:hidden">{fmtCLP(totalAccountBalance)} en cuentas</span>
+          <span className="text-[13px] text-[var(--muted)] group-open:rotate-45 transition-transform">+</span>
+        </summary>
+        <div className="border-t border-[var(--line)] p-3 grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <Metric label="Saldo total" value={fmtCLP(totalAccountBalance)} detail={`${activeAccounts.length} cuentas · incluye dinero reservado`} onClick={() => setView?.('accounts')}/>
+          <Metric label="Reserva real" value={fmtCLP(reservedCommitments)} detail={reservedPayables.length ? reservedPayables.map(item => item.personName || item.person_name || item.name).join(', ') : 'Sin dinero reservado'} tone={reservedCommitments ? 'violet' : 'default'} onClick={() => setView?.('accounts')}/>
+          <Metric label="Después de próximos pagos" value={fmtCLP(freeAfterNearTerm)} detail="Tarjetas y cuentas por pagar ya conocidas" tone={freeAfterNearTerm < 0 ? 'danger' : 'green'} onClick={() => setView?.('projection')}/>
+          <Metric label="Tarjetas próximas" value={loadingCycles ? '…' : fmtCLP(nextCardPayment)} detail={nextDueDetail} onClick={() => setView?.('billing')}/>
+          <Metric label="Cuentas próximas" value={fmtCLP(upcomingBillsTotal)} detail={upcomingBills.length ? upcomingBills.map(item => item.name).join(' · ') : 'Sin cuentas pendientes'} onClick={() => setView?.('recurring')}/>
+          <Metric label="Por cobrar" value={fmtCLP(receivablePending)} detail="Préstamos, cuentas compartidas y otros cobros" onClick={() => openExternal('?me-deben=1')}/>
+          <Metric label="Ingresos mensuales" value={fmtCLP(recurringIncome)} detail="No incluye Shopify/PayPal ni cobros pendientes" onClick={() => setView?.('recurring')}/>
+        </div>
+      </details>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-4">
         <Card padding="p-0" className="overflow-hidden">

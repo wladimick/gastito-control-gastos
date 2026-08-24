@@ -168,7 +168,7 @@ export function IconBtn({ name, label, onClick, tone = 'ghost', title }) {
   }
   return (
     <button type="button" onClick={onClick} title={title || label} aria-label={label}
-      className={`w-8 h-8 grid place-items-center rounded-lg transition-colors ${tones[tone]}`}>
+      className={`w-11 h-11 grid place-items-center rounded-xl transition-colors ${tones[tone]}`}>
       <Icon name={name} size={14}/>
     </button>
   )

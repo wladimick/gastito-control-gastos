@@ -41,14 +41,13 @@ export default function PrevisionalOverview({ setView }) {
     <div>
       <div className="text-[9.5px] uppercase tracking-[.13em] text-[var(--muted)] font-bold">Patrimonio</div>
       <h2 className="text-[21px] md:text-[24px] font-bold mt-1">Previsión</h2>
-      <p className="text-[10px] text-[var(--muted)] mt-1">Saldos previsionales separados del dinero líquido. AFP es saldo real; AFC queda marcada como estimación cuando proviene de simulación.</p>
+      <p className="text-[10px] text-[var(--muted)] mt-1">Este patrimonio no está disponible para pagar gastos hoy. AFP es saldo real; AFC queda marcada como estimación cuando proviene de simulación.</p>
     </div>
 
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
       <Metric label="Patrimonio previsional" value={fmtCLP(total)} detail="AFP real + CIC implícita"/>
       <Metric label="AFP UNO" value={fmtCLP(afp?.balance || 0)} detail={`Fondo ${afp?.fundCode || '—'} · ${afp?.fundUnits || 0} cuotas`} tone="blue"/>
       <Metric label="AFC · CIC" value={fmtCLP(afc?.balance || 0)} detail="Implícita por simulación oficial"/>
-      <Metric label="Aportes 12 meses" value={fmtCLP(afp12 + afc12)} detail={`AFP ${fmtCLP(afp12)} · AFC ${fmtCLP(afc12)}`} tone="green"/>
     </div>
 
     <div className="grid md:grid-cols-2 gap-3">
@@ -64,21 +63,23 @@ export default function PrevisionalOverview({ setView }) {
             <div className="text-[9px] text-[var(--muted)] mt-1">{afp?.fundUnits || 0} cuotas acumuladas</div>
           </div>
         </div>
-        {latestAfp && <div className="mt-4 rounded-xl bg-[var(--hover)] p-3 text-[9px] text-[var(--muted)]">
-          Último aporte certificado: {fmtCLP(latestAfp.creditedAmount)} · {latestAfp.fundUnits} cuotas · valor cuota {fmtCLP(latestAfp.unitValue)}.
-        </div>}
       </Card>
 
       <Card padding="p-4">
         <div className="text-[9px] uppercase tracking-[.12em] text-[var(--muted)] font-bold">Seguro de Cesantía</div>
         <div className="mt-3 font-mono text-[22px] font-bold">{fmtCLP(afc?.balance || 0)}</div>
         <div className="text-[9px] text-[var(--muted)] mt-1">Saldo CIC implícito; no es cartola directa.</div>
-        <div className="mt-4 grid grid-cols-2 gap-3 text-[9px]">
-          <div><div className="text-[var(--muted)]">Acreditado 12 meses</div><div className="font-semibold mt-1">{fmtCLP(afc12)}</div></div>
-          <div><div className="text-[var(--muted)]">Simulación CIC</div><div className="font-semibold mt-1">{fmtCLP(cic?.totalBenefit || 0)}</div></div>
-        </div>
       </Card>
     </div>
+
+    <details className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] group">
+      <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 text-[11px] font-semibold"><span>Ver aportes y respaldo</span><span className="text-[13px] text-[var(--muted)] group-open:rotate-45 transition-transform">+</span></summary>
+      <div className="border-t border-[var(--line)] p-3 grid grid-cols-2 gap-3">
+        <Metric label="Aportes 12 meses" value={fmtCLP(afp12 + afc12)} detail={`AFP ${fmtCLP(afp12)} · AFC ${fmtCLP(afc12)}`} tone="green"/>
+        <Metric label="Simulación CIC" value={fmtCLP(cic?.totalBenefit || 0)} detail="Referencia oficial; no es una cartola directa"/>
+        {latestAfp && <div className="col-span-2 rounded-xl bg-[var(--hover)] p-3 text-[9px] text-[var(--muted)]">Último aporte certificado: {fmtCLP(latestAfp.creditedAmount)} · {latestAfp.fundUnits} cuotas · valor cuota {fmtCLP(latestAfp.unitValue)}.</div>}
+      </div>
+    </details>
 
     <div className="flex justify-end">
       <button type="button" onClick={() => setView?.('salary')} className="h-9 rounded-xl bg-[var(--ink)] text-[var(--bg)] px-3 text-[10px] font-semibold">Ver liquidaciones y detalle</button>

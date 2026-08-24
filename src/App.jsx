@@ -1,27 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { Suspense, lazy, useState, useEffect } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
-import ExpensesList from './components/ExpensesList'
 import ExpenseModal from './components/ExpenseModal'
-import Budgets from './components/Budgets'
-import Recurring from './components/Recurring'
-import Installments from './components/Installments'
-import Reports from './components/Reports'
-import SpendingInsights from './components/SpendingInsights'
-import EmploymentProfile from './components/EmploymentProfile'
-import SalaryWorkspace from './components/SalaryWorkspace'
-import PrevisionalOverview from './components/PrevisionalOverview'
-import Comparison from './components/Comparison'
-import UnparsedMessages from './components/UnparsedMessages'
-import TelegramSettings from './components/TelegramSettings'
-import Audit from './components/Audit'
-import AdminPanel from './components/AdminPanel'
-import UserProfile from './components/UserProfile'
-import Savings from './components/Savings'
-import Accounts from './components/Accounts'
-import Projection from './components/Projection'
-import Reimbursements from './components/Reimbursements'
-import Billing from './components/Billing'
 import BotChat from './components/BotChat'
 import { Icon } from './lib/helpers'
 import {
@@ -49,7 +29,32 @@ import { getBilledStatements, upsertBilledStatement, deleteBilledStatement } fro
 import { fetchReimbursements, createReimbursement, updateReimbursement, patchReimbursement, removeReimbursement, reimbursementToReceivable } from './services/reimbursementsService'
 import Login, { NewPasswordForm } from './components/Login'
 
+const ExpensesList = lazy(() => import('./components/ExpensesList'))
+const Budgets = lazy(() => import('./components/Budgets'))
+const Recurring = lazy(() => import('./components/Recurring'))
+const Installments = lazy(() => import('./components/Installments'))
+const Reports = lazy(() => import('./components/Reports'))
+const SpendingInsights = lazy(() => import('./components/SpendingInsights'))
+const EmploymentProfile = lazy(() => import('./components/EmploymentProfile'))
+const SalaryWorkspace = lazy(() => import('./components/SalaryWorkspace'))
+const PrevisionalOverview = lazy(() => import('./components/PrevisionalOverview'))
+const Comparison = lazy(() => import('./components/Comparison'))
+const UnparsedMessages = lazy(() => import('./components/UnparsedMessages'))
+const TelegramSettings = lazy(() => import('./components/TelegramSettings'))
+const Audit = lazy(() => import('./components/Audit'))
+const AdminPanel = lazy(() => import('./components/AdminPanel'))
+const UserProfile = lazy(() => import('./components/UserProfile'))
+const Savings = lazy(() => import('./components/Savings'))
+const Accounts = lazy(() => import('./components/Accounts'))
+const Projection = lazy(() => import('./components/Projection'))
+const Reimbursements = lazy(() => import('./components/Reimbursements'))
+const Billing = lazy(() => import('./components/Billing'))
+
 const IS_REAL = isConfigured
+
+function ViewLoading() {
+  return <div className="min-h-[240px] grid place-items-center" role="status" aria-live="polite"><div className="flex items-center gap-3 text-[11px] text-[var(--muted)]"><div className="w-5 h-5 rounded-full border-2 border-[var(--line)] border-t-[var(--ink)] animate-spin"/><span>Abriendo sección…</span></div></div>
+}
 
 export default function App() {
   // ── Auth ────────────────────────────────────────────────────
@@ -122,30 +127,10 @@ export default function App() {
   // ── Recurring ───────────────────────────────────────────────
   const [recurringList, setRecurringList] = useState(IS_REAL ? [] : RECURRING)
 
-  useEffect(() => {
-    if (!IS_REAL || !session) return
-    fetchRecurring()
-      .then(data => { if (data) setRecurringList(data) })
-      .catch(err  => console.error('fetchRecurring:', err))
-  }, [session])
-
   // ── Income / Receivables / Payables ─────────────────────────
   const [incomeList,      setIncomeList]      = useState([])
   const [receivablesList, setReceivablesList] = useState([])
   const [payablesList,    setPayablesList]    = useState([])
-
-  useEffect(() => {
-    if (!IS_REAL || !session) return
-    fetchIncome()
-      .then(data => { if (data) setIncomeList(data) })
-      .catch(err  => console.error('fetchIncome:', err))
-    fetchReceivables()
-      .then(data => { if (data) setReceivablesList(data) })
-      .catch(err  => console.error('fetchReceivables:', err))
-    fetchPayables()
-      .then(data => { if (data) setPayablesList(data) })
-      .catch(err  => console.error('fetchPayables:', err))
-  }, [session])
 
   // ── Company reimbursements ───────────────────────────────────
   const [reimbursements, setReimbursements] = useState([])
@@ -215,15 +200,31 @@ export default function App() {
   // ── Accounts & Credit Cards ──────────────────────────────────
   const [accounts,    setAccounts]    = useState([])
   const [creditCards, setCreditCards] = useState([])
+  const [financialSnapshotState, setFinancialSnapshotState] = useState(IS_REAL ? 'loading' : 'ready')
 
   useEffect(() => {
     if (!IS_REAL || !session) return
-    fetchAccounts()
-      .then(data => setAccounts(data))
-      .catch(err  => console.error('fetchAccounts:', err))
-    fetchMyCards()
-      .then(data => setCreditCards(data))
-      .catch(err  => console.error('fetchMyCards:', err))
+    let cancelled = false
+    setFinancialSnapshotState('loading')
+    Promise.allSettled([
+      fetchRecurring(),
+      fetchIncome(),
+      fetchReceivables(),
+      fetchPayables(),
+      fetchAccounts(),
+      fetchMyCards(),
+    ]).then(results => {
+      if (cancelled) return
+      const [recurringResult, incomeResult, receivablesResult, payablesResult, accountsResult, cardsResult] = results
+      if (recurringResult.status === 'fulfilled') setRecurringList(recurringResult.value || [])
+      if (incomeResult.status === 'fulfilled') setIncomeList(incomeResult.value || [])
+      if (receivablesResult.status === 'fulfilled') setReceivablesList(receivablesResult.value || [])
+      if (payablesResult.status === 'fulfilled') setPayablesList(payablesResult.value || [])
+      if (accountsResult.status === 'fulfilled') setAccounts(accountsResult.value || [])
+      if (cardsResult.status === 'fulfilled') setCreditCards(cardsResult.value || [])
+      setFinancialSnapshotState(results.some(result => result.status === 'rejected') ? 'partial' : 'ready')
+    })
+    return () => { cancelled = true }
   }, [session])
 
   const onCreateAccount = async (a) => {
@@ -681,6 +682,7 @@ export default function App() {
               isSuperAdmin={userRole === 'super_admin'}
               unparsedCount={unparsed.length}
               reimbursementCount={openReimbursements}>
+        <Suspense fallback={<ViewLoading/>}>
         {view === 'dashboard' && (
           <Dashboard
             expenses={expenses}
@@ -697,12 +699,13 @@ export default function App() {
             creditCards={creditCards}
             userSettings={userSettings}
             billedStatements={billedStatements}
+            dataState={expensesSource === 'loading' || financialSnapshotState === 'loading' ? 'loading' : financialSnapshotState}
           />
         )}
         {view === 'employment' && <EmploymentProfile/>}
         {view === 'salary' && <SalaryWorkspace/>}
         {view === 'previsional' && <PrevisionalOverview setView={navigate}/>}
-        {view === 'spending' && <SpendingInsights expenses={expenses} setView={navigate}/>}
+        {view === 'spending' && <SpendingInsights expenses={expenses} setView={navigate} dataState={expensesSource}/>}
         {view === 'expenses' && (
           <>
             {expensesSource === 'loading' && (
@@ -801,6 +804,7 @@ export default function App() {
           receivables={combinedReceivables}
           payables={payablesList}
           userSettings={userSettings}
+          dataState={expensesSource}
         />}
         {view === 'projection' && (
           <Projection
@@ -846,6 +850,7 @@ export default function App() {
         {view === 'admin' && userRole === 'super_admin' && IS_REAL && session && (
           <AdminPanel adminUserId={session.user.id}/>
         )}
+        </Suspense>
       </Layout>
 
       {editing && (

@@ -268,7 +268,7 @@ export default function ReceivablesAdmin() {
 
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <button onClick={() => setExpandedItem(expanded ? null : item.id)} className="text-[8.8px] font-semibold text-slate-600 underline underline-offset-2">{expanded ? 'Ocultar detalle' : 'Ver más detalle'}</button>
-                  {!expanded && item.status !== 'paid' && <div className="text-[8px] text-slate-400">Acciones dentro del detalle</div>}
+                  {!expanded && item.status !== 'paid' && <div className="text-[8px] text-slate-400">Acciones disponibles al abrir</div>}
                 </div>
 
                 {expanded && <div className="mt-2.5 rounded-xl bg-slate-50 border border-slate-100 p-3">

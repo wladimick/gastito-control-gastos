@@ -283,7 +283,7 @@ export default function Reimbursements({ items, expenses, onCreate, onUpdate, on
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-[12px]">{item.title}</span><Badge tone={meta.tone}>{meta.label}</Badge>{isOverdue && <Badge tone="warn">Fuera de plazo</Badge>}</div>
                   <div className="mt-1 text-[10px] text-[var(--muted)]">{item.company} · gasto {formatDate(item.expenseDate)}{item.submissionDueDate ? ` · rendir antes del ${formatDate(item.submissionDueDate)}` : ''}</div>
-                  {item.notes && <div className="mt-1 text-[10px] text-[var(--ink-2)] line-clamp-1">{item.notes}</div>}
+                  {item.notes && <details className="mt-1.5 text-[10px] text-[var(--ink-2)]"><summary className="cursor-pointer font-semibold text-[var(--muted)]">Ver detalle del origen</summary><div className="mt-1 leading-relaxed">{item.notes}</div></details>}
                 </div>
               </div>
               <div className="flex items-center justify-between lg:justify-end gap-3 lg:min-w-[390px]">

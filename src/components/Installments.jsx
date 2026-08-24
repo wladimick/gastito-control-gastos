@@ -4,6 +4,7 @@ import { useBanks } from '../services/banksService'
 import { useCategories } from '../services/categoriesService'
 import { Badge, Card } from './ui'
 import { CATEGORIES } from '../data'
+import { categoryLabel, uniqueCategoryOptions } from '../lib/categoryOptions'
 
 const FALLBACK_CATEGORY = { id: 'otros', label: 'Otros', icon: '•', color: '#888880' }
 const BLANK = {
@@ -162,7 +163,7 @@ function InstallmentForm({ initial, categories, banks, onSave, onCancel }) {
       <Field label="Valor de cuota"><input inputMode="numeric" value={form.monthlyAmount ?? ''} onChange={event => set('monthlyAmount', event.target.value)} className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] font-mono"/></Field>
       <Field label="Cuotas pagadas"><input type="number" min="0" max={form.installments || 1} value={form.paid || 0} onChange={event => set('paid', Number(event.target.value))} className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] font-mono"/></Field>
       <Field label="Banco"><select value={form.bank || 'bchile'} onChange={event => set('bank', event.target.value)} className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[10px]">{banks.map(bank => <option key={bank.id} value={bank.id}>{bank.label}</option>)}</select></Field>
-      <Field label="Categoría"><select value={form.category || 'otros'} onChange={event => set('category', event.target.value)} className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[10px]">{categories.map(category => <option key={category.id} value={category.id}>{category.icon} {category.label}</option>)}</select></Field>
+      <Field label="Categoría"><select value={form.category || 'otros'} onChange={event => set('category', event.target.value)} className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[10px]">{uniqueCategoryOptions(categories).map(category => <option key={category.id} value={category.id}>{category.icon} {categoryLabel(category)}</option>)}</select></Field>
       <Field label="Mes de inicio"><input type="month" value={form.startMonth || currentMonthKey()} onChange={event => set('startMonth', event.target.value)} className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[10px]"/></Field>
       <Field label="Día de cobro"><input type="number" min="1" max="31" value={form.dayOfMonth || 5} onChange={event => set('dayOfMonth', Number(event.target.value))} className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] font-mono"/></Field>
       <label className="col-span-2 flex items-center gap-2 text-[10px] text-[var(--muted)]"><input type="checkbox" checked={Boolean(form.autoPay)} onChange={event => set('autoPay', event.target.checked)}/>Avanzar cuotas pagadas automáticamente después del día de cobro.</label>

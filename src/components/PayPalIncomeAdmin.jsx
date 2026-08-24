@@ -77,13 +77,13 @@ export default function PayPalIncomeAdmin() {
             </div>
           </div>
           <div className="flex gap-2">
-            <a href="/" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-semibold">Volver</a>
-            <button onClick={load} className="rounded-xl bg-[#003087] px-3 py-2 text-[10px] font-semibold text-white">Actualizar</button>
+            <a href="/" className="h-10 inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold">Volver</a>
+            <button onClick={load} disabled={loading} className="h-10 rounded-xl bg-[#003087] px-3 text-[10px] font-semibold text-white disabled:opacity-50">{loading ? 'Actualizando…' : 'Actualizar'}</button>
           </div>
         </div>
       </section>
 
-      {message && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-900">{message}</div>}
+      {message && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-900"><div>No fue posible actualizar Shopify / PayPal.</div><button type="button" onClick={load} className="mt-2 font-semibold underline">Reintentar</button></div>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Saldo PayPal" value={source ? money(source.current_balance, source.currency) : '—'} detail="Saldo visible informado" dark/>
@@ -92,17 +92,17 @@ export default function PayPalIncomeAdmin() {
         <Kpi label="Retirado a CLP" value={fmtCLP(stats.withdrawnClp)} detail="Retiros históricos visibles"/>
       </div>
 
-      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3.5">
-        <div className="flex items-center gap-2"><FinancialBrand brand="paypal" size="sm"/><div className="text-[10.5px] font-semibold text-blue-950">Integración manual por ahora</div></div>
-        <div className="mt-1.5 text-[9px] leading-relaxed text-blue-800">Gastito conserva el calendario y el historial. Cuando conectemos la API de PayPal, esta misma vista actualizará saldo, pagos Shopify y retiros automáticamente.</div>
-      </div>
+      <details className="rounded-2xl border border-blue-200 bg-blue-50 p-3.5 group">
+        <summary className="cursor-pointer list-none flex items-center justify-between gap-3"><span className="flex items-center gap-2"><FinancialBrand brand="paypal" size="sm"/><span className="text-[10.5px] font-semibold text-blue-950">Esta fuente se actualiza manualmente</span></span><span className="text-[13px] text-blue-800 group-open:rotate-45 transition-transform">+</span></summary>
+        <div className="mt-2 text-[9px] leading-relaxed text-blue-800">Gastito conserva el calendario y el historial. Cuando conectemos la API de PayPal, esta vista podrá actualizar saldo, pagos Shopify y retiros automáticamente.</div>
+      </details>
 
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div className="p-3.5 border-b border-slate-100 flex items-center justify-between gap-3">
           <div><div className="text-[11.5px] font-semibold">Historial conocido</div><div className="text-[8.5px] text-slate-500 mt-0.5">Pagos y retiros registrados en Gastito.</div></div>
           <div className="flex gap-1.5"><FinancialBrand brand="shopify" size="sm"/><FinancialBrand brand="paypal" size="sm"/></div>
         </div>
-        {loading ? <div className="p-8 text-center text-[10px] text-slate-400">Cargando…</div> : events.length ? <div className="divide-y divide-slate-100">{events.map(event => <div key={event.id} className="px-3.5 py-3 flex items-start justify-between gap-4"><div className="min-w-0 flex items-start gap-2.5"><FinancialBrand brand={event.event_type === 'received' ? 'shopify' : 'paypal'} size="sm"/><div className="min-w-0"><div className="text-[10.5px] font-semibold truncate">{event.description || (event.event_type === 'received' ? 'Ingreso' : 'Retiro')}</div><div className="mt-0.5 text-[8.5px] text-slate-500">{shortDate(event.occurred_at)}{event.destination ? ` · ${event.destination}` : ''}</div></div></div><div className={`font-mono text-[11px] font-bold whitespace-nowrap ${event.event_type === 'received' ? 'text-emerald-700' : 'text-slate-900'}`}>{event.event_type === 'received' ? '+' : '−'}{money(event.amount, event.currency)}</div></div>)}</div> : <div className="p-8 text-center text-[10px] text-slate-400">Sin movimientos registrados.</div>}
+        {loading ? <div className="p-8 text-center text-[10px] text-slate-400" aria-busy="true">Cargando…</div> : events.length ? <div className="divide-y divide-slate-100">{events.map(event => <div key={event.id} className="px-3.5 py-3 flex items-start justify-between gap-4"><div className="min-w-0 flex items-start gap-2.5"><FinancialBrand brand={event.event_type === 'received' ? 'shopify' : 'paypal'} size="sm"/><div className="min-w-0"><div className="text-[10.5px] font-semibold truncate">{event.description || (event.event_type === 'received' ? 'Ingreso' : 'Retiro')}</div><div className="mt-0.5 text-[8.5px] text-slate-500">{shortDate(event.occurred_at)}{event.destination ? ` · ${event.destination}` : ''}</div></div></div><div className={`font-mono text-[11px] font-bold whitespace-nowrap ${event.event_type === 'received' ? 'text-emerald-700' : 'text-slate-900'}`}>{event.event_type === 'received' ? '+' : '−'}{money(event.amount, event.currency)}</div></div>)}</div> : <div className="p-8 text-center"><div className="text-[11px] font-semibold text-slate-700">Aún no hay pagos ni retiros registrados</div><div className="mt-1 text-[9.5px] text-slate-500">Registra el próximo evento para que esta fuente aparezca en tus reportes.</div></div>}
       </div>
     </div>
   </div>

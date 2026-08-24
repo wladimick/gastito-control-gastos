@@ -196,7 +196,7 @@ function downloadCSV(rows) {
   URL.revokeObjectURL(url)
 }
 
-export default function SpendingInsights({ expenses = [], setView }) {
+export default function SpendingInsights({ expenses = [], setView, dataState = 'ready' }) {
   const today = chileDate()
   const [dateFrom, setDateFrom] = useState(() => firstDayMonthsAgo(5))
   const [dateTo, setDateTo] = useState(() => chileDate())
@@ -260,7 +260,10 @@ export default function SpendingInsights({ expenses = [], setView }) {
   const maxCategory = categoryRows[0]?.amount || 1
   const maxSource = sourceRows[0]?.amount || 1
   const maxMerchant = merchantRows[0]?.amount || 1
-  const activeFilters = [source !== 'all', category !== 'all', merchant !== 'all'].filter(Boolean).length
+  const activeFilters = [
+    dateFrom !== firstDayMonthsAgo(5), dateTo !== today,
+    source !== 'all', category !== 'all', merchant !== 'all',
+  ].filter(Boolean).length
 
   const applyRange = range => {
     if (range === 'month') setDateFrom(today.slice(0, 7) + '-01')
@@ -282,12 +285,24 @@ export default function SpendingInsights({ expenses = [], setView }) {
     setMerchant('all')
   }
 
+  if (dataState === 'loading') {
+    return <div className="max-w-7xl mx-auto space-y-4 pb-20" aria-busy="true" aria-label="Cargando reporte de gastos">
+      <div className="h-24 rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] animate-pulse"/>
+      <div className="h-32 rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] animate-pulse"/>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[0, 1, 2, 3].map(item => <div key={item} className="h-24 rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] animate-pulse"/>)}</div>
+    </div>
+  }
+
+  if (dataState === 'error') {
+    return <div className="max-w-7xl mx-auto rounded-2xl border border-red-200 bg-red-50 p-6 text-center"><div className="text-[13px] font-semibold text-red-800">No fue posible cargar el reporte</div><p className="mt-1 text-[10.5px] text-red-700">Intenta actualizar los movimientos antes de revisar tus gastos.</p><button type="button" onClick={() => setView?.('expenses')} className="mt-4 h-9 rounded-xl bg-[var(--ink)] px-3 text-[10px] font-semibold text-[var(--bg)]">Ir a gastos</button></div>
+  }
+
   return <div className="max-w-7xl mx-auto space-y-4 pb-20">
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
       <div>
         <div className="text-[9.5px] uppercase tracking-[.13em] text-[var(--muted)] font-bold">Flujo · Inteligencia de gasto</div>
-        <h2 className="text-[21px] md:text-[25px] font-bold mt-1">Reporte de gastos</h2>
-        <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Vista interactiva sobre consumo conciliado de Mercado Pago y tarjetas. Todos los gráficos comparten los mismos filtros.</p>
+        <h1 className="text-[21px] md:text-[25px] font-bold mt-1">Reporte de gastos</h1>
+        <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Una sola lectura de tus compras conciliadas. Al seleccionar una categoría, fuente o comercio, todos los gráficos se actualizan.</p>
       </div>
       <div className="flex gap-2">
         <button type="button" onClick={() => downloadCSV(filtered)} disabled={!filtered.length} className="h-9 rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] px-3 text-[10px] font-semibold disabled:opacity-40">Exportar CSV</button>
@@ -304,7 +319,9 @@ export default function SpendingInsights({ expenses = [], setView }) {
         {activeFilters > 0 && <button type="button" onClick={clearFilters} className="h-7 rounded-lg bg-[var(--amber-soft)] text-[var(--amber-ink)] px-2.5 text-[9px] font-semibold">Limpiar · {activeFilters}</button>}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5">
+      <details className="group rounded-xl border border-[var(--line)] bg-[var(--bg)]">
+        <summary className="cursor-pointer list-none px-3 py-2.5 flex items-center justify-between gap-3 text-[10px] font-semibold"><span>Filtros avanzados</span><span className="text-[var(--muted)] group-open:hidden">Fuente, categoría y comercio</span><span className="text-[13px] text-[var(--muted)] group-open:rotate-45 transition-transform">+</span></summary>
+        <div className="border-t border-[var(--line)] p-3 grid grid-cols-2 lg:grid-cols-5 gap-2.5">
         <label className="text-[8.5px] text-[var(--muted)]">Desde
           <input type="date" value={dateFrom} max={dateTo || today} onChange={e => setDateFrom(e.target.value)} className="mt-1 w-full h-9 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-2 text-[10px] text-[var(--ink)]"/>
         </label>
@@ -329,8 +346,11 @@ export default function SpendingInsights({ expenses = [], setView }) {
             {merchantOptions.map(value => <option key={value} value={value}>{value}</option>)}
           </select>
         </label>
-      </div>
+        </div>
+      </details>
     </Card>
+
+    {!filtered.length && <Card padding="p-4" className="border-amber-200 bg-amber-50"><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="text-[11px] font-semibold text-amber-900">No hay compras para esta combinación de filtros</div><div className="text-[9.5px] text-amber-800 mt-1">No significa que no existan gastos: prueba con otro período o restablece los filtros.</div></div><button type="button" onClick={clearFilters} className="h-9 rounded-xl bg-[var(--ink)] text-[var(--bg)] px-3 text-[10px] font-semibold">Restablecer filtros</button></div></Card>}
 
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <Metric label="Gasto filtrado" value={fmtCLP(total)} detail={`${filtered.length} movimientos conciliados`} tone="dark"/>
@@ -434,11 +454,9 @@ export default function SpendingInsights({ expenses = [], setView }) {
       </Card>
 
       <Card padding="p-0" className="overflow-hidden">
-        <div className="p-4 border-b border-[var(--line)]">
-          <div className="text-[9px] uppercase tracking-[.12em] text-[var(--muted)] font-bold">Detalle</div>
-          <div className="text-[12px] font-semibold mt-1">Movimientos del filtro actual</div>
-        </div>
-        <div className="max-h-[390px] overflow-y-auto divide-y divide-[var(--line)]">
+        <details className="group">
+          <summary className="cursor-pointer list-none p-4 flex items-center justify-between gap-3"><div><div className="text-[9px] uppercase tracking-[.12em] text-[var(--muted)] font-bold">Detalle</div><div className="text-[12px] font-semibold mt-1">Ver {filtered.length} movimientos del filtro</div></div><span className="text-[13px] text-[var(--muted)] group-open:rotate-45 transition-transform">+</span></summary>
+        <div className="max-h-[390px] overflow-y-auto divide-y divide-[var(--line)] border-t border-[var(--line)]">
           {[...filtered].sort((a,b) => dateOnly(b.date).localeCompare(dateOnly(a.date))).slice(0, 50).map(row => {
             const meta = rowCategory(row)
             return <div key={row.id} className="px-4 py-3 grid grid-cols-[1fr_auto] gap-3">
@@ -451,6 +469,7 @@ export default function SpendingInsights({ expenses = [], setView }) {
           })}
           {!filtered.length && <div className="p-8 text-center text-[10px] text-[var(--muted)]">No hay movimientos con estos filtros.</div>}
         </div>
+        </details>
       </Card>
     </div>
 

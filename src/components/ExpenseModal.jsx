@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Icon, fmtCLP } from '../lib/helpers'
 import { PAYMENT_METHODS, CATEGORIES } from '../data'
 import { useBanks } from '../services/banksService'
+import { categoryLabel, uniqueCategoryOptions } from '../lib/categoryOptions'
 
 // datetime-local no incluye zona horaria. Convertimos el ISO de Supabase a la
 // hora local del dispositivo y, al guardar, lo transformamos nuevamente a ISO.
@@ -184,7 +185,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
           <div>
             <FieldLabel>Categoría</FieldLabel>
             <StyledSelect value={form.category} onChange={v => setF('category', v)}>
-              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              {uniqueCategoryOptions(CATEGORIES).map(c => <option key={c.id} value={c.id}>{categoryLabel(c)}</option>)}
             </StyledSelect>
           </div>
 

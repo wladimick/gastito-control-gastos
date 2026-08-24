@@ -457,11 +457,19 @@ export default function ExpensesList({
           </div>
         </>
       ) : (
-        <Card className="mt-6 text-center" padding="p-10">
-          <div className="text-[26px]">📭</div>
-          <div className="text-[13px] font-semibold mt-3">Todavía no hay movimientos</div>
-          <div className="text-[10.5px] text-[var(--muted)] mt-1">Registra un gasto manual o importa una cartola en Facturación.</div>
-        </Card>
+        dataSource === 'loading' ? (
+          <Card className="mt-6 text-center" padding="p-10" aria-busy="true">
+            <div className="mx-auto h-7 w-7 rounded-full border-2 border-[var(--line)] border-t-[var(--ink)] animate-spin"/>
+            <div className="text-[13px] font-semibold mt-3">Cargando movimientos conciliados…</div>
+            <div className="text-[10.5px] text-[var(--muted)] mt-1">Aún no mostramos un resultado vacío mientras se actualizan tus datos.</div>
+          </Card>
+        ) : (
+          <Card className="mt-6 text-center" padding="p-10">
+            <div className="text-[26px]">📭</div>
+            <div className="text-[13px] font-semibold mt-3">Todavía no hay movimientos</div>
+            <div className="text-[10.5px] text-[var(--muted)] mt-1">Registra un gasto manual o importa una cartola en Facturación.</div>
+          </Card>
+        )
       )}
     </div>
   )

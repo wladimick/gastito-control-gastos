@@ -17,6 +17,14 @@
   --accent-soft: oklch(0.94 0.04 165);
   --amber-ink:   oklch(0.42 0.13 70);
   --amber-soft:  oklch(0.94 0.06 80);
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
 }
 
 * {
@@ -55,6 +63,7 @@ input,
 select,
 textarea {
   transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+  touch-action: manipulation;
 }
 
 button:focus-visible,
@@ -67,6 +76,24 @@ textarea:focus-visible {
 
 button:disabled {
   cursor: not-allowed;
+}
+
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 200;
+  transform: translateY(-160%);
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: var(--type-small);
+  font-weight: 700;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 ::selection {
@@ -108,6 +135,10 @@ input[type='month'] {
   select,
   textarea {
     font-size: 16px !important;
+  }
+
+  button:not([data-compact-control]) {
+    min-height: 44px;
   }
 }
 
@@ -188,6 +219,7 @@ html[data-font-size='large'] {
 
 body {
   font-size: var(--type-body);
+  line-height: 1.5;
 }
 
 /* Semantic classes for new UI. */
@@ -199,6 +231,15 @@ body {
 .type-title { font-size: var(--type-title) !important; }
 .type-display { font-size: var(--type-display) !important; }
 .type-display-lg { font-size: var(--type-display-lg) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
 /*
  * Legacy normalization.

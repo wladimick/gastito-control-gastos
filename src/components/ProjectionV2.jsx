@@ -365,11 +365,10 @@ export default function ProjectionV2({
   return (
     <div className="max-w-7xl mx-auto pb-20 flex flex-col gap-5">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Plan financiero · 6 meses</div>
-          <p className="text-[12px] text-[var(--muted)] mt-1 max-w-2xl leading-relaxed">
-            La proyección usa tus saldos, ingresos, recurrentes, cuotas conciliadas y facturas reales. Solo estima lo que todavía no existe en Facturación.
-          </p>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Plan financiero · 6 meses</div>
+          <h1 className="text-[21px] md:text-[22px] font-bold tracking-tight mt-1">Proyección de dinero</h1>
+          <p className="text-[12px] text-[var(--muted)] mt-1 max-w-2xl leading-relaxed">Mira cómo cambia tu dinero en los próximos meses. Solo se estima lo que todavía no aparece en Facturación.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={loadCycles} disabled={loading} className="h-9 px-3 rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] text-[11px] font-semibold inline-flex items-center gap-1.5 disabled:opacity-50">
