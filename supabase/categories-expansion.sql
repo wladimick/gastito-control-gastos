@@ -23,11 +23,14 @@ INSERT INTO categories (label, icon, color, sort_order) VALUES
 
   -- ── Alimentación ──────────────────────────────────────────────
   ('Supermercado',    '🛒', '#81B29A',  2),
+  ('Almacén de barrio','🧺', '#8FB996', 61),
+  ('Feria',           '🥬', '#77A65A', 62),
   ('Comida',          '🍽',  '#F2CC8F',  3),
   ('Panadería',       '🥖', '#D4A574', 26),
 
   -- ── Movilidad ─────────────────────────────────────────────────
   ('Bencina',         '⛽', '#E07A5F',  1),
+  ('Calefacción / Parafina', '♨️', '#C96C4B', 63),
   ('Transporte',      '🚇', '#6D9DC5',  5),
   ('Vehículo',        '🚗', '#607D8B', 45),
   ('Estacionamiento', '🅿', '#9E9E9E', 46),
@@ -58,9 +61,12 @@ INSERT INTO categories (label, icon, color, sort_order) VALUES
   -- ── Familia y personas ────────────────────────────────────────
   ('Familia',         '👨‍👩‍👧', '#2196F3', 13),
   ('Mascotas',        '🐾', '#795548', 57),
+  ('Mascotas · Molly','🐾', '#B16C7A', 64),
+  ('Mascotas · Terry','🐾', '#6B8E78', 65),
 
   -- ── Educación ─────────────────────────────────────────────────
   ('Educación',       '📚', '#3F51B5', 17),
+  ('Hobby / Coleccionables', '🃏', '#8064C8', 66),
 
   -- ── Servicios y finanzas ──────────────────────────────────────
   ('Servicios',       '⚡', '#FF5722', 18),
