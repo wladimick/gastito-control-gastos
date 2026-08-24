@@ -4,7 +4,10 @@ const FIELDS = `id, period_month, scheduled_payment_date, actual_payment_date, p
   base_salary_contract, base_salary_paid, gratification, overtime_amount, taxable_base,
   pension_amount, health_amount, unemployment_amount, income_tax, legal_deductions,
   other_deductions, days_worked, overtime_minutes, permission_minutes, nonworked_minutes,
-  employer, position_title, source_file, status, notes, created_at, updated_at`
+  employer, position_title, source_file, status, notes, created_at, updated_at,
+  contract_type, contract_start_date, pension_provider, pension_rate_percent,
+  health_provider, health_rate_percent, uf_value, taxable_earnings, non_taxable_earnings,
+  pension_health_base, unemployment_base, total_earnings, total_deductions, source_details_verified`
 
 function mapRow(row) {
   return {
@@ -35,6 +38,20 @@ function mapRow(row) {
     sourceFile: row.source_file,
     status: row.status || 'actual',
     notes: row.notes,
+    contractType: row.contract_type,
+    contractStartDate: row.contract_start_date,
+    pensionProvider: row.pension_provider,
+    pensionRatePercent: Number(row.pension_rate_percent || 0),
+    healthProvider: row.health_provider,
+    healthRatePercent: Number(row.health_rate_percent || 0),
+    ufValue: Number(row.uf_value || 0),
+    taxableEarnings: Number(row.taxable_earnings || 0),
+    nonTaxableEarnings: Number(row.non_taxable_earnings || 0),
+    pensionHealthBase: Number(row.pension_health_base || 0),
+    unemploymentBase: Number(row.unemployment_base || 0),
+    totalEarnings: Number(row.total_earnings || 0),
+    totalDeductions: Number(row.total_deductions || 0),
+    sourceDetailsVerified: Boolean(row.source_details_verified),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
