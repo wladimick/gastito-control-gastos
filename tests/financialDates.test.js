@@ -36,3 +36,12 @@ test('prioriza el monto final y usa la mejor estimación en ciclos abiertos', ()
     reportedAmountIsFinal: true,
   }), 100)
 })
+
+test('una factura final de cero no revive estimaciones antiguas', () => {
+  assert.equal(billingCycleAmount({
+    reportedAmount: 0,
+    estimatedAmount: 45000,
+    calculatedAmount: 45000,
+    reportedAmountIsFinal: true,
+  }), 0)
+})
