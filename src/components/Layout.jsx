@@ -17,6 +17,7 @@ const BASE_NAV_GROUPS = [
       { id: 'mercadopago', label: 'Mercado Pago', brand: 'mercadopago', short: 'MP', href: '?mercadopago-admin=1' },
       { id: 'receivables', label: 'Me deben', brand: 'receivables', short: 'Cobros', href: '?me-deben=1' },
       { id: 'paypal', label: 'Shopify / PayPal', brand: 'paypal', short: 'PayPal', href: '?paypal-admin=1' },
+      { id: 'salary', label: 'Sueldo y previsión', icon: 'cash', short: 'Sueldo', href: '?liquidaciones=1' },
     ],
   },
   {
