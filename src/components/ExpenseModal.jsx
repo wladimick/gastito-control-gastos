@@ -58,7 +58,7 @@ function TxtInput({ value, onChange, placeholder, type = 'text', style: extraSty
         background:  '#f0efe9',
         borderColor: focused ? '#1e2535' : '#e8e6df',
         color:       '#1e2535',
-        fontSize:    '16px',
+        fontSize:    'var(--type-subtitle)',
         minWidth:    0,
         maxWidth:    '100%',
         boxSizing:   'border-box',
@@ -83,7 +83,7 @@ function StyledSelect({ value, onChange, children }) {
           background:  '#f0efe9',
           borderColor: focused ? '#1e2535' : '#e8e6df',
           color:       '#1e2535',
-          fontSize:    '16px',
+          fontSize:    'var(--type-subtitle)',
           minWidth:    0,
           maxWidth:    '100%',
           boxSizing:   'border-box',
@@ -168,7 +168,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
                 onChange={e => setF('amount', e.target.value)}
                 placeholder="0"
                 className="flex-1 bg-transparent outline-none tabular-nums"
-                style={{ fontSize: '42px', fontWeight: 800, color: '#1e2535', letterSpacing: '-0.02em' }}
+                style={{ fontSize: 'var(--type-display-lg)', fontWeight: 800, color: '#1e2535', letterSpacing: '-0.02em' }}
               />
             </div>
             <div className="text-[13px] mt-1" style={{ color: '#9ba5c2' }}>{fmtCLP(form.amount)}</div>
@@ -262,7 +262,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
                   disabled={form.type !== 'credito'}
                   onChange={e => setF('installments', Number(e.target.value))}
                   className="w-[80px] py-[10px] px-3 rounded-[10px] font-bold border-[1.5px] text-center outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: '#f0efe9', borderColor: '#dddbd3', color: '#1e2535', fontSize: '16px', boxSizing: 'border-box' }}
+                  style={{ background: '#f0efe9', borderColor: '#dddbd3', color: '#1e2535', fontSize: 'var(--type-subtitle)', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
@@ -277,7 +277,7 @@ export default function ExpenseModal({ expense, onClose, onSave }) {
               onChange={e => setF('notes', e.target.value)}
               placeholder="Algún detalle adicional..."
               className="w-full rounded-[10px] border px-3.5 py-[11px] outline-none resize-none leading-relaxed transition-colors"
-              style={{ background: '#f0efe9', borderColor: '#e8e6df', color: '#1e2535', minHeight: '80px', fontSize: '16px', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
+              style={{ background: '#f0efe9', borderColor: '#e8e6df', color: '#1e2535', minHeight: '80px', fontSize: 'var(--type-subtitle)', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
               onFocus={e => (e.target.style.borderColor = '#1e2535')}
               onBlur={e => (e.target.style.borderColor = '#e8e6df')}
             />
