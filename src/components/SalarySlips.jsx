@@ -52,7 +52,7 @@ function Metric({ label, value, detail, tone = 'default' }) {
   </div>
 }
 
-export default function SalarySlips({ salarySlips = [], previsionalAccounts = [], afcContributions = [], afcSimulations = [] }) {
+export default function SalarySlips({ salarySlips = [], previsionalAccounts = [], afpContributions = [], afcContributions = [], afcSimulations = [] }) {
   const sorted = useMemo(() => [...salarySlips].sort((a, b) => salaryPeriodKey(b).localeCompare(salaryPeriodKey(a))), [salarySlips])
   const stats = useMemo(() => salaryStats(salarySlips), [salarySlips])
   const contributions = useMemo(() => salaryContributionStats(salarySlips), [salarySlips])
@@ -63,6 +63,13 @@ export default function SalarySlips({ salarySlips = [], previsionalAccounts = []
   const missing = useMemo(() => missingPeriods(salarySlips), [salarySlips])
   const afp = previsionalAccounts.find(item => item.accountType === 'afp_mandatory')
   const afc = previsionalAccounts.find(item => item.accountType === 'afc_cic')
+  const afpTotals = afpContributions.reduce((acc, item) => {
+    acc.credited += Number(item.creditedAmount || 0)
+    acc.units += Number(item.fundUnits || 0)
+    acc.taxable += Number(item.taxableIncome || 0)
+    return acc
+  }, { credited: 0, units: 0, taxable: 0 })
+  const afpRate = afpTotals.taxable > 0 ? (afpTotals.credited * 100 / afpTotals.taxable) : 0
   const afcTotals = afcContributions.reduce((acc, item) => {
     acc.worker += Number(item.workerContribution || 0)
     acc.employer += Number(item.employerPersonalContribution || 0)
@@ -100,11 +107,16 @@ export default function SalarySlips({ salarySlips = [], previsionalAccounts = []
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-4">
         <Metric label="AFP UNO · obligatoria" value={fmtCLP(afp?.balance || 0)} detail={afp ? `Fondo ${afp.fundCode || '—'} ${afp.fundAllocationPercent || 0}% · ${afp.fundUnits || 0} cuotas` : 'Sin saldo registrado'} tone="blue"/>
+        <Metric label="AFP acreditada · 12 meses" value={fmtCLP(afpTotals.credited)} detail={`${afpContributions.length} cotizaciones certificadas · ${afpTotals.units.toLocaleString('es-CL', { maximumFractionDigits: 2 })} cuotas · ${afpRate.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% de renta imponible`} tone="green"/>
         <Metric label="AFC · CIC implícita" value={fmtCLP(afc?.balance || 0)} detail="Derivada de simulación oficial · no cartola directa"/>
         <Metric label="AFC acreditado · 12 meses" value={fmtCLP(afcTotals.total)} detail={`Trabajador ${fmtCLP(afcTotals.worker)} · empleador CIC ${fmtCLP(afcTotals.employer)}`} tone="green"/>
-        <Metric label="Remuneración prom. AFC" value={fmtCLP(cicSimulation?.averageRemuneration || 0)} detail="Base usada por simulación 24/08/2026"/>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[9px]">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[9px]">
+        {afpContributions.length > 0 && <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] p-3">
+          <div className="font-semibold">Certificado AFP UNO</div>
+          <div className="text-[var(--muted)] mt-1">08/2025–07/2026 · Fondo B · {fmtCLP(afpTotals.credited)} acreditados.</div>
+          <div className="text-[var(--muted)] mt-1">Gastito usa estos abonos certificados como fuente principal para aportes AFP del período.</div>
+        </div>}
         {cicSimulation && <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] p-3">
           <div className="font-semibold">Simulación con CIC</div>
           <div className="text-[var(--muted)] mt-1">Beneficios {fmtCLP(cicSimulation.totalBenefit)} · aporte AFP asociado {fmtCLP(cicSimulation.totalAfpContribution)}.</div>
