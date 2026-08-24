@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Icon } from '../lib/helpers'
 import { GastitoLogo } from './Brand'
 import FinancialBrand from './FinancialBrand'
@@ -84,6 +84,33 @@ function NavIcon({ item, size = 16 }) {
   return <span className="w-7 h-7 grid place-items-center shrink-0"><Icon name={item.icon} size={size}/></span>
 }
 
+function FontSizeControl({ value, onChange }) {
+  const options = [
+    { id: 'small', label: 'A−', title: 'Reducir tamaño de letra' },
+    { id: 'normal', label: 'A', title: 'Tamaño de letra normal' },
+    { id: 'large', label: 'A+', title: 'Aumentar tamaño de letra' },
+  ]
+
+  return (
+    <div className="h-9 inline-flex items-center rounded-xl border border-[var(--line)] bg-[var(--bg-elev)] p-0.5" aria-label="Tamaño de letra">
+      {options.map(option => (
+        <button
+          key={option.id}
+          type="button"
+          title={option.title}
+          aria-label={option.title}
+          aria-pressed={value === option.id}
+          onClick={() => onChange(option.id)}
+          className={`h-8 min-w-7 px-1.5 rounded-[9px] type-caption font-semibold transition ${value === option.id ? 'bg-[var(--ink)] text-[var(--bg)]' : 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--ink)]'}`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+
 export default function Layout({
   view,
   setView,
@@ -97,6 +124,24 @@ export default function Layout({
   reimbursementCount,
 }) {
   const [openMobile, setOpenMobile] = useState(false)
+  const [fontSize, setFontSize] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem('gastito-font-size')
+      return ['small', 'normal', 'large'].includes(saved) ? saved : 'normal'
+    } catch {
+      return 'normal'
+    }
+  })
+
+  useEffect(() => {
+    document.documentElement.dataset.fontSize = fontSize
+    try {
+      window.localStorage.setItem('gastito-font-size', fontSize)
+    } catch {
+      // localStorage can be unavailable in private/restricted contexts.
+    }
+  }, [fontSize])
+
   const navGroups = buildNavGroups(isSuperAdmin, unparsedCount, reimbursementCount)
   const allNav = navGroups.flatMap(group => group.items)
   const currentItem = allNav.find(item => item.id === view)
@@ -188,7 +233,8 @@ export default function Layout({
                 <span className={`w-1.5 h-1.5 rounded-full ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[var(--muted)]'}`}/>
                 <span className="text-[10px] text-[var(--ink-2)]">Bot {botStatus === 'online' ? 'activo' : 'off'}</span>
               </div>
-              <button type="button" onClick={onOpenChat} className="h-9 px-3 inline-flex items-center gap-2 rounded-xl bg-[var(--ink)] text-[var(--bg)] text-[10.5px] font-semibold hover:opacity-90">
+              <FontSizeControl value={fontSize} onChange={setFontSize}/>
+              <button type="button" onClick={onOpenChat} className="h-9 px-3 inline-flex items-center gap-2 rounded-xl bg-[var(--ink)] text-[var(--bg)] type-small font-semibold hover:opacity-90">
                 <Icon name="send" size={13}/><span className="hidden sm:inline">Probar bot</span>
               </button>
             </div>
