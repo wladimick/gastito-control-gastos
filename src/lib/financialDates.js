@@ -82,7 +82,7 @@ export function billingCycleAmount(cycle) {
   const reported = Number(cycle?.reportedAmount || 0)
   const estimated = Number(cycle?.estimatedAmount || 0)
   const calculated = Number(cycle?.calculatedAmount || 0)
-  if (cycle?.reportedAmountIsFinal && reported > 0) return reported
+  if (cycle?.reportedAmountIsFinal) return reported
   return Math.max(reported, estimated, calculated)
 }
 
