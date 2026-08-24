@@ -101,6 +101,7 @@ function mapBillingMovement(cycle, item, cards) {
     id: `billing:${item.id}`,
     rawId: item.id,
     source: 'billing',
+    originSource: 'billing',
     editable: false,
     amount: Number(item.amount || 0),
     description: item.description || 'Movimiento de tarjeta',
@@ -129,6 +130,7 @@ function mapBillingMovement(cycle, item, cards) {
 export function buildUnifiedMovements(manualExpenses = [], cycles = [], cards = []) {
   const manualRows = (manualExpenses || []).map(row => ({
     ...row,
+    originSource: row.originSource || row.source || 'manual',
     source: row.source === 'reconciled' ? 'reconciled' : 'manual',
     editable: true,
     amount: Number(row.amount || 0),
