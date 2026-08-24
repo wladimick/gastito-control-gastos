@@ -80,3 +80,80 @@ export async function markMercadoPagoMovement(id, reviewStatus) {
     .eq('id', id)
   if (error) throw error
 }
+
+
+export async function fetchMercadoPagoCategories() {
+  if (!isConfigured || !supabase) return []
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id, label, icon, color')
+    .order('label')
+  if (error) throw error
+  const seen = new Set()
+  return (data || []).filter(item => {
+    if (seen.has(item.label)) return false
+    seen.add(item.label)
+    return true
+  })
+}
+
+function normalizeMercadoPagoMerchant(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+export async function updateMercadoPagoMovementCategory(movement, categoryId) {
+  if (!movement?.id || !categoryId) throw new Error('Movimiento o categoría inválidos')
+
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+  const userId = authData?.user?.id
+  if (!userId) throw new Error('Sesión no disponible')
+
+  const merchant = movement.merchant || movement.description || 'Mercado Pago'
+  const merchantNormalized = normalizeMercadoPagoMerchant(merchant)
+
+  const { error: movementError } = await supabase
+    .from('mercadopago_movements')
+    .update({
+      category_id: categoryId,
+      review_status: 'verified',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', movement.id)
+    .eq('user_id', userId)
+  if (movementError) throw movementError
+
+  if (movement.expense_id) {
+    const { error: expenseError } = await supabase
+      .from('expenses')
+      .update({
+        category_id: categoryId,
+        status: 'ok',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', movement.expense_id)
+      .eq('user_id', userId)
+    if (expenseError) throw expenseError
+  }
+
+  if (merchantNormalized) {
+    const { error: ruleError } = await supabase
+      .from('mercadopago_category_rules')
+      .upsert({
+        user_id: userId,
+        merchant_normalized: merchantNormalized,
+        merchant_label: merchant,
+        category_id: categoryId,
+        active: true,
+        source: 'manual',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,merchant_normalized' })
+    if (ruleError) throw ruleError
+  }
+
+  return true
+}
