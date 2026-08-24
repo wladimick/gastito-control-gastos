@@ -79,6 +79,15 @@ function buildNavGroups(isSuperAdmin, unparsedCount, reimbursementCount) {
 
 const MOBILE_PRIMARY = ['dashboard', 'accounts', 'expenses', 'spending']
 
+const HEADER_TONES = {
+  Caja: 'border-sky-100 bg-gradient-to-r from-sky-100 via-cyan-50 to-emerald-50',
+  Patrimonio: 'border-emerald-100 bg-gradient-to-r from-emerald-100 via-teal-50 to-cyan-50',
+  Flujo: 'border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50',
+  Herramientas: 'border-amber-100 bg-gradient-to-r from-amber-100 via-orange-50 to-rose-50',
+  Sistema: 'border-indigo-100 bg-gradient-to-r from-indigo-100 via-blue-50 to-sky-50',
+  Sección: 'border-slate-200 bg-gradient-to-r from-slate-100 via-white to-violet-50',
+}
+
 function NavIcon({ item, size = 16 }) {
   if (item.brand) return <FinancialBrand brand={item.brand} size="sm"/>
   return <span className="w-7 h-7 grid place-items-center shrink-0"><Icon name={item.icon} size={size}/></span>
@@ -157,6 +166,7 @@ export default function Layout({
   const currentLabel = currentItem?.label || 'Control'
   const currentGroup = navGroups.find(group => group.items.some(item => item.id === view))
   const breadcrumb = currentGroup?.label
+  const headerTone = HEADER_TONES[breadcrumb || 'Sección'] || HEADER_TONES.Sección
 
   const openNavItem = item => {
     if (item.href) {
@@ -222,9 +232,10 @@ export default function Layout({
       </aside>
 
       <div className="min-h-screen min-w-0 flex flex-col lg:ml-64">
-        <header className="sticky top-0 z-30 bg-[var(--bg)]/88 backdrop-blur-xl border-b border-[var(--line)]">
-          <div className="px-4 md:px-7 py-3 flex items-center gap-3 max-w-[1600px] w-full mx-auto">
-            <button type="button" onClick={() => setOpenMobile(true)} aria-label="Abrir menú" className="lg:hidden w-11 h-11 grid place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-elev)]">
+        <header className={`sticky top-0 z-30 isolate border-b backdrop-blur-xl ${headerTone}`}>
+          <div className="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full bg-white/45 blur-2xl" aria-hidden="true"/>
+          <div className="relative px-4 md:px-7 py-3 flex items-center gap-3 max-w-[1600px] w-full mx-auto">
+            <button type="button" onClick={() => setOpenMobile(true)} aria-label="Abrir menú" className="lg:hidden w-11 h-11 grid place-items-center rounded-xl border border-white/80 bg-white/75 shadow-sm shadow-slate-950/5">
               <Icon name="menu" size={18}/>
             </button>
             <div className="min-w-0">
@@ -234,12 +245,12 @@ export default function Layout({
 
             <div className="ml-auto flex items-center gap-2">
               {FINANCIAL_VIEWS.has(view) && (
-                <div className="hidden sm:flex h-9 items-center gap-2 px-2.5 rounded-xl border border-[var(--line)] bg-[var(--bg-elev)]">
+                <div className="hidden sm:flex h-9 items-center gap-2 px-2.5 rounded-xl border border-white/80 bg-white/70">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"/>
                   <span className="text-[10px] font-medium text-[var(--ink-2)]">Datos conciliados</span>
                 </div>
               )}
-              <div className="hidden md:flex items-center gap-2 px-2.5 h-9 border border-[var(--line)] rounded-xl bg-[var(--bg-elev)]">
+              <div className="hidden md:flex items-center gap-2 px-2.5 h-9 border border-white/80 rounded-xl bg-white/70">
                 <span className={`w-1.5 h-1.5 rounded-full ${botStatus === 'online' ? 'bg-[var(--accent)]' : 'bg-[var(--muted)]'}`}/>
                 <span className="text-[10px] text-[var(--ink-2)]">Bot {botStatus === 'online' ? 'activo' : 'off'}</span>
               </div>
