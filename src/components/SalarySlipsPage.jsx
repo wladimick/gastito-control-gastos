@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchSalarySlips } from '../services/salaryService'
-import { fetchAfcContributions, fetchAfcSimulations, fetchPrevisionalAccounts } from '../services/previsionalService'
+import { fetchAfcContributions, fetchAfcSimulations, fetchAfpContributions, fetchPrevisionalAccounts } from '../services/previsionalService'
 import SalarySlips from './SalarySlips'
 
 export default function SalarySlipsPage() {
@@ -9,6 +9,7 @@ export default function SalarySlipsPage() {
   const [authReady, setAuthReady] = useState(false)
   const [salarySlips, setSalarySlips] = useState([])
   const [previsionalAccounts, setPrevisionalAccounts] = useState([])
+  const [afpContributions, setAfpContributions] = useState([])
   const [afcContributions, setAfcContributions] = useState([])
   const [afcSimulations, setAfcSimulations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -26,12 +27,14 @@ export default function SalarySlipsPage() {
     Promise.all([
       fetchSalarySlips(),
       fetchPrevisionalAccounts(),
+      fetchAfpContributions(),
       fetchAfcContributions(),
       fetchAfcSimulations(),
     ])
-      .then(([slips, accounts, contributions, simulations]) => {
+      .then(([slips, accounts, afpRows, contributions, simulations]) => {
         setSalarySlips(slips)
         setPrevisionalAccounts(accounts)
+        setAfpContributions(afpRows)
         setAfcContributions(contributions)
         setAfcSimulations(simulations)
       })
@@ -46,10 +49,10 @@ export default function SalarySlipsPage() {
     <div className="mx-auto max-w-5xl p-4 md:p-7 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <a href="/" className="h-9 inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold">Volver a Gastito</a>
-        <button onClick={() => { setLoading(true); fetchSalarySlips().then(setSalarySlips).catch(error => setMessage(error?.message || 'No fue posible actualizar.')).finally(() => setLoading(false)) }} className="h-9 rounded-xl bg-slate-900 px-3 text-[10px] font-semibold text-white">{loading ? 'Actualizando…' : 'Actualizar'}</button>
+        <button onClick={() => { setLoading(true); Promise.all([fetchSalarySlips(), fetchPrevisionalAccounts(), fetchAfpContributions(), fetchAfcContributions(), fetchAfcSimulations()]).then(([slips, accounts, afpRows, contributions, simulations]) => { setSalarySlips(slips); setPrevisionalAccounts(accounts); setAfpContributions(afpRows); setAfcContributions(contributions); setAfcSimulations(simulations) }).catch(error => setMessage(error?.message || 'No fue posible actualizar.')).finally(() => setLoading(false)) }} className="h-9 rounded-xl bg-slate-900 px-3 text-[10px] font-semibold text-white">{loading ? 'Actualizando…' : 'Actualizar'}</button>
       </div>
       {message && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-900">{message}</div>}
-      {loading && !salarySlips.length ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[10px] text-slate-500">Cargando liquidaciones…</div> : <SalarySlips salarySlips={salarySlips} previsionalAccounts={previsionalAccounts} afcContributions={afcContributions} afcSimulations={afcSimulations}/>} 
+      {loading && !salarySlips.length ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[10px] text-slate-500">Cargando liquidaciones…</div> : <SalarySlips salarySlips={salarySlips} previsionalAccounts={previsionalAccounts} afpContributions={afpContributions} afcContributions={afcContributions} afcSimulations={afcSimulations}/>} 
     </div>
   </div>
 }
