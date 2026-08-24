@@ -1,1 +1,1 @@
-export { default } from './ProjectionWithBalanceStatus'
+export { default } from './ProjectionAudited'
