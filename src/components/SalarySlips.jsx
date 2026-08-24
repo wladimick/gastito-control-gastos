@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { Card, Badge } from './ui'
 import { fmtCLP } from '../lib/helpers'
-import { addSalaryMonths, salaryForCashMonth, salaryPeriodKey, salaryStats } from '../lib/salaryModel'
+import { addSalaryMonths, salaryContributionStats, salaryForCashMonth, salaryPeriodKey, salaryStats } from '../lib/salaryModel'
 
 function currentMonthKey() {
   return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', timeZone: 'America/Santiago' })
@@ -55,6 +55,7 @@ function Metric({ label, value, detail, tone = 'default' }) {
 export default function SalarySlips({ salarySlips = [] }) {
   const sorted = useMemo(() => [...salarySlips].sort((a, b) => salaryPeriodKey(b).localeCompare(salaryPeriodKey(a))), [salarySlips])
   const stats = useMemo(() => salaryStats(salarySlips), [salarySlips])
+  const contributions = useMemo(() => salaryContributionStats(salarySlips), [salarySlips])
   const currentCash = currentMonthKey()
   const currentSalary = salaryForCashMonth(salarySlips, currentCash)
   const nextCash = addSalaryMonths(currentCash, 1)
@@ -79,6 +80,24 @@ export default function SalarySlips({ salarySlips = [] }) {
       <strong>Falta documentación:</strong> {missing.map(monthLabel).join(', ')}. Ese período no se inventa; queda ausente del historial y no se usa como valor real de liquidación.
     </div>}
 
+    <Card padding="p-4">
+      <div className="flex items-end justify-between gap-3 mb-3">
+        <div>
+          <div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Previsión documentada</div>
+          <div className="text-[12px] font-semibold mt-0.5">{contributions.months} liquidaciones con detalle previsional</div>
+        </div>
+        <div className="text-[8.5px] text-[var(--muted)] text-right">No reemplaza cartola AFP/AFC</div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <Metric label="Ahorro AFP trabajador" value={fmtCLP(contributions.afpWorkerSavings)} detail="10% estimado de base imponible · AFP UNO"/>
+        <Metric label="Comisión AFP" value={fmtCLP(contributions.afpCommission)} detail="Diferencia hasta 10,46% descontado"/>
+        <Metric label="Salud Fonasa" value={fmtCLP(contributions.health)} detail="Cotización salud acumulada"/>
+        <Metric label="Cesantía descontada" value={fmtCLP(contributions.afcWorker)} detail="0,6% trabajador registrado en liquidaciones"/>
+        <Metric label="CIC esperada documentada" value={fmtCLP(contributions.afcExpectedCic)} detail="0,6% trabajador + 1,6% empleador · sin rentabilidad"/>
+        <Metric label="Fondo solidario" value={fmtCLP(contributions.afcEmployerFcs)} detail="0,8% empleador · no es saldo personal"/>
+      </div>
+    </Card>
+
     <Card padding="p-0" className="overflow-hidden">
       <div className="px-4 py-3 border-b border-[var(--line)]">
         <div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Historial real</div>
@@ -94,6 +113,8 @@ export default function SalarySlips({ salarySlips = [] }) {
               {item.overtimeAmount > 0 && <Badge tone="info" className="!text-[8px] !px-1.5 !py-0.5">Horas extra {fmtCLP(item.overtimeAmount)}</Badge>}
             </div>
             <div className="text-[9px] text-[var(--muted)] mt-1">Haberes {fmtCLP(item.grossAmount)} · descuentos {fmtCLP(item.legalDeductions)} · base pagada {fmtCLP(item.baseSalaryPaid)}</div>
+            <div className="text-[8.5px] text-[var(--muted)] mt-1">{item.pensionProvider || 'AFP'} {item.pensionRatePercent ? `${item.pensionRatePercent}%` : ''} {fmtCLP(item.pensionAmount)} · {item.healthProvider || 'Salud'} {item.healthRatePercent ? `${item.healthRatePercent}%` : ''} {fmtCLP(item.healthAmount)} · AFC {fmtCLP(item.unemploymentAmount)}</div>
+            <div className="text-[8px] text-[var(--muted)] mt-0.5">Base prev./salud {fmtCLP(item.pensionHealthBase || item.grossAmount)} · base cesantía {fmtCLP(item.unemploymentBase || item.grossAmount)}{item.ufValue ? ` · UF ${item.ufValue.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}</div>
             <div className="text-[8.5px] text-[var(--muted)] mt-1">{item.sourceFile || 'Liquidación'}{paymentEvidenceLabel(item)}</div>
           </div>
           <div className="font-mono text-[15px] font-bold whitespace-nowrap">{fmtCLP(item.netAmount)}</div>
