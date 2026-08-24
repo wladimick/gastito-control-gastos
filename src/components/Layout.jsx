@@ -31,7 +31,7 @@ const BASE_NAV_GROUPS = [
       { id: 'employment', label: 'Perfil laboral', icon: 'person', short: 'Trabajo' },
       { id: 'salary', label: 'Liquidaciones', icon: 'cash', short: 'Sueldo' },
       { id: 'expenses', label: 'Gastos', icon: 'list', short: 'Gastos' },
-      { id: 'spending', label: 'Métricas de gasto', icon: 'chart', short: 'Métricas' },
+      { id: 'spending', label: 'Reporte de gastos', icon: 'chart', short: 'Reporte' },
       { id: 'billing', label: 'Facturación', icon: 'card', short: 'Factur.' },
       { id: 'installments', label: 'Cuotas', icon: 'layers', short: 'Cuotas' },
       { id: 'recurring', label: 'Recurrentes', icon: 'repeat', short: 'Recurr.' },
