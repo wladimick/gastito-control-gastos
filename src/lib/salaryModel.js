@@ -2,6 +2,10 @@ function monthKey(value) {
   return String(value || '').slice(0, 7)
 }
 
+function actualPaymentDate(item) {
+  return item?.actualPaymentDate || item?.actual_payment_date || ''
+}
+
 export function addSalaryMonths(key, offset) {
   const [year, month] = String(key || '').split('-').map(Number)
   if (!year || !month) return ''
@@ -11,6 +15,13 @@ export function addSalaryMonths(key, offset) {
 
 export function salaryPeriodKey(slip) {
   return monthKey(slip?.periodMonth || slip?.period_month)
+}
+
+export function salaryCashMonthKey(slip) {
+  const paid = actualPaymentDate(slip)
+  if (paid) return monthKey(paid)
+  return monthKey(slip?.scheduledPaymentDate || slip?.scheduled_payment_date)
+    || addSalaryMonths(salaryPeriodKey(slip), 1)
 }
 
 export function salaryForecast(slips = [], targetPeriodKey = '', count = 3) {
@@ -28,14 +39,49 @@ export function salaryForecast(slips = [], targetPeriodKey = '', count = 3) {
 
 export function salaryForCashMonth(slips = [], cashMonthKey = '') {
   const periodKey = addSalaryMonths(cashMonthKey, -1)
-  const actual = (slips || []).find(item => salaryPeriodKey(item) === periodKey && item?.status !== 'estimated')
-  if (actual) {
+
+  const paidActual = (slips || []).find(item =>
+    item?.status !== 'estimated'
+    && actualPaymentDate(item)
+    && salaryCashMonthKey(item) === cashMonthKey
+  )
+
+  if (paidActual) {
+    const paidPeriodKey = salaryPeriodKey(paidActual)
     return {
-      amount: Number(actual.netAmount ?? actual.net_amount ?? 0),
+      amount: Number(paidActual.netAmount ?? paidActual.net_amount ?? 0),
+      mode: 'actual',
+      periodKey: paidPeriodKey,
+      cashMonthKey,
+      slip: paidActual,
+      sourceCount: 1,
+      sourceMonths: [paidPeriodKey],
+    }
+  }
+
+  const periodSlip = (slips || []).find(item =>
+    salaryPeriodKey(item) === periodKey && item?.status !== 'estimated'
+  )
+
+  if (periodSlip) {
+    if (actualPaymentDate(periodSlip)) {
+      return {
+        amount: 0,
+        mode: 'no_payment',
+        periodKey,
+        cashMonthKey,
+        slip: periodSlip,
+        sourceCount: 0,
+        sourceMonths: [],
+      }
+    }
+
+    return {
+      amount: Number(periodSlip.netAmount ?? periodSlip.net_amount ?? 0),
       mode: 'actual',
       periodKey,
       cashMonthKey,
-      slip: actual,
+      slip: periodSlip,
       sourceCount: 1,
       sourceMonths: [periodKey],
     }
