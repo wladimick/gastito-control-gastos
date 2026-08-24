@@ -29,6 +29,14 @@ function missingPeriods(slips) {
   return result
 }
 
+function paymentEvidenceLabel(item) {
+  if (!item?.scheduledPaymentDate) return ''
+  const date = item.scheduledPaymentDate
+  const formatted = `${date.slice(8, 10)}/${date.slice(5, 7)}`
+  const confirmed = String(item.notes || '').toLowerCase().includes('abono confirmado')
+  return confirmed ? ` · abono confirmado ${formatted}` : ` · abono planificado ${formatted}`
+}
+
 function Metric({ label, value, detail, tone = 'default' }) {
   const cls = tone === 'green' ? 'bg-emerald-50 border-emerald-100 text-emerald-950'
     : tone === 'blue' ? 'bg-blue-50 border-blue-100 text-blue-950'
@@ -53,24 +61,24 @@ export default function SalarySlips({ salarySlips = [] }) {
     <div>
       <div className="text-[9.5px] uppercase tracking-[.13em] text-[var(--muted)] font-bold">Ingresos · Tibox</div>
       <h1 className="text-[21px] md:text-[22px] font-bold mt-1">Liquidaciones de sueldo</h1>
-      <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">El sueldo se registra por liquidación real. Cuando todavía no existe una liquidación, Gastito proyecta usando el promedio de las últimas 3 disponibles.</p>
+      <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Gastito separa el mes de la liquidación del mes en que recibes el dinero. Cuando falta una liquidación, la proyección usa el promedio de las últimas 3 disponibles.</p>
     </div>
 
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Metric label={`Sueldo pagado · ${monthLabel(currentCash)}`} value={fmtCLP(currentSalary.amount)} detail={currentSalary.mode === 'actual' ? `Liquidación ${monthLabel(currentSalary.periodKey)}` : 'Estimación móvil'} tone="green"/>
-      <Metric label={`Próximo · ${monthLabel(nextCash)}`} value={fmtCLP(nextSalary.amount)} detail={nextSalary.mode === 'actual' ? 'Liquidación disponible' : `Estimado con ${nextSalary.sourceCount} liquidaciones`} tone="blue"/>
+      <Metric label={`Sueldo pagado · ${monthLabel(currentCash)}`} value={fmtCLP(currentSalary.amount)} detail={currentSalary.mode === 'actual' ? `Corresponde a liquidación ${monthLabel(currentSalary.periodKey)}` : 'Estimación móvil'} tone="green"/>
+      <Metric label={`Próximo · ${monthLabel(nextCash)}`} value={fmtCLP(nextSalary.amount)} detail={nextSalary.mode === 'actual' ? `Liquidación ${monthLabel(nextSalary.periodKey)}` : `Estimado con ${nextSalary.sourceCount} liquidaciones`} tone="blue"/>
       <Metric label="Promedio cargado" value={fmtCLP(stats.average)} detail={`${stats.count} liquidaciones reales`}/>
       <Metric label="Rango líquido" value={`${fmtCLP(stats.minimum)} – ${fmtCLP(stats.maximum)}`} detail="Mínimo y máximo del historial cargado"/>
     </div>
 
     {missing.length > 0 && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-900">
-      <strong>Falta documentación:</strong> {missing.map(monthLabel).join(', ')}. Ese mes no se inventa; simplemente queda ausente del historial y no se usa como valor real.
+      <strong>Falta documentación:</strong> {missing.map(monthLabel).join(', ')}. Ese período no se inventa; queda ausente del historial y no se usa como valor real de liquidación.
     </div>}
 
     <Card padding="p-0" className="overflow-hidden">
       <div className="px-4 py-3 border-b border-[var(--line)]">
         <div className="text-[9px] uppercase tracking-[.11em] text-[var(--muted)] font-bold">Historial real</div>
-        <div className="text-[12px] font-semibold mt-0.5">Líquido recibido por liquidación</div>
+        <div className="text-[12px] font-semibold mt-0.5">Líquido por período de liquidación</div>
       </div>
       <div className="divide-y divide-[var(--line)]">
         {sorted.map(item => <div key={item.id} className="px-4 py-3 grid grid-cols-[minmax(0,1fr)_auto] gap-3 items-start">
@@ -81,7 +89,7 @@ export default function SalarySlips({ salarySlips = [] }) {
               {item.overtimeAmount > 0 && <Badge tone="info" className="!text-[8px] !px-1.5 !py-0.5">Horas extra {fmtCLP(item.overtimeAmount)}</Badge>}
             </div>
             <div className="text-[9px] text-[var(--muted)] mt-1">Haberes {fmtCLP(item.grossAmount)} · descuentos {fmtCLP(item.legalDeductions)} · base pagada {fmtCLP(item.baseSalaryPaid)}</div>
-            <div className="text-[8.5px] text-[var(--muted)] mt-1">{item.sourceFile || 'Liquidación'}{item.scheduledPaymentDate ? ` · planificación de abono ${item.scheduledPaymentDate.slice(8,10)}/${item.scheduledPaymentDate.slice(5,7)}` : ''}</div>
+            <div className="text-[8.5px] text-[var(--muted)] mt-1">{item.sourceFile || 'Liquidación'}{paymentEvidenceLabel(item)}</div>
           </div>
           <div className="font-mono text-[15px] font-bold whitespace-nowrap">{fmtCLP(item.netAmount)}</div>
         </div>)}
@@ -90,7 +98,7 @@ export default function SalarySlips({ salarySlips = [] }) {
     </Card>
 
     <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] px-4 py-3 text-[9.5px] text-[var(--muted)] leading-relaxed">
-      <strong className="text-[var(--ink)]">Regla de planificación:</strong> la liquidación de un mes se considera disponible el día 05 del mes siguiente, que es tu día de pago configurado. Esa fecha es una convención de Gastito para flujo de caja; las liquidaciones adjuntas no informan la fecha bancaria efectiva del abono.
+      <strong className="text-[var(--ink)]">Regla de flujo:</strong> una liquidación pertenece al período laboral indicado en el documento, pero el ingreso se asigna al mes en que se paga. Si tenemos comprobante bancario, Gastito muestra la fecha confirmada; si no, usa el día 05 del mes siguiente como fecha de planificación.
     </div>
   </div>
 }
