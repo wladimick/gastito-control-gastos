@@ -165,7 +165,7 @@ export default function MercadoPagoAdmin() {
   return (
     <div className="min-h-screen bg-[#f7f6f2] text-slate-900">
       <div className="mx-auto max-w-6xl p-4 md:p-7 space-y-4">
-        <section className="rounded-3xl border border-[#EAD400] bg-[#FFE600] p-4 md:p-5 overflow-hidden relative">
+        <section className="rounded-3xl border border-[#EAD400] bg-[#FFE600] p-4 md:p-5 overflow-visible relative">
           <div className="absolute -right-12 -top-16 w-48 h-48 rounded-full bg-white/25"/>
           <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3 min-w-0">
