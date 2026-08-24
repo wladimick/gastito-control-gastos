@@ -51,7 +51,7 @@ export async function fetchAfcContributions() {
   if (!isConfigured) return []
   const { data, error } = await supabase
     .from('previsional_contributions')
-    .select('period_month, taxable_income, worker_contribution, employer_personal_contribution, payment_date, provider, verified')
+    .select('period_month, taxable_income, worker_contribution, employer_personal_contribution, payment_date, provider, employer, employer_rut, verified')
     .eq('system', 'afc')
     .order('period_month')
   if (error) throw error
@@ -62,6 +62,8 @@ export async function fetchAfcContributions() {
     employerPersonalContribution: Number(row.employer_personal_contribution || 0),
     paymentDate: row.payment_date,
     provider: row.provider,
+    employer: row.employer,
+    employerRut: row.employer_rut,
     verified: Boolean(row.verified),
   }))
 }
