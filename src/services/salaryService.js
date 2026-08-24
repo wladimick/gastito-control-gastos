@@ -1,6 +1,6 @@
 import { supabase, isConfigured } from '../lib/supabase'
 
-const FIELDS = `id, period_month, scheduled_payment_date, net_amount, gross_amount,
+const FIELDS = `id, period_month, scheduled_payment_date, actual_payment_date, payment_evidence, net_amount, gross_amount,
   base_salary_contract, base_salary_paid, gratification, overtime_amount, taxable_base,
   pension_amount, health_amount, unemployment_amount, income_tax, legal_deductions,
   other_deductions, days_worked, overtime_minutes, permission_minutes, nonworked_minutes,
@@ -11,6 +11,8 @@ function mapRow(row) {
     id: row.id,
     periodMonth: row.period_month,
     scheduledPaymentDate: row.scheduled_payment_date,
+    actualPaymentDate: row.actual_payment_date,
+    paymentEvidence: row.payment_evidence,
     netAmount: Number(row.net_amount || 0),
     grossAmount: Number(row.gross_amount || 0),
     baseSalaryContract: Number(row.base_salary_contract || 0),
