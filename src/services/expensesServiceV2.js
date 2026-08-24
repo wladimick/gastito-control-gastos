@@ -33,7 +33,8 @@ function mapRow(row) {
   return {
     id: row.id,
     rawId: row.id,
-    source: 'manual',
+    source: row.source ?? 'manual',
+    originSource: row.source ?? 'manual',
     editable: true,
     amount: Number(row.amount || 0),
     description: row.description,
@@ -50,7 +51,7 @@ function mapRow(row) {
 }
 
 const SELECT_FIELDS = `
-  id, amount, description, bank_id, payment_method_id,
+  id, amount, description, source, bank_id, payment_method_id,
   card_type, installments_count, status, expense_date, notes,
   categories ( label )
 `
