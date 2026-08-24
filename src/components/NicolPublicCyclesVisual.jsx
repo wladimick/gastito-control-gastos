@@ -71,13 +71,14 @@ function buildCategorySummary(items, percentage) {
 
 function Header() {
   return (
-    <header className="border-b border-[var(--line)] bg-[var(--bg-elev)]">
-      <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
-        <div>
+    <header className="relative overflow-hidden border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
+      <div className="pointer-events-none absolute -left-8 -top-12 h-32 w-32 rounded-full bg-violet-300/30 blur-2xl" aria-hidden="true" />
+      <div className="relative max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <div className="text-[18px] font-bold tracking-tight">Gastito</div>
-          <div className="text-[11px] text-[var(--muted)] mt-0.5">Gastos compartidos con Nicol</div>
+          <div className="text-[11px] text-slate-600 mt-0.5">Gastos compartidos con Nicol</div>
         </div>
-        <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-[var(--muted)] border border-[var(--line)] rounded-full px-2.5 py-1">
+        <div className="shrink-0 text-[10px] uppercase tracking-[0.12em] font-bold text-violet-800 border border-white/80 bg-white/70 rounded-full px-2.5 py-1">
           Solo lectura
         </div>
       </div>
@@ -136,8 +137,9 @@ function CycleSelector({ cycles, selectedKey, onSelect }) {
 
 function CycleSummary({ cycle, percentage, index, total, onMove }) {
   return (
-    <section className="bg-[var(--ink)] text-[var(--bg)] rounded-2xl p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+    <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-violet-950 to-fuchsia-900 text-[var(--bg)] rounded-2xl p-4 sm:p-5 shadow-sm shadow-violet-950/25">
+      <div className="pointer-events-none absolute -right-10 -top-14 h-40 w-40 rounded-full bg-fuchsia-400/20 blur-3xl" aria-hidden="true" />
+      <div className="relative flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] opacity-60 font-bold">
             {cycle.isUpcoming ? 'Monto estimado del ciclo' : 'Total compartido del ciclo'}
@@ -156,8 +158,8 @@ function CycleSummary({ cycle, percentage, index, total, onMove }) {
         </div>
       </div>
 
-      <div className="font-mono text-[30px] font-bold mt-4">{fmtCLP(cycle.sharedTotal || 0)}</div>
-      <div className="mt-4 pt-4 border-t border-white/15 flex items-end justify-between gap-4">
+      <div className="relative font-mono text-[30px] font-bold mt-4">{fmtCLP(cycle.sharedTotal || 0)}</div>
+      <div className="relative mt-4 pt-4 border-t border-white/15 flex items-end justify-between gap-4">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] opacity-60 font-bold">Aporte de Nicol</div>
           <div className="font-mono text-[23px] font-bold mt-1">{fmtCLP(cycle.nicolAmount || 0)}</div>
@@ -165,7 +167,7 @@ function CycleSummary({ cycle, percentage, index, total, onMove }) {
         <div className="text-[13px] font-semibold bg-white/10 rounded-full px-3 py-1.5">{percentage}%</div>
       </div>
 
-      <div className="mt-4 rounded-xl bg-white/10 px-3.5 py-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
+      <div className="relative mt-4 rounded-xl bg-white/10 px-3.5 py-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
         <span className="font-mono font-semibold">{fmtCLP(cycle.sharedTotal || 0)}</span>
         <span className="opacity-55">×</span>
         <span className="font-semibold">{percentage}%</span>
@@ -173,7 +175,7 @@ function CycleSummary({ cycle, percentage, index, total, onMove }) {
         <span className="font-mono font-bold">{fmtCLP(cycle.nicolAmount || 0)}</span>
       </div>
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] opacity-65 mt-4">
+      <div className="relative flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] opacity-65 mt-4">
         {cycle.dueDate && <span>Vencimiento desde {formatDate(cycle.dueDate)}</span>}
         {cycle.projectedCount > 0 && <span>{cycle.projectedCount} cuotas proyectadas</span>}
         {cycle.recurringCount > 0 && <span>{cycle.recurringCount} recurrentes</span>}
@@ -290,7 +292,7 @@ function TransactionRow({ item, percentage }) {
     : item.isProjected ? 'Próximo ciclo' : 'Confirmado'
 
   return (
-    <div className="px-4 py-4 flex items-start gap-3.5">
+    <div className="px-4 py-3 flex items-start gap-3">
       <div
         className="w-10 h-10 rounded-xl grid place-items-center text-[19px] shrink-0 border"
         style={{
@@ -303,9 +305,11 @@ function TransactionRow({ item, percentage }) {
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+        <div className="text-[13px] font-semibold break-words leading-snug">{item.description}</div>
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
           <span
-            className="inline-flex items-center rounded-full border px-2 py-0.5 text-[9.5px] font-bold"
+            className="inline-flex max-w-[9.5rem] items-center rounded-full border px-2 py-0.5 text-[9.5px] font-bold truncate"
+            title={category.label}
             style={{
               borderColor: translucent(category.color, '66'),
               backgroundColor: translucent(category.color, '18'),
@@ -321,11 +325,9 @@ function TransactionRow({ item, percentage }) {
             {stateLabel}
           </span>
         </div>
-
-        <div className="text-[13px] font-semibold break-words leading-snug">{item.description}</div>
         <InstallmentBadges item={item} />
 
-        <div className="text-[10.5px] text-[var(--muted)] mt-2 leading-relaxed">
+        <div className="text-[10.5px] text-[var(--muted)] mt-1.5 leading-relaxed">
           {item.isRecurring ? 'Gasto mensual' : item.isProjected ? 'Monto proyectado' : formatDate(item.date) || TYPE_LABELS[item.movementType] || 'Movimiento'}
           {!item.isRecurring && !isInstallment && <> · {TYPE_LABELS[item.movementType] || 'Movimiento'}</>}
           {isInstallment && originalAmount > amount && <> · Compra total {fmtCLP(originalAmount)}</>}
