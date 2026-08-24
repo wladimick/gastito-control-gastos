@@ -29,12 +29,16 @@ function missingPeriods(slips) {
   return result
 }
 
+function formatDate(value) {
+  if (!value) return ''
+  const text = String(value)
+  return `${text.slice(8, 10)}/${text.slice(5, 7)}/${text.slice(0, 4)}`
+}
+
 function paymentEvidenceLabel(item) {
-  if (!item?.scheduledPaymentDate) return ''
-  const date = item.scheduledPaymentDate
-  const formatted = `${date.slice(8, 10)}/${date.slice(5, 7)}`
-  const confirmed = String(item.notes || '').toLowerCase().includes('abono confirmado')
-  return confirmed ? ` · abono confirmado ${formatted}` : ` · abono planificado ${formatted}`
+  if (item?.actualPaymentDate) return ` · abono confirmado ${formatDate(item.actualPaymentDate)}`
+  if (item?.scheduledPaymentDate) return ` · abono planificado ${formatDate(item.scheduledPaymentDate)}`
+  return ''
 }
 
 function Metric({ label, value, detail, tone = 'default' }) {
@@ -61,11 +65,11 @@ export default function SalarySlips({ salarySlips = [] }) {
     <div>
       <div className="text-[9.5px] uppercase tracking-[.13em] text-[var(--muted)] font-bold">Ingresos · Tibox</div>
       <h1 className="text-[21px] md:text-[22px] font-bold mt-1">Liquidaciones de sueldo</h1>
-      <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Gastito separa el mes de la liquidación del mes en que recibes el dinero. Cuando falta una liquidación, la proyección usa el promedio de las últimas 3 disponibles.</p>
+      <p className="text-[10px] text-[var(--muted)] mt-1 max-w-2xl">Gastito separa el período de la liquidación de la fecha bancaria en que realmente recibiste el dinero. Si aún no existe liquidación, la proyección usa el promedio de las últimas 3 disponibles.</p>
     </div>
 
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Metric label={`Sueldo pagado · ${monthLabel(currentCash)}`} value={fmtCLP(currentSalary.amount)} detail={currentSalary.mode === 'actual' ? `Corresponde a liquidación ${monthLabel(currentSalary.periodKey)}` : 'Estimación móvil'} tone="green"/>
+      <Metric label={`Sueldo pagado · ${monthLabel(currentCash)}`} value={fmtCLP(currentSalary.amount)} detail={currentSalary.mode === 'actual' ? `Corresponde a liquidación ${monthLabel(currentSalary.periodKey)}` : currentSalary.mode === 'no_payment' ? 'Sin abono en este mes' : 'Estimación móvil'} tone="green"/>
       <Metric label={`Próximo · ${monthLabel(nextCash)}`} value={fmtCLP(nextSalary.amount)} detail={nextSalary.mode === 'actual' ? `Liquidación ${monthLabel(nextSalary.periodKey)}` : `Estimado con ${nextSalary.sourceCount} liquidaciones`} tone="blue"/>
       <Metric label="Promedio cargado" value={fmtCLP(stats.average)} detail={`${stats.count} liquidaciones reales`}/>
       <Metric label="Rango líquido" value={`${fmtCLP(stats.minimum)} – ${fmtCLP(stats.maximum)}`} detail="Mínimo y máximo del historial cargado"/>
@@ -86,6 +90,7 @@ export default function SalarySlips({ salarySlips = [] }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11.5px] font-semibold">{monthLabel(salaryPeriodKey(item))}</span>
               <Badge tone="ok" className="!text-[8px] !px-1.5 !py-0.5">Real</Badge>
+              {item.actualPaymentDate && <Badge tone="info" className="!text-[8px] !px-1.5 !py-0.5">Abono verificado</Badge>}
               {item.overtimeAmount > 0 && <Badge tone="info" className="!text-[8px] !px-1.5 !py-0.5">Horas extra {fmtCLP(item.overtimeAmount)}</Badge>}
             </div>
             <div className="text-[9px] text-[var(--muted)] mt-1">Haberes {fmtCLP(item.grossAmount)} · descuentos {fmtCLP(item.legalDeductions)} · base pagada {fmtCLP(item.baseSalaryPaid)}</div>
@@ -98,7 +103,7 @@ export default function SalarySlips({ salarySlips = [] }) {
     </Card>
 
     <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] px-4 py-3 text-[9.5px] text-[var(--muted)] leading-relaxed">
-      <strong className="text-[var(--ink)]">Regla de flujo:</strong> una liquidación pertenece al período laboral indicado en el documento, pero el ingreso se asigna al mes en que se paga. Si tenemos comprobante bancario, Gastito muestra la fecha confirmada; si no, usa el día 05 del mes siguiente como fecha de planificación.
+      <strong className="text-[var(--ink)]">Regla de flujo:</strong> si existe comprobante bancario, la fecha efectiva de abono manda. Solo cuando todavía no tenemos evidencia Gastito usa la fecha programada para planificar el ingreso.
     </div>
   </div>
 }
