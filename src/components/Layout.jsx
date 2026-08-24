@@ -11,58 +11,51 @@ const BASE_NAV_GROUPS = [
     ],
   },
   {
-    label: 'Dinero',
+    label: 'Caja',
     items: [
-      { id: 'accounts', label: 'Cuentas y flujo', icon: 'wallet', short: 'Cuentas' },
+      { id: 'accounts', label: 'Cuentas', icon: 'wallet', short: 'Cuentas' },
       { id: 'mercadopago', label: 'Mercado Pago', brand: 'mercadopago', short: 'MP', href: '?mercadopago-admin=1' },
-      { id: 'receivables', label: 'Me deben', brand: 'receivables', short: 'Cobros', href: '?me-deben=1' },
       { id: 'paypal', label: 'Shopify / PayPal', brand: 'paypal', short: 'PayPal', href: '?paypal-admin=1' },
-      { id: 'salary', label: 'Sueldo y previsión', icon: 'cash', short: 'Sueldo', href: '?liquidaciones=1' },
     ],
   },
   {
-    label: 'Gastos y tarjetas',
+    label: 'Patrimonio',
     items: [
-      { id: 'expenses', label: 'Gastos', icon: 'list', short: 'Gastos' },
-      { id: 'billing', label: 'Facturación', icon: 'card', short: 'Factur.' },
-      { id: 'installments', label: 'Cuotas', icon: 'layers', short: 'Cuotas' },
-    ],
-  },
-  {
-    label: 'Planificación',
-    items: [
-      { id: 'recurring', label: 'Recurrentes', icon: 'repeat', short: 'Recurr.' },
-      { id: 'budgets', label: 'Presupuestos', icon: 'target', short: 'Presup.' },
-      { id: 'reimbursements', label: 'Rendiciones', icon: 'cash', short: 'Rend.', badge: 0 },
-      { id: 'projection', label: 'Proyección', icon: 'trend', short: 'Proyec.' },
+      { id: 'previsional', label: 'Previsión', icon: 'savings', short: 'Previsión' },
       { id: 'savings', label: 'Ahorros', icon: 'savings', short: 'Ahorros' },
     ],
   },
   {
-    label: 'Compartidos',
+    label: 'Flujo',
     items: [
-      { id: 'nicol', label: 'Gastos con Nicol', icon: 'users', short: 'Nicol', href: '?nicol-admin=recurrentes' },
+      { id: 'employment', label: 'Perfil laboral', icon: 'person', short: 'Trabajo' },
+      { id: 'salary', label: 'Liquidaciones', icon: 'cash', short: 'Sueldo' },
+      { id: 'expenses', label: 'Gastos', icon: 'list', short: 'Gastos' },
+      { id: 'spending', label: 'Métricas de gasto', icon: 'chart', short: 'Métricas' },
+      { id: 'billing', label: 'Facturación', icon: 'card', short: 'Factur.' },
+      { id: 'installments', label: 'Cuotas', icon: 'layers', short: 'Cuotas' },
+      { id: 'recurring', label: 'Recurrentes', icon: 'repeat', short: 'Recurr.' },
+      { id: 'budgets', label: 'Presupuestos', icon: 'target', short: 'Presup.' },
+      { id: 'receivables', label: 'Me deben', brand: 'receivables', short: 'Cobros', href: '?me-deben=1' },
+      { id: 'reimbursements', label: 'Rendiciones', icon: 'cash', short: 'Rend.', badge: 0 },
+      { id: 'projection', label: 'Proyección', icon: 'trend', short: 'Proyec.' },
+      { id: 'nicol', label: 'Compartido con Nicol', icon: 'users', short: 'Nicol', href: '?nicol-admin=recurrentes' },
+      { id: 'reports', label: 'Reportes financieros', icon: 'chart', short: 'Reportes' },
     ],
   },
   {
-    label: 'Análisis',
+    label: 'Herramientas',
     items: [
-      { id: 'reports', label: 'Reportes', icon: 'chart', short: 'Reportes' },
-      { id: 'comparison', label: 'Comparación', icon: 'scale', short: 'Compar.' },
-    ],
-  },
-  {
-    label: 'Bot Telegram',
-    items: [
-      { id: 'unparsed', label: 'Sin interpretar', icon: 'alert', badge: 5, short: 'Bot' },
-      { id: 'telegram', label: 'Configuración', icon: 'bot', short: 'Config' },
+      { id: 'unparsed', label: 'Bot · sin interpretar', icon: 'alert', badge: 5, short: 'Bot' },
+      { id: 'telegram', label: 'Bot · configuración', icon: 'bot', short: 'Config' },
     ],
   },
 ]
 
 const FINANCIAL_VIEWS = new Set([
-  'dashboard', 'expenses', 'billing', 'installments', 'accounts', 'budgets',
-  'recurring', 'projection', 'reports', 'comparison',
+  'dashboard', 'accounts', 'previsional', 'employment', 'salary', 'expenses',
+  'spending', 'billing', 'installments', 'budgets', 'recurring', 'projection',
+  'reports',
 ])
 
 function buildNavGroups(isSuperAdmin, unparsedCount, reimbursementCount) {
@@ -84,7 +77,7 @@ function buildNavGroups(isSuperAdmin, unparsedCount, reimbursementCount) {
   return groups
 }
 
-const MOBILE_PRIMARY = ['dashboard', 'expenses', 'billing', 'accounts']
+const MOBILE_PRIMARY = ['dashboard', 'accounts', 'expenses', 'spending']
 
 function NavIcon({ item, size = 16 }) {
   if (item.brand) return <FinancialBrand brand={item.brand} size="sm"/>
