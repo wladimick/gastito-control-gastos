@@ -173,7 +173,7 @@ export default function NicolRecurringAdmin() {
 
   return (
     <div className="min-h-screen bg-[#fcfbff] text-[var(--ink)]">
-      <header className="relative overflow-hidden border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
+      <header className="relative overflow-visible border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
         <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-rose-300/30 blur-2xl" aria-hidden="true" />
         <div className="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
           <div className="relative">

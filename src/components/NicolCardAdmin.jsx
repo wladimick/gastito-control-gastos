@@ -403,7 +403,7 @@ export default function NicolCardAdmin() {
 
   return (
     <div className="min-h-screen bg-[#fcfbff] text-[var(--ink)]">
-      <header className="relative overflow-hidden border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
+      <header className="relative overflow-visible border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
         <div className="absolute -left-8 -top-10 h-32 w-32 rounded-full bg-violet-300/25 blur-2xl" aria-hidden="true" />
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div className="relative">
