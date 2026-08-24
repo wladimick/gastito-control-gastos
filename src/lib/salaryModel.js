@@ -114,3 +114,46 @@ export function salaryStats(slips = []) {
     latest: actual[actual.length - 1] || null,
   }
 }
+
+
+export function salaryContributionStats(slips = []) {
+  const actual = (slips || [])
+    .filter(item => item?.status !== 'estimated')
+    .filter(item => Number(item?.pensionHealthBase ?? item?.pension_health_base ?? item?.grossAmount ?? item?.gross_amount ?? 0) > 0)
+
+  return actual.reduce((acc, item) => {
+    const pensionBase = Number(item?.pensionHealthBase ?? item?.pension_health_base ?? item?.grossAmount ?? item?.gross_amount ?? 0)
+    const unemploymentBase = Number(item?.unemploymentBase ?? item?.unemployment_base ?? pensionBase)
+    const pensionDeduction = Number(item?.pensionAmount ?? item?.pension_amount ?? 0)
+    const health = Number(item?.healthAmount ?? item?.health_amount ?? 0)
+    const afcWorker = Number(item?.unemploymentAmount ?? item?.unemployment_amount ?? 0)
+
+    const afpWorkerSavings = Math.round(pensionBase * 0.10)
+    const afpCommission = Math.max(pensionDeduction - afpWorkerSavings, 0)
+    const afcEmployerCic = Math.round(unemploymentBase * 0.016)
+    const afcEmployerFcs = Math.round(unemploymentBase * 0.008)
+
+    acc.months += 1
+    acc.pensionBase += pensionBase
+    acc.afpDeducted += pensionDeduction
+    acc.afpWorkerSavings += afpWorkerSavings
+    acc.afpCommission += afpCommission
+    acc.health += health
+    acc.afcWorker += afcWorker
+    acc.afcEmployerCic += afcEmployerCic
+    acc.afcExpectedCic += afcWorker + afcEmployerCic
+    acc.afcEmployerFcs += afcEmployerFcs
+    return acc
+  }, {
+    months: 0,
+    pensionBase: 0,
+    afpDeducted: 0,
+    afpWorkerSavings: 0,
+    afpCommission: 0,
+    health: 0,
+    afcWorker: 0,
+    afcEmployerCic: 0,
+    afcExpectedCic: 0,
+    afcEmployerFcs: 0,
+  })
+}
