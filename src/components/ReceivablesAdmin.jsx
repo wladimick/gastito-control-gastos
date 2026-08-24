@@ -202,6 +202,7 @@ export default function ReceivablesAdmin() {
 
   return <div className="min-h-screen bg-[#f7f6f2] text-slate-900">
     <div className="mx-auto max-w-5xl p-4 md:p-7 space-y-4">
+      <section className="relative rounded-3xl border border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50 p-4 md:p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <FinancialBrand brand="receivables" size="lg"/>
@@ -212,10 +213,11 @@ export default function ReceivablesAdmin() {
           </div>
         </div>
         <div className="flex gap-2">
-          <ExternalMenu/>
+          <ExternalMenu align="left"/>
           <button onClick={() => setFormOpen(v => !v)} className={`${BTN} bg-slate-900 text-white`}>+ Nueva</button>
         </div>
       </div>
+      </section>
 
       {message && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] text-amber-900">{message}</div>}
 

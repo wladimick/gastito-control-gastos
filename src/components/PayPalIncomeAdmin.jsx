@@ -78,7 +78,7 @@ export default function PayPalIncomeAdmin() {
             </div>
           </div>
           <div className="flex gap-2">
-            <ExternalMenu/>
+            <ExternalMenu align="left"/>
             <button onClick={load} disabled={loading} className="h-10 rounded-xl bg-[#003087] px-3 text-[10px] font-semibold text-white disabled:opacity-50">{loading ? 'Actualizando…' : 'Actualizar'}</button>
           </div>
         </div>

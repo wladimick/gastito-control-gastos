@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import ExternalMenu from './ExternalMenu'
 import Login from './Login'
-import { fmtCLP } from '../lib/helpers'
+import { fmtCLP, Icon } from '../lib/helpers'
 import { isConfigured, supabase } from '../lib/supabase'
 import {
   createOrRotateNicolShare,
@@ -207,7 +207,7 @@ function TransactionRow({ item, categories, categoriesById, busy, categoryBusy, 
 
         <div className="mt-2 grid sm:grid-cols-[minmax(0,230px)_1fr] gap-2 sm:items-end">
           <label>
-            <span className="block text-[9.5px] uppercase tracking-[0.08em] text-[var(--muted)] font-bold mb-1">Categoría</span>
+            <span className="block text-[9.5px] uppercase tracking-[0.08em] text-[var(--muted)] font-bold mb-1"><Icon name="tag" size={13} className="sm:hidden"/><span className="hidden sm:inline">Categoría</span></span>
             <select
               value={item.category_id || ''}
               disabled={categoryBusy}

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { fmtCLP } from '../lib/helpers'
+import { fmtCLP, Icon } from '../lib/helpers'
 import FinancialBrand from './FinancialBrand'
 import ExternalMenu from './ExternalMenu'
 import { categoryLabel, uniqueCategoryOptions } from '../lib/categoryOptions'
@@ -70,6 +70,11 @@ export default function MercadoPagoAdmin() {
   const [categories, setCategories] = useState([])
   const [savingCategory, setSavingCategory] = useState('')
   const [editingCategory, setEditingCategory] = useState('')
+  const [search, setSearch] = useState('')
+  const [classificationFilter, setClassificationFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [reviewFilter, setReviewFilter] = useState('all')
+  const [sort, setSort] = useState('date-desc')
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState('')
@@ -104,12 +109,31 @@ export default function MercadoPagoAdmin() {
 
   useEffect(() => { load() }, [load])
 
-  const totals = useMemo(() => movements.reduce((acc, item) => {
+  const categoryOptions = useMemo(() => uniqueCategoryOptions(categories), [categories])
+  const filteredMovements = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase('es-CL')
+    const matches = movements.filter(item => {
+      const categoryId = item.category?.id || ''
+      const text = `${movementLabel(item)} ${item.description || ''} ${categoryLabel(item.category || {})}`.toLocaleLowerCase('es-CL')
+      return (!needle || text.includes(needle))
+        && (classificationFilter === 'all' || item.classification === classificationFilter)
+        && (categoryFilter === 'all' || categoryId === categoryFilter)
+        && (reviewFilter === 'all' || (reviewFilter === 'review' ? item.review_status === 'review_required' : item.review_status !== 'review_required'))
+    })
+    return [...matches].sort((a, b) => {
+      if (sort === 'date-asc') return new Date(a.occurred_at) - new Date(b.occurred_at)
+      if (sort === 'amount-desc') return Math.abs(Number(b.net_credit_amount || b.net_debit_amount || 0)) - Math.abs(Number(a.net_credit_amount || a.net_debit_amount || 0))
+      if (sort === 'amount-asc') return Math.abs(Number(a.net_credit_amount || a.net_debit_amount || 0)) - Math.abs(Number(b.net_credit_amount || b.net_debit_amount || 0))
+      if (sort === 'name-asc') return movementLabel(a).localeCompare(movementLabel(b), 'es')
+      return new Date(b.occurred_at) - new Date(a.occurred_at)
+    })
+  }, [movements, search, classificationFilter, categoryFilter, reviewFilter, sort])
+  const visibleTotals = useMemo(() => filteredMovements.reduce((acc, item) => {
     acc.in += Number(item.net_credit_amount || 0)
     acc.out += Number(item.net_debit_amount || 0)
     return acc
-  }, { in: 0, out: 0 }), [movements])
-  const categoryOptions = useMemo(() => uniqueCategoryOptions(categories), [categories])
+  }, { in: 0, out: 0 }), [filteredMovements])
+  const hasActiveFilters = Boolean(search) || classificationFilter !== 'all' || categoryFilter !== 'all' || reviewFilter !== 'all' || sort !== 'date-desc'
 
   const syncNow = async () => {
     setSyncing(true)
@@ -176,12 +200,12 @@ export default function MercadoPagoAdmin() {
                 <p className="mt-0.5 text-[10px] text-slate-700/75">Saldo, reservas y movimientos conciliados automáticamente.</p>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={status?.status}/>
-              <div className="grid grid-cols-2 gap-2 sm:flex">
-                <ExternalMenu/>
-                <button onClick={syncNow} disabled={syncing} className={`${BTN} min-w-[138px] bg-[#171715] text-white`}>
-                  {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
+              <div className="flex items-center gap-2">
+                <ExternalMenu align="left"/>
+                <button aria-label="Sincronizar ahora" title="Sincronizar ahora" onClick={syncNow} disabled={syncing} className={`${BTN} w-11 px-0 bg-[#171715] text-white sm:w-auto sm:min-w-[138px] sm:px-3`}>
+                  <Icon name="refresh" size={16}/><span className="hidden sm:inline sm:ml-1.5">{syncing ? 'Sincronizando…' : 'Sincronizar ahora'}</span>
                 </button>
               </div>
             </div>
@@ -219,15 +243,30 @@ export default function MercadoPagoAdmin() {
           <div className="p-3.5 border-b border-slate-100 flex items-center justify-between gap-3">
             <div>
               <div className="text-[11.5px] font-semibold">Movimientos</div>
-              <div className="text-[8.5px] text-slate-500 mt-0.5">{movements.length} visibles · Entradas {fmtCLP(totals.in)} · Salidas {fmtCLP(totals.out)}</div>
+              <div className="text-[8.5px] text-slate-500 mt-0.5">{filteredMovements.length} de {movements.length} visibles · Entradas {fmtCLP(visibleTotals.in)} · Salidas {fmtCLP(visibleTotals.out)}</div>
             </div>
             <div className="hidden sm:flex"><FinancialBrand brand="mercadopago" size="sm"/></div>
           </div>
+          <details className="border-b border-slate-100 bg-slate-50/70 group">
+            <summary className="min-h-11 cursor-pointer list-none px-3.5 py-2.5 flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-2 text-[10px] font-semibold text-slate-700"><Icon name="filter" size={14}/>Filtrar y ordenar</span>
+              <span className="text-[9px] text-slate-500 group-open:hidden">Ver opciones</span>
+              <span className="text-[9px] text-slate-500 hidden group-open:inline">Ocultar</span>
+            </summary>
+            <div className="grid grid-cols-2 gap-2 px-3.5 pb-3 sm:grid-cols-5">
+              <label className="col-span-2 sm:col-span-1"><span className="sr-only">Buscar movimiento</span><div className="relative"><Icon name="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar" className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[11px] outline-none focus:ring-2 focus:ring-[#3483FA]/25"/></div></label>
+              <label><span className="sr-only">Tipo</span><select value={classificationFilter} onChange={event => setClassificationFilter(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-2 text-[10px]"><option value="all">Todos los tipos</option>{Object.entries(CLASS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label><span className="sr-only">Categoría</span><select value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-2 text-[10px]"><option value="all">Categorías</option>{categoryOptions.map(category => <option key={category.id} value={category.id}>{category.icon ? `${category.icon} ` : ''}{categoryLabel(category)}</option>)}</select></label>
+              <label><span className="sr-only">Estado de revisión</span><select value={reviewFilter} onChange={event => setReviewFilter(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-2 text-[10px]"><option value="all">Cualquier estado</option><option value="review">Por revisar</option><option value="verified">Revisados</option></select></label>
+              <label><span className="sr-only">Orden</span><select value={sort} onChange={event => setSort(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-2 text-[10px]"><option value="date-desc">Más recientes</option><option value="date-asc">Más antiguos</option><option value="amount-desc">Monto: mayor a menor</option><option value="amount-asc">Monto: menor a mayor</option><option value="name-asc">Nombre: A a Z</option></select></label>
+              {hasActiveFilters && <button type="button" onClick={() => { setSearch(''); setClassificationFilter('all'); setCategoryFilter('all'); setReviewFilter('all'); setSort('date-desc') }} className="col-span-2 h-10 justify-self-start px-2 text-[10px] font-semibold text-[#3483FA] hover:underline sm:col-span-1">Limpiar filtros</button>}
+            </div>
+          </details>
           {loading ? <div className="p-8 text-center text-[10px] text-slate-400" aria-busy="true">Cargando movimientos…</div> : movements.length === 0 ? (
             <div className="p-8 text-center"><div className="text-[11px] font-semibold text-slate-700">Aún no hay movimientos importados</div><div className="mt-1 text-[9.5px] text-slate-500">Sincroniza Mercado Pago para traer tus movimientos. Si ya lo hiciste, vuelve a intentarlo en unos minutos.</div><button type="button" onClick={syncNow} disabled={syncing} className={`${BTN} mt-4 bg-slate-900 text-white`}>{syncing ? 'Sincronizando…' : 'Sincronizar ahora'}</button></div>
-          ) : (
+          ) : filteredMovements.length === 0 ? <div className="p-8 text-center"><div className="text-[11px] font-semibold text-slate-700">No hay movimientos con estos filtros</div><button type="button" onClick={() => { setSearch(''); setClassificationFilter('all'); setCategoryFilter('all'); setReviewFilter('all'); setSort('date-desc') }} className="mt-2 text-[10px] font-semibold text-[#3483FA] hover:underline">Limpiar filtros</button></div> : (
             <div className="divide-y divide-slate-100">
-              {movements.map(item => {
+              {filteredMovements.map(item => {
                 const isCredit = Number(item.net_credit_amount || 0) > 0
                 const amount = isCredit ? Number(item.net_credit_amount || 0) : Number(item.net_debit_amount || 0)
                 return <div key={item.id} className="px-3.5 py-3 flex items-start gap-3">
@@ -252,7 +291,7 @@ export default function MercadoPagoAdmin() {
                         {categoryOptions.map(category => <option key={category.id} value={category.id}>{category.icon ? `${category.icon} ` : ''}{categoryLabel(category)}</option>)}
                       </select> : <>
                         <span className="inline-flex h-7 items-center rounded-full bg-slate-100 px-2 text-[9px] font-semibold text-slate-700">{item.category ? `${item.category.icon || '•'} ${categoryLabel(item.category)}` : 'Sin categoría'}</span>
-                        <button type="button" onClick={() => setEditingCategory(item.id)} className="h-8 px-2 text-[9px] font-semibold text-[#3483FA] hover:underline">Cambiar categoría</button>
+                        <button type="button" aria-label={`Cambiar categoría de ${movementLabel(item)}`} title="Cambiar categoría" onClick={() => setEditingCategory(item.id)} className="h-10 w-10 grid place-items-center rounded-lg text-[#3483FA] hover:bg-blue-50 sm:h-8 sm:w-auto sm:px-2 sm:inline-flex sm:gap-1"><Icon name="tag" size={14}/><span className="hidden sm:inline">Cambiar categoría</span></button>
                       </>}
                       {editingCategory === item.id && <button type="button" onClick={() => setEditingCategory('')} className="h-8 px-2 text-[9px] font-semibold text-slate-500">Cancelar</button>}
                       {savingCategory === item.id && <span className="text-[8px] text-slate-400">Guardando…</span>}
