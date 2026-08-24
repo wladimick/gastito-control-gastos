@@ -24,6 +24,29 @@ export async function fetchPrevisionalAccounts() {
   }))
 }
 
+export async function fetchAfpContributions() {
+  if (!isConfigured) return []
+  const { data, error } = await supabase
+    .from('previsional_contributions')
+    .select('period_month, taxable_income, credited_amount, payment_date, movement_type, fund_code, fund_units, unit_value, provider, source_folio, verified')
+    .eq('system', 'afp')
+    .order('period_month')
+  if (error) throw error
+  return (data || []).map(row => ({
+    periodMonth: row.period_month,
+    taxableIncome: Number(row.taxable_income || 0),
+    creditedAmount: Number(row.credited_amount || 0),
+    paymentDate: row.payment_date,
+    movementType: row.movement_type,
+    fundCode: row.fund_code,
+    fundUnits: Number(row.fund_units || 0),
+    unitValue: Number(row.unit_value || 0),
+    provider: row.provider,
+    sourceFolio: row.source_folio,
+    verified: Boolean(row.verified),
+  }))
+}
+
 export async function fetchAfcContributions() {
   if (!isConfigured) return []
   const { data, error } = await supabase
