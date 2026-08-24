@@ -111,6 +111,178 @@ input[type='month'] {
   }
 }
 
+
+
+/* ─────────────────────────────────────────────────────────────
+   Gastito typography system
+   A single responsive scale replaces legacy arbitrary font sizes.
+   Smallest visible text is always 10px.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --type-caption: 10px;
+  --type-small: 11px;
+  --type-body: 13px;
+  --type-subtitle: 15px;
+  --type-section: 18px;
+  --type-title: 22px;
+  --type-display: 26px;
+  --type-display-lg: 32px;
+}
+
+html[data-font-size='small'] {
+  --type-caption: 10px;
+  --type-small: 10px;
+  --type-body: 12px;
+  --type-subtitle: 14px;
+  --type-section: 17px;
+  --type-title: 20px;
+  --type-display: 24px;
+  --type-display-lg: 30px;
+}
+
+html[data-font-size='large'] {
+  --type-caption: 11px;
+  --type-small: 12px;
+  --type-body: 14px;
+  --type-subtitle: 16px;
+  --type-section: 20px;
+  --type-title: 24px;
+  --type-display: 29px;
+  --type-display-lg: 35px;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --type-caption: 11px;
+    --type-small: 12px;
+    --type-body: 14px;
+    --type-subtitle: 16px;
+    --type-section: 19px;
+    --type-title: 24px;
+    --type-display: 28px;
+    --type-display-lg: 34px;
+  }
+
+  html[data-font-size='small'] {
+    --type-caption: 10px;
+    --type-small: 11px;
+    --type-body: 13px;
+    --type-subtitle: 15px;
+    --type-section: 18px;
+    --type-title: 22px;
+    --type-display: 26px;
+    --type-display-lg: 32px;
+  }
+
+  html[data-font-size='large'] {
+    --type-caption: 12px;
+    --type-small: 13px;
+    --type-body: 15px;
+    --type-subtitle: 17px;
+    --type-section: 21px;
+    --type-title: 26px;
+    --type-display: 31px;
+    --type-display-lg: 37px;
+  }
+}
+
+body {
+  font-size: var(--type-body);
+}
+
+/* Semantic classes for new UI. */
+.type-caption { font-size: var(--type-caption) !important; }
+.type-small { font-size: var(--type-small) !important; }
+.type-body { font-size: var(--type-body) !important; }
+.type-subtitle { font-size: var(--type-subtitle) !important; }
+.type-section { font-size: var(--type-section) !important; }
+.type-title { font-size: var(--type-title) !important; }
+.type-display { font-size: var(--type-display) !important; }
+.type-display-lg { font-size: var(--type-display-lg) !important; }
+
+/*
+ * Legacy normalization.
+ * Attribute selectors also catch responsive classes such as md:text-[24px].
+ */
+[class*="text-[7px]"],
+[class*="text-[7.5px]"],
+[class*="text-[8px]"],
+[class*="text-[8.5px]"],
+[class*="text-[9px]"],
+[class*="text-[9.5px]"],
+[class*="text-[10px]"] {
+  font-size: var(--type-caption) !important;
+}
+
+[class*="text-[10.5px]"],
+[class*="text-[11px]"],
+[class*="text-[11.5px]"],
+.text-xs {
+  font-size: var(--type-small) !important;
+}
+
+[class*="text-[12px]"],
+[class*="text-[12.5px]"],
+[class*="text-[13px]"],
+[class*="text-[13.5px]"],
+[class*="text-[14px]"],
+.text-sm {
+  font-size: var(--type-body) !important;
+}
+
+[class*="text-[14.5px]"],
+[class*="text-[15px]"],
+[class*="text-[15.5px]"],
+[class*="text-[16px]"],
+.text-base {
+  font-size: var(--type-subtitle) !important;
+}
+
+[class*="text-[16.5px]"],
+[class*="text-[17px]"],
+[class*="text-[18px]"],
+[class*="text-[19px]"],
+[class*="text-[20px]"],
+.text-lg,
+.text-xl {
+  font-size: var(--type-section) !important;
+}
+
+[class*="text-[21px]"],
+[class*="text-[22px]"],
+[class*="text-[23px]"],
+[class*="text-[24px]"],
+[class*="text-[25px]"],
+.text-2xl {
+  font-size: var(--type-title) !important;
+}
+
+[class*="text-[26px]"],
+[class*="text-[27px]"],
+[class*="text-[28px]"],
+[class*="text-[29px]"],
+[class*="text-[30px]"],
+[class*="text-[31px]"],
+[class*="text-[32px]"],
+.text-3xl {
+  font-size: var(--type-display) !important;
+}
+
+[class*="text-[33px]"],
+[class*="text-[34px]"],
+[class*="text-[35px]"],
+[class*="text-[36px]"],
+[class*="text-[38px]"],
+[class*="text-[40px]"],
+[class*="text-[42px]"],
+[class*="text-[44px]"],
+[class*="text-[46px]"],
+[class*="text-[48px]"],
+.text-4xl,
+.text-5xl {
+  font-size: var(--type-display-lg) !important;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
