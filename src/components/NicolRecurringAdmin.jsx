@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import ExternalMenu from './ExternalMenu'
 import Login from './Login'
 import { fmtCLP } from '../lib/helpers'
 import { isConfigured, supabase } from '../lib/supabase'
@@ -171,23 +172,15 @@ export default function NicolRecurringAdmin() {
   if (!session) return <Login />
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
-      <header className="border-b border-[var(--line)] bg-[var(--bg-elev)]">
+    <div className="min-h-screen bg-[#fcfbff] text-[var(--ink)]">
+      <header className="relative overflow-hidden border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
+        <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-rose-300/30 blur-2xl" aria-hidden="true" />
         <div className="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-[18px] font-bold">Gastito · Recurrentes de Nicol</div>
-            <div className="text-[11px] text-[var(--muted)] mt-0.5">Luz, agua, internet y otros gastos mensuales</div>
+          <div className="relative">
+            <div className="text-[18px] font-bold text-slate-900">Gastito · Recurrentes de Nicol</div>
+            <div className="text-[11px] text-slate-600 mt-0.5">Luz, agua, internet y otros gastos mensuales</div>
           </div>
-          <div className="flex gap-2">
-            <a href={`${window.location.pathname}?nicol-admin=1`}
-              className="text-[11px] font-semibold border border-[var(--line)] rounded-lg px-3 py-2 hover:bg-[var(--hover)]">
-              Gastos de tarjetas
-            </a>
-            <a href={window.location.pathname}
-              className="text-[11px] font-semibold border border-[var(--line)] rounded-lg px-3 py-2 hover:bg-[var(--hover)]">
-              Volver a Gastito
-            </a>
-          </div>
+          <ExternalMenu/>
         </div>
       </header>
 
@@ -195,29 +188,30 @@ export default function NicolRecurringAdmin() {
         {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-[12px]">{error}</div>}
 
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="col-span-2 lg:col-span-1 bg-[var(--ink)] text-[var(--bg)] rounded-2xl p-4">
+          <div className="col-span-2 lg:col-span-1 bg-gradient-to-br from-violet-700 to-fuchsia-700 text-white rounded-2xl p-4 shadow-sm shadow-violet-700/20">
             <div className="text-[10px] uppercase tracking-[0.12em] opacity-60 font-bold">Recurrentes compartidos</div>
             <div className="font-mono text-[22px] font-bold mt-1">{fmtCLP(sharedTotal)}</div>
             <div className="text-[11px] opacity-65 mt-1">{sharedItems.length} conceptos activos</div>
           </div>
-          <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl p-4">
-            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Aporte Nicol</div>
+          <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4">
+            <div className="text-[10px] uppercase tracking-[0.12em] text-violet-800 font-bold">Aporte Nicol</div>
             <div className="font-mono text-[20px] font-bold mt-1">{fmtCLP(nicolTotal)}</div>
-            <div className="text-[11px] text-[var(--muted)] mt-1">{percentage}%</div>
+            <div className="text-[11px] text-violet-700 mt-1">{percentage}%</div>
           </div>
-          <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl p-4">
-            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Enlace público</div>
+          <div className={`rounded-2xl border p-4 ${hasActiveLink ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+            <div className={`text-[10px] uppercase tracking-[0.12em] font-bold ${hasActiveLink ? 'text-emerald-800' : 'text-amber-800'}`}>Enlace público</div>
             <div className={`text-[13px] font-semibold mt-2 ${hasActiveLink ? 'text-emerald-700' : 'text-amber-700'}`}>
               {hasActiveLink ? 'Activo' : 'Sin crear'}
             </div>
+            <a href="?nicol-admin=1" className={`inline-block mt-1 text-[10.5px] font-semibold underline underline-offset-2 ${hasActiveLink ? 'text-emerald-800' : 'text-amber-800'}`}>Ver y administrar enlace</a>
           </div>
-          <div className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl p-4">
-            <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Categorías</div>
+          <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4">
+            <div className="text-[10px] uppercase tracking-[0.12em] text-rose-800 font-bold">Categorías</div>
             <div className="text-[11.5px] font-semibold mt-2">Automáticas y editables</div>
           </div>
         </section>
 
-        <form onSubmit={createItem} className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl p-4">
+        <form onSubmit={createItem} className="bg-white border border-violet-100 rounded-2xl p-4 shadow-sm shadow-violet-950/5">
           <div>
             <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Nuevo recurrente</div>
             <h2 className="text-[16px] font-bold mt-1">Agregar gasto mensual</h2>
@@ -261,13 +255,13 @@ export default function NicolRecurringAdmin() {
               Incluir inmediatamente en el cobro a Nicol
             </label>
             <button disabled={creating} type="submit"
-              className="h-10 px-4 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[12px] font-semibold disabled:opacity-50">
+              className="h-10 px-4 rounded-xl bg-violet-700 text-white text-[12px] font-semibold hover:bg-violet-800 disabled:opacity-50">
               {creating ? 'Agregando…' : 'Agregar recurrente'}
             </button>
           </div>
         </form>
 
-        <section className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl overflow-hidden">
+        <section className="bg-white border border-violet-100 rounded-2xl overflow-hidden shadow-sm shadow-violet-950/5">
           <div className="p-4 border-b border-[var(--line)]">
             <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Gastos existentes</div>
             <h2 className="text-[16px] font-bold mt-1">Seleccionar, categorizar y actualizar</h2>

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fmtCLP } from '../lib/helpers'
 import FinancialBrand from './FinancialBrand'
+import ExternalMenu from './ExternalMenu'
 
 function formatDate(value, withTime = false) {
   if (!value) return 'Sin fecha'
@@ -210,9 +211,8 @@ export default function ReceivablesAdmin() {
             <p className="mt-0.5 text-[10px] text-slate-500">Préstamos, cuentas compartidas y pagos pendientes.</p>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2 md:flex">
-          <a href="/?mercadopago-admin=1" className={`${BTN} border border-[#EAD400] bg-[#FFF9D7] text-slate-900`}><FinancialBrand brand="mercadopago" size="sm"/><span className="ml-1.5 hidden sm:inline">Mercado Pago</span><span className="sm:hidden">MP</span></a>
-          <a href="/" className={`${BTN} border border-slate-200 bg-white text-slate-900`}>Volver</a>
+        <div className="flex gap-2">
+          <ExternalMenu/>
           <button onClick={() => setFormOpen(v => !v)} className={`${BTN} bg-slate-900 text-white`}>+ Nueva</button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import ExternalMenu from './ExternalMenu'
 import Login from './Login'
 import { fmtCLP } from '../lib/helpers'
 import { isConfigured, supabase } from '../lib/supabase'
@@ -65,20 +66,28 @@ function SimpleMessage({ title, text, loading = false }) {
 }
 
 function LinkPanel({ link, percentage, setPercentage, generatedUrl, onGenerate, onSavePercentage, onRevoke, busy }) {
+  const [copied, setCopied] = useState(false)
+
   const copy = async () => {
     if (!generatedUrl) return
     await navigator.clipboard.writeText(generatedUrl)
-    alert('Enlace copiado')
+    setCopied(true)
   }
 
   return (
-    <section className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl p-4 space-y-4">
-      <div>
-        <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Enlace público</div>
-        <h2 className="text-[16px] font-bold mt-1">Acceso de Nicol</h2>
-        <p className="text-[11.5px] text-[var(--muted)] mt-1 leading-relaxed">
-          Nicol solo puede leer los movimientos y recurrentes que marques.
-        </p>
+    <section className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-100 via-fuchsia-50 to-rose-50 p-4 sm:p-5 space-y-4 shadow-sm shadow-violet-950/5">
+      <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-fuchsia-300/25 blur-2xl" aria-hidden="true" />
+      <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.12em] text-violet-700 font-bold">Enlace compartido</div>
+          <h2 className="text-[18px] font-bold mt-1 text-slate-900">Portal de Nicol</h2>
+          <p className="text-[11.5px] text-slate-600 mt-1 leading-relaxed max-w-xl">
+            Comparte solo los movimientos y recurrentes que marques. Nicol puede verlos, pero no modificar nada.
+          </p>
+        </div>
+        <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${link ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+          {link ? '● Enlace activo' : '● Aún no creado'}
+        </span>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
@@ -91,45 +100,51 @@ function LinkPanel({ link, percentage, setPercentage, generatedUrl, onGenerate, 
             step="0.1"
             value={percentage}
             onChange={event => setPercentage(event.target.value)}
-            className="w-full h-10 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 font-mono text-[13px] outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            className="w-full h-10 rounded-xl border border-violet-200 bg-white/85 px-3 font-mono text-[13px] outline-none focus:ring-2 focus:ring-violet-300"
           />
         </label>
         {link && (
           <button disabled={busy} onClick={onSavePercentage}
-            className="h-10 px-4 rounded-lg border border-[var(--line)] text-[12px] font-semibold hover:bg-[var(--hover)] disabled:opacity-50">
+            className="h-10 px-4 rounded-xl border border-violet-200 bg-white/70 text-[12px] font-semibold text-violet-900 hover:bg-white disabled:opacity-50">
             Guardar porcentaje
           </button>
         )}
       </div>
 
-      {generatedUrl && (
-        <div className="bg-[var(--bg)] border border-[var(--line)] rounded-xl p-3">
-          <div className="text-[10px] text-[var(--muted)] mb-1">Nuevo enlace — guárdalo ahora</div>
-          <div className="text-[11px] break-all font-mono">{generatedUrl}</div>
-          <button onClick={copy} className="mt-2 h-8 px-3 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[11px] font-semibold">
-            Copiar enlace
+      {generatedUrl ? (
+        <div className="relative rounded-2xl border border-violet-200 bg-white/90 p-3.5">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="text-[10px] uppercase tracking-[0.1em] text-violet-700 font-bold">Enlace listo para enviar</div>
+            <span className="text-[10px] font-semibold text-emerald-700">Solo lectura</span>
+          </div>
+          <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2 text-[11px] break-all font-mono text-slate-700">{generatedUrl}</div>
+          <button onClick={copy} className="mt-2 h-9 px-3 rounded-lg bg-violet-700 text-white text-[11px] font-semibold hover:bg-violet-800">
+            {copied ? 'Enlace copiado' : 'Copiar enlace'}
           </button>
+        </div>
+      ) : link ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-[11px] text-emerald-900 leading-relaxed">
+          <span className="font-bold">El enlace de Nicol está activo.</span> Por seguridad, Gastito no conserva el token original: si necesitas volver a verlo o copiarlo, usa “Renovar enlace” y envía el nuevo.
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5 text-[11px] text-amber-900 leading-relaxed">
+          Aún no hay un enlace para Nicol. Créalo cuando quieras compartir el detalle seleccionado.
         </div>
       )}
 
       <div className="flex flex-wrap gap-2">
         <button disabled={busy} onClick={onGenerate}
-          className="h-10 px-4 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[12px] font-semibold disabled:opacity-50">
+          className="h-10 px-4 rounded-xl bg-violet-700 text-white text-[12px] font-semibold shadow-sm shadow-violet-700/25 hover:bg-violet-800 disabled:opacity-50">
           {link ? 'Renovar enlace' : 'Crear enlace para Nicol'}
         </button>
         {link && (
           <button disabled={busy} onClick={onRevoke}
-            className="h-10 px-4 rounded-lg border border-red-200 text-red-600 text-[12px] font-semibold hover:bg-red-50 disabled:opacity-50">
+            className="h-10 px-4 rounded-xl border border-red-200 bg-white/60 text-red-700 text-[12px] font-semibold hover:bg-red-50 disabled:opacity-50">
             Desactivar enlace
           </button>
         )}
       </div>
 
-      {link && !generatedUrl && (
-        <div className="text-[11px] text-[var(--muted)]">
-          Hay un enlace activo. Usa “Renovar enlace” solamente cuando necesites generar un token nuevo.
-        </div>
-      )}
     </section>
   )
 }
@@ -387,17 +402,15 @@ export default function NicolCardAdmin() {
   if (!session) return <Login />
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
-      <header className="border-b border-[var(--line)] bg-[var(--bg-elev)]">
+    <div className="min-h-screen bg-[#fcfbff] text-[var(--ink)]">
+      <header className="relative overflow-hidden border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
+        <div className="absolute -left-8 -top-10 h-32 w-32 rounded-full bg-violet-300/25 blur-2xl" aria-hidden="true" />
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div>
-            <div className="text-[18px] font-bold">Gastito · Nicol</div>
-            <div className="text-[11px] text-[var(--muted)] mt-0.5">Configura gastos, cuotas y categorías</div>
+          <div className="relative">
+            <div className="text-[18px] font-bold text-slate-900">Gastito · Nicol</div>
+            <div className="text-[11px] text-slate-600 mt-0.5">Gastos, cuotas y el portal compartido</div>
           </div>
-          <a href={window.location.pathname}
-            className="text-[11px] font-semibold border border-[var(--line)] rounded-lg px-3 py-2 hover:bg-[var(--hover)]">
-            Volver a Gastito
-          </a>
+          <ExternalMenu/>
         </div>
       </header>
 
@@ -415,9 +428,9 @@ export default function NicolCardAdmin() {
           busy={busy}
         />
 
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] px-4 py-3.5">
-          <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Categorías automáticas</div>
-          <p className="text-[11.5px] text-[var(--muted)] mt-1 leading-relaxed">
+        <section className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/60 px-4 py-3.5">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-fuchsia-800 font-bold">Categorías automáticas</div>
+          <p className="text-[11.5px] text-slate-600 mt-1 leading-relaxed">
             Gastito reconoce comercios como Lider, Shell, veterinarias, Sodimac y servicios básicos. Cuando el nombre no sea suficiente, cambia la categoría manualmente en la fila del gasto.
           </p>
         </section>
@@ -468,11 +481,11 @@ export default function NicolCardAdmin() {
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-[var(--bg)] border border-[var(--line)] rounded-xl p-3">
+              <div className="bg-violet-50 border border-violet-100 rounded-xl p-3">
                 <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] font-bold">Compartido</div>
                 <div className="font-mono text-[18px] font-bold mt-1">{fmtCLP(sharedTotal)}</div>
               </div>
-              <div className="bg-[var(--ink)] text-[var(--bg)] rounded-xl p-3">
+              <div className="bg-gradient-to-br from-violet-700 to-fuchsia-700 text-white rounded-xl p-3 shadow-sm shadow-violet-700/20">
                 <div className="text-[10px] uppercase tracking-[0.1em] opacity-60 font-bold">Nicol · {percentage || 0}%</div>
                 <div className="font-mono text-[18px] font-bold mt-1">{fmtCLP(nicolTotal)}</div>
               </div>

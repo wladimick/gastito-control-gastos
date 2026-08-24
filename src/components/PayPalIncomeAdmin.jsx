@@ -3,6 +3,7 @@ import { fmtCLP } from '../lib/helpers'
 import { supabase } from '../lib/supabase'
 import { fetchExternalIncomeEvents, fetchExternalIncomeSources } from '../services/externalIncomeService'
 import FinancialBrand from './FinancialBrand'
+import ExternalMenu from './ExternalMenu'
 
 function money(amount, currency) {
   const value = Number(amount || 0)
@@ -77,7 +78,7 @@ export default function PayPalIncomeAdmin() {
             </div>
           </div>
           <div className="flex gap-2">
-            <a href="/" className="h-10 inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold">Volver</a>
+            <ExternalMenu/>
             <button onClick={load} disabled={loading} className="h-10 rounded-xl bg-[#003087] px-3 text-[10px] font-semibold text-white disabled:opacity-50">{loading ? 'Actualizando…' : 'Actualizar'}</button>
           </div>
         </div>

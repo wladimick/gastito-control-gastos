@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fmtCLP } from '../lib/helpers'
 import FinancialBrand from './FinancialBrand'
+import ExternalMenu from './ExternalMenu'
 import { categoryLabel, uniqueCategoryOptions } from '../lib/categoryOptions'
 import {
   fetchMercadoPagoMovements,
@@ -178,7 +179,7 @@ export default function MercadoPagoAdmin() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <StatusBadge status={status?.status}/>
               <div className="grid grid-cols-2 gap-2 sm:flex">
-                <a href="/" className={`${BTN} min-w-[104px] border border-black/10 bg-white/85 text-slate-900`}>Volver</a>
+                <ExternalMenu/>
                 <button onClick={syncNow} disabled={syncing} className={`${BTN} min-w-[138px] bg-[#171715] text-white`}>
                   {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
                 </button>
