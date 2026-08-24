@@ -1,4 +1,4 @@
-import { addSalaryMonths, salaryForCashMonth } from './salaryModel'
+import { addSalaryMonths, salaryForCashMonth } from './salaryModel.js'
 
 export function isSalaryIncome(item) {
   const text = `${item?.name || ''} ${item?.notes || ''}`.toLowerCase()
