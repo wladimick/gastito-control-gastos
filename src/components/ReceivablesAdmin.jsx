@@ -16,6 +16,18 @@ function todayKey() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
 }
 
+function receivableDateValue(item) {
+  if (item?.due_date) {
+    return new Date(`${String(item.due_date).slice(0, 10)}T12:00:00Z`).getTime()
+  }
+  if (item?.created_at) return new Date(item.created_at).getTime()
+  return 0
+}
+
+function newestFirst(a, b) {
+  return receivableDateValue(b) - receivableDateValue(a)
+}
+
 const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10.5px] focus:outline-none focus:border-slate-500'
 const BTN = 'h-9 inline-flex items-center justify-center rounded-xl px-3 text-[10px] font-semibold transition disabled:opacity-40'
 const BTN_SMALL = 'h-8 inline-flex items-center justify-center rounded-xl px-2.5 text-[9px] font-semibold transition disabled:opacity-40'
@@ -51,6 +63,7 @@ export default function ReceivablesAdmin() {
   const [selectedTransfer, setSelectedTransfer] = useState({})
   const [formOpen, setFormOpen] = useState(false)
   const [expandedItem, setExpandedItem] = useState(null)
+  const [expandedPaidPeople, setExpandedPaidPeople] = useState({})
   const [form, setForm] = useState({ person: '', name: '', amount: '', dueDate: '' })
 
   useEffect(() => {
@@ -68,8 +81,8 @@ export default function ReceivablesAdmin() {
         supabase.from('recurring_expenses')
           .select('id,name,person_name,amount,due_date,status,paid_at,notes,created_at')
           .eq('kind', 'receivable')
-          .order('status', { ascending: true })
-          .order('due_date', { ascending: true, nullsFirst: false }),
+          .order('due_date', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false }),
         supabase.from('receivable_allocations')
           .select('id,receivable_id,mercadopago_movement_id,amount,paid_at,note,created_at')
           .order('created_at', { ascending: false }),
@@ -112,7 +125,19 @@ export default function ReceivablesAdmin() {
       if (!map.has(person)) map.set(person, [])
       map.get(person).push(item)
     }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'))
+
+    return [...map.entries()]
+      .map(([person, items]) => {
+        const pendingItems = items.filter(item => item.status !== 'paid').sort(newestFirst)
+        const paidItems = items.filter(item => item.status === 'paid').sort(newestFirst)
+        return [person, [...pendingItems, ...paidItems]]
+      })
+      .filter(([, items]) => items.some(item => item.status !== 'paid'))
+      .sort((a, b) => {
+        const aLatest = a[1].find(item => item.status !== 'paid')
+        const bLatest = b[1].find(item => item.status !== 'paid')
+        return receivableDateValue(bLatest) - receivableDateValue(aLatest)
+      })
   }, [receivables])
 
   const pendingTotal = receivables.reduce((sum, item) => {
@@ -223,7 +248,7 @@ export default function ReceivablesAdmin() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Pendiente total" value={fmtCLP(pendingTotal)} detail="Dinero que falta recibir" tone="violet"/>
-        <Kpi label="Personas" value={groups.filter(([,items]) => items.some(i => i.status !== 'paid')).length} detail="Con deuda pendiente"/>
+        <Kpi label="Personas" value={groups.length} detail="Con deuda pendiente"/>
         <Kpi label="Ya pagado" value={fmtCLP(paidTotal)} detail="Historial conservado" tone="green"/>
         <Kpi label="Transferencias MP" value={availableTransfers.length} detail="Entradas sin asignar"/>
       </div>
@@ -239,15 +264,20 @@ export default function ReceivablesAdmin() {
         <div className="mt-3 flex justify-end"><button disabled={!form.person.trim() || Number(form.amount) <= 0 || busy === 'new'} onClick={createReceivable} className={`${BTN} bg-slate-900 text-white`}>Guardar</button></div>
       </div>}
 
-      {loading ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[10px] text-slate-400">Cargando cuentas por cobrar…</div> : groups.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[10px] text-slate-400">No hay cuentas por cobrar.</div> : groups.map(([person, items]) => {
-        const personPending = items.reduce((sum, item) => item.status === 'paid' ? sum : sum + Math.max(Number(item.amount) - Number(allocationByReceivable[item.id] || 0), 0), 0)
+      {loading ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[10px] text-slate-400">Cargando cuentas por cobrar…</div> : groups.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[10px] text-slate-400">No tienes cobros pendientes.</div> : groups.map(([person, items]) => {
+        const pendingItems = items.filter(item => item.status !== 'paid')
+        const paidItems = items.filter(item => item.status === 'paid')
+        const showPaid = Boolean(expandedPaidPeople[person])
+        const visibleItems = showPaid ? [...pendingItems, ...paidItems] : pendingItems
+        const personPending = pendingItems.reduce((sum, item) => sum + Math.max(Number(item.amount) - Number(allocationByReceivable[item.id] || 0), 0), 0)
+
         return <section key={person} className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
           <div className="px-3.5 py-3 border-b border-slate-100 flex items-center justify-between gap-3 bg-gradient-to-r from-violet-50/55 to-white">
-            <div className="flex items-center gap-2.5 min-w-0"><PersonAvatar name={person}/><div className="min-w-0"><div className="text-[12.5px] font-bold truncate">{person}</div><div className="text-[8.5px] text-slate-500 mt-0.5">{items.length} concepto{items.length === 1 ? '' : 's'}</div></div></div>
+            <div className="flex items-center gap-2.5 min-w-0"><PersonAvatar name={person}/><div className="min-w-0"><div className="text-[12.5px] font-bold truncate">{person}</div><div className="text-[8.5px] text-slate-500 mt-0.5">{pendingItems.length} pendiente{pendingItems.length === 1 ? '' : 's'}</div></div></div>
             <div className="text-right"><div className="text-[8px] uppercase tracking-wider text-slate-400 font-bold">Pendiente</div><div className="font-mono text-[15px] font-bold">{fmtCLP(personPending)}</div></div>
           </div>
           <div className="divide-y divide-slate-100">
-            {items.map(item => {
+            {visibleItems.map(item => {
               const allocated = Number(allocationByReceivable[item.id] || 0)
               const remaining = item.status === 'paid' ? 0 : Math.max(Number(item.amount) - allocated, 0)
               const overdue = item.status !== 'paid' && item.due_date && String(item.due_date).slice(0,10) < today
@@ -296,6 +326,21 @@ export default function ReceivablesAdmin() {
                 </div>}
               </div>
             })}
+
+            {paidItems.length > 0 && <div className="px-3.5 py-2.5 bg-slate-50/70">
+              <button
+                type="button"
+                onClick={() => setExpandedPaidPeople(current => ({ ...current, [person]: !current[person] }))}
+                className="w-full flex items-center justify-between gap-3 text-left"
+                aria-expanded={showPaid}
+              >
+                <div>
+                  <div className="text-[9px] font-semibold text-slate-600">Pagados ({paidItems.length})</div>
+                  <div className="mt-0.5 text-[8px] text-slate-400">{showPaid ? 'Ocultar historial pagado' : 'Historial oculto'}</div>
+                </div>
+                <span className="text-[9px] font-semibold text-slate-500">{showPaid ? 'Ocultar ↑' : 'Mostrar ↓'}</span>
+              </button>
+            </div>}
           </div>
         </section>
       })}
