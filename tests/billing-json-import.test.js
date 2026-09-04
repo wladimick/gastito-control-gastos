@@ -37,6 +37,22 @@ test('acepta montos CLP escritos con separador de miles', () => {
   assert.equal(result.validTransactions[0].amount, 13756)
 })
 
+test('acepta pendientes sin fecha y los deja fuera del total por defecto', () => {
+  const result = parseBillingJson({
+    transactions: [
+      { description: 'Mayorista DyL', amount: 50926, is_pending: true },
+      { date: '2026-08-29', description: 'Impuesto compra cuotas', amount: 76, affects_cycle_total: false },
+    ],
+  })
+
+  assert.equal(result.totals.valid, 2)
+  assert.equal(result.validTransactions[0].date, null)
+  assert.equal(result.validTransactions[0].is_pending, true)
+  assert.equal(result.validTransactions[0].affects_cycle_total, false)
+  assert.equal(result.validTransactions[1].movement_type, 'tax')
+  assert.equal(result.validTransactions[1].affects_cycle_total, false)
+})
+
 test('mantiene errores por fila sin descartar movimientos válidos', () => {
   const result = parseBillingJson({
     transactions: [
