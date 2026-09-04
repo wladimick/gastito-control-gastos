@@ -1,12 +1,17 @@
 -- ============================================================
 -- GASTITO — Importación manual JSON de movimientos de tarjeta
--- Fecha: 2026-09-02
+-- Fecha: 2026-09-02 (ajuste 2026-09-04)
 --
 -- Flujo:
 --   1) la UI normaliza y valida el JSON;
 --   2) p_preview = true simula ciclos y detecta duplicados;
 --   3) p_preview = false crea/actualiza ciclos parciales e inserta
 --      solo movimientos nuevos.
+--
+-- Soporta además:
+--   - is_pending: movimiento pendiente sin fecha confirmada;
+--   - affects_cycle_total: permite reflejar exactamente el total mostrado
+--     por el banco cuando un movimiento visible aún no entra al total.
 --
 -- La función es SECURITY DEFINER porque billing_transactions se
 -- administra con RLS. La propiedad de la tarjeta se valida siempre
@@ -42,6 +47,7 @@ declare
   v_ordinal integer;
   v_source_row integer;
   v_date date;
+  v_cycle_date date;
   v_description text;
   v_normalized_description text;
   v_amount integer;
@@ -49,6 +55,7 @@ declare
   v_installment_current integer;
   v_installment_total integer;
   v_movement_type text;
+  v_is_pending boolean;
   v_affects_cycle_total boolean;
   v_period_end_anchor date;
   v_period_start_anchor date;
@@ -109,6 +116,7 @@ begin
     v_total := v_total + 1;
     v_duplicate_id := null;
     v_cycle_id := null;
+    v_source_row := v_ordinal;
 
     begin
       if jsonb_typeof(v_item) <> 'object' then
@@ -123,6 +131,7 @@ begin
       v_original_amount := nullif(v_item->>'original_amount', '')::numeric::integer;
       v_installment_current := coalesce(nullif(v_item->>'installment_current', '')::integer, 1);
       v_installment_total := coalesce(nullif(v_item->>'installment_total', '')::integer, 1);
+      v_is_pending := coalesce(nullif(v_item->>'is_pending', '')::boolean, false);
       v_movement_type := lower(coalesce(nullif(v_item->>'movement_type', ''),
         case
           when v_installment_total > 1 then 'installment'
@@ -130,7 +139,15 @@ begin
         end
       ));
 
-      if v_date is null then raise exception 'Falta la fecha.'; end if;
+      if v_item ? 'affects_cycle_total' then
+        v_affects_cycle_total := coalesce(nullif(v_item->>'affects_cycle_total', '')::boolean, false);
+      elsif v_is_pending then
+        v_affects_cycle_total := false;
+      else
+        v_affects_cycle_total := v_movement_type not in ('payment', 'credit');
+      end if;
+
+      if v_date is null and not v_is_pending then raise exception 'Falta la fecha.'; end if;
       if v_description = '' then raise exception 'Falta la descripción.'; end if;
       if v_amount is null or v_amount <= 0 then raise exception 'El monto debe ser mayor que cero.'; end if;
       if v_installment_total < 1 then raise exception 'El total de cuotas debe ser al menos 1.'; end if;
@@ -153,12 +170,14 @@ begin
       continue item_loop;
     end;
 
-    -- Calcula el ciclo con exactamente las mismas reglas usadas por el
-    -- registro manual de gastos con tarjeta de crédito.
-    if extract(day from v_date)::integer >= coalesce(v_card.billing_start_day, v_card.billing_day + 1) then
-      v_period_end_anchor := (date_trunc('month', v_date)::date + interval '1 month')::date;
+    -- Los pendientes sin fecha confirmada se asignan al ciclo vigente usando
+    -- la fecha de importación, pero conservan transaction_date = null.
+    v_cycle_date := coalesce(v_date, current_date);
+
+    if extract(day from v_cycle_date)::integer >= coalesce(v_card.billing_start_day, v_card.billing_day + 1) then
+      v_period_end_anchor := (date_trunc('month', v_cycle_date)::date + interval '1 month')::date;
     else
-      v_period_end_anchor := date_trunc('month', v_date)::date;
+      v_period_end_anchor := date_trunc('month', v_cycle_date)::date;
     end if;
 
     v_period_end := public.gastito_clamped_date(
@@ -182,14 +201,13 @@ begin
     );
     v_cycle_key := to_char(v_due_date, 'YYYY-MM');
 
-    -- Duplicado exacto funcional: misma tarjeta, fecha, monto y descripción
-    -- normalizada. Esto permite pegar el mismo JSON más de una vez sin
-    -- duplicar los movimientos existentes.
+    -- Duplicado exacto funcional: misma tarjeta, fecha (incluido null), monto
+    -- y descripción normalizada.
     select tx.id into v_duplicate_id
     from public.billing_transactions tx
     where tx.user_id = v_user_id
       and tx.credit_card_id = v_card.id
-      and tx.transaction_date = v_date
+      and tx.transaction_date is not distinct from v_date
       and abs(tx.amount) = abs(v_amount)
       and public.gastito_normalize_billing_description(tx.description) = v_normalized_description
     order by tx.created_at
@@ -205,6 +223,8 @@ begin
         'date', v_date,
         'description', v_description,
         'amount', v_amount,
+        'is_pending', v_is_pending,
+        'affects_cycle_total', v_affects_cycle_total,
         'installment_current', v_installment_current,
         'installment_total', v_installment_total
       ));
@@ -221,6 +241,8 @@ begin
         'description', v_description,
         'amount', v_amount,
         'movement_type', v_movement_type,
+        'is_pending', v_is_pending,
+        'affects_cycle_total', v_affects_cycle_total,
         'installment_current', v_installment_current,
         'installment_total', v_installment_total
       ));
@@ -265,7 +287,6 @@ begin
       updated_at = now()
     returning id into v_cycle_id;
 
-    v_affects_cycle_total := v_movement_type not in ('payment', 'credit');
     v_stable_hash := encode(
       extensions.digest(
         convert_to(
@@ -273,11 +294,13 @@ begin
             'manual-json',
             v_user_id::text,
             v_card.id::text,
-            v_date::text,
+            coalesce(v_date::text, 'pending'),
             v_amount::text,
             v_normalized_description,
             v_installment_current::text,
-            v_installment_total::text
+            v_installment_total::text,
+            v_is_pending::text,
+            v_affects_cycle_total::text
           ),
           'UTF8'
         ),
@@ -297,7 +320,7 @@ begin
       v_date, v_description, v_movement_type, v_amount, v_original_amount,
       v_installment_current, v_installment_total,
       greatest(v_installment_total - v_installment_current, 0),
-      'CLP', v_affects_cycle_total, false, 'verified',
+      'CLP', v_affects_cycle_total, v_is_pending, 'verified',
       v_source, 'manual', v_source_row, v_stable_hash,
       jsonb_build_object(
         'import_method', 'manual_json',
@@ -320,6 +343,8 @@ begin
       'description', v_description,
       'amount', v_amount,
       'movement_type', v_movement_type,
+      'is_pending', v_is_pending,
+      'affects_cycle_total', v_affects_cycle_total,
       'installment_current', v_installment_current,
       'installment_total', v_installment_total
     ));
@@ -348,4 +373,4 @@ revoke all on function public.import_billing_json(uuid, jsonb, boolean) from pub
 grant execute on function public.import_billing_json(uuid, jsonb, boolean) to authenticated;
 
 comment on function public.import_billing_json(uuid, jsonb, boolean) is
-  'Valida, previsualiza e importa movimientos de tarjeta desde JSON para la tarjeta autenticada, evitando duplicados exactos.';
+  'Valida, previsualiza e importa movimientos de tarjeta desde JSON para la tarjeta autenticada, evitando duplicados exactos y soportando movimientos pendientes/fuera del total.';
