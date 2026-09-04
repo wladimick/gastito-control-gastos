@@ -41,8 +41,20 @@ function parsePositiveInteger(value, fallback = null) {
   return Number.isInteger(number) && number > 0 ? number : NaN
 }
 
+function parseBoolean(value, fallback = null) {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'boolean') return value
+  if (value === 1 || value === '1') return true
+  if (value === 0 || value === '0') return false
+  const normalized = String(value).trim().toLowerCase()
+  if (['true', 'si', 'sí', 'yes'].includes(normalized)) return true
+  if (['false', 'no'].includes(normalized)) return false
+  return NaN
+}
+
 function normalizeDate(value) {
   const text = String(value || '').trim()
+  if (!text) return ''
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return ''
   const [year, month, day] = text.split('-').map(Number)
   const date = new Date(Date.UTC(year, month - 1, day))
@@ -125,6 +137,7 @@ export function parseBillingJson(input) {
       return { row: index + 1, raw, status: 'error', errors: ['El movimiento debe ser un objeto.'] }
     }
 
+    const isPending = parseBoolean(firstDefined(raw, ['is_pending', 'pending', 'pendiente']), false)
     const date = normalizeDate(firstDefined(raw, ['date', 'fecha']))
     const description = String(firstDefined(raw, ['description', 'descripcion', 'comercio']) || '').trim().replace(/\s+/g, ' ')
     const amount = parseClpAmount(firstDefined(raw, ['amount', 'monto']))
@@ -133,8 +146,14 @@ export function parseBillingJson(input) {
     const originalAmountRaw = firstDefined(raw, ['original_amount', 'monto_original'])
     const originalAmount = originalAmountRaw === undefined ? null : parseClpAmount(originalAmountRaw)
     const movementType = inferMovementType(firstDefined(raw, ['movement_type', 'tipo']), description, installmentTotal)
+    const affectsRaw = firstDefined(raw, ['affects_cycle_total', 'afecta_total'])
+    const affectsCycleTotal = parseBoolean(
+      affectsRaw,
+      isPending === true ? false : !['payment', 'credit'].includes(movementType),
+    )
 
-    if (!date) errors.push('Fecha inválida; usa YYYY-MM-DD.')
+    if (Number.isNaN(isPending)) errors.push('El campo pendiente debe ser booleano.')
+    if (!date && isPending !== true) errors.push('Fecha inválida; usa YYYY-MM-DD.')
     if (!description) errors.push('Falta la descripción.')
     if (!Number.isInteger(amount) || amount <= 0) errors.push('El monto debe ser un entero CLP mayor que cero.')
     if (!Number.isInteger(installmentTotal) || installmentTotal < 1) errors.push('El total de cuotas debe ser un entero mayor que cero.')
@@ -146,16 +165,19 @@ export function parseBillingJson(input) {
       errors.push('El monto original debe ser un entero CLP mayor que cero.')
     }
     if (!movementType) errors.push('Tipo de movimiento no reconocido.')
+    if (Number.isNaN(affectsCycleTotal)) errors.push('El campo afecta_total debe ser booleano.')
 
     const normalized = {
       source_row: index + 1,
-      date,
+      date: date || null,
       description,
       amount,
       movement_type: movementType,
       installment_current: installmentCurrent,
       installment_total: installmentTotal,
       original_amount: originalAmount,
+      is_pending: isPending === true,
+      affects_cycle_total: affectsCycleTotal === true,
     }
 
     return {
