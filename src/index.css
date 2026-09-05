@@ -157,8 +157,6 @@ input[type='month'] {
   }
 }
 
-
-
 /* ─────────────────────────────────────────────────────────────
    Gastito typography system
    A single responsive scale replaces legacy arbitrary font sizes.
@@ -337,6 +335,30 @@ body {
 .text-4xl,
 .text-5xl {
   font-size: var(--type-display-lg) !important;
+}
+
+/*
+ * Accessibility / mobile layout:
+ * when A+ is active on a narrow viewport, KPI groups that normally use two
+ * columns become a single readable column. This prevents monetary values and
+ * badges from overlapping, as seen in Facturación on iPhone.
+ */
+@media (max-width: 639px) {
+  html[data-font-size='large'] [class~="grid-cols-2"][class*="lg:grid-cols-4"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html[data-font-size='large'] [class~="grid-cols-2"][class*="lg:grid-cols-4"] > * {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  html[data-font-size='large'] [class~="grid-cols-2"][class*="lg:grid-cols-4"] .font-mono {
+    max-width: 100%;
+    white-space: nowrap;
+    font-size: var(--type-title) !important;
+    letter-spacing: -0.035em;
+  }
 }
 
 @keyframes spin {
