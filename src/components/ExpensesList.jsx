@@ -49,12 +49,12 @@ export default function ExpensesList(props) {
     <div>
       {previousImported && (
         <div className="max-w-7xl mx-auto mb-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-950">
-          <div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-65">Movimientos de tarjeta cargados</div>
+          <div className="text-[10px] uppercase tracking-[0.11em] font-bold opacity-65">Movimientos de tarjeta disponibles</div>
           <div className="text-[12px] font-semibold mt-1">
             {previousImported.count} movimientos están en {monthLabel(previousImported.key)} · {fmtCLP(previousImported.total)}
           </div>
           <div className="text-[10.5px] mt-1 opacity-75 leading-relaxed">
-            Gastos se ordena por la fecha real de compra, no por la fecha de pago de la tarjeta. Si acabamos de cargar compras de agosto, aparecen en el botón de Agosto aunque hoy estemos en septiembre.
+            Gastos se ordena por la fecha real de compra, no por la fecha en que pagas la tarjeta. Usa el selector de meses para revisar compras anteriores.
           </div>
         </div>
       )}
