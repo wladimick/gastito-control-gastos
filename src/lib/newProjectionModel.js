@@ -255,13 +255,27 @@ function futureRows({ planMonths, currentKey, creditCards, billingCycles, billin
     ;(month.knownCycles || []).forEach(item => {
       const bank = cards.get(item.cardId) || 'otros'
       const amount = Number(item.amount || 0)
+      const forecast = forecasts.get(`${key}|${item.cardId}`)
+      const bankReported = forecast ? Math.min(amount, Number(forecast.amount || 0)) : amount
+      const extraKnown = Math.max(0, amount - bankReported)
       knownCardIds.add(item.cardId)
-      addSource(row, bank, 'billing', amount, {
+
+      addSource(row, bank, 'billing', bankReported, {
         id: item.id,
         label: cardInfo.get(item.cardId)?.name || PROJECTION_BANKS[bank]?.label || 'Tarjeta de crédito',
-        meta: [item.dueDate ? `Vence ${item.dueDate}` : null, item.final ? 'Monto final' : 'Ciclo en curso'].filter(Boolean).join(' · '),
-        source: 'billing_cycle',
+        meta: forecast
+          ? `Vencimiento informado por el banco · ${monthLabel(key)}`
+          : [item.dueDate ? `Vence ${item.dueDate}` : null, item.final ? 'Monto final' : 'Ciclo en curso'].filter(Boolean).join(' · '),
+        source: forecast ? 'billing_forecast' : 'billing_cycle',
       })
+
+      addSource(row, bank, 'other', extraKnown, {
+        id: `cycle-extra:${item.id}`,
+        label: 'Movimientos adicionales al vencimiento informado',
+        meta: 'Monto ya conocido por Gastito que excede el valor importado desde Próximos vencimientos',
+        source: 'billing_extra',
+      })
+
       addMap(row.categorySegments, cycleCategoryTotals(cycles.get(item.id)))
     })
 
