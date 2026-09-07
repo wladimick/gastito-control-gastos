@@ -60,11 +60,17 @@ function LayerMarks({ row, visible }) {
   )
 }
 
-function BankBar({ row, filter, maxVisible, selected, onSelect, layers }) {
+function BankBar({ row, filter, maxVisible, selected, onSelect, onOpenDetail, layers }) {
   const visibleTotal = visibleBankTotal(row, filter)
   const height = visibleTotal > 0 ? Math.max(10, Math.round(178 * visibleTotal / Math.max(1, maxVisible))) : 4
   return (
-    <button type="button" onClick={() => onSelect(row.key)} className="w-[76px] sm:w-[86px] shrink-0 text-center group">
+    <button
+      type="button"
+      onClick={() => onSelect(row.key)}
+      onDoubleClick={() => onOpenDetail(row.key)}
+      title="Click: seleccionar · doble click: ver qué se consideró"
+      className="w-[76px] sm:w-[86px] shrink-0 text-center group"
+    >
       <div className={`font-mono text-[8.5px] sm:text-[9.5px] font-bold mb-2 whitespace-nowrap ${selected ? 'text-[var(--ink)]' : 'text-[var(--muted)]'}`}>{fmtCLP(visibleTotal)}</div>
       <div className="h-[184px] flex items-end justify-center">
         <div
@@ -84,7 +90,7 @@ function BankBar({ row, filter, maxVisible, selected, onSelect, layers }) {
   )
 }
 
-function BankChart({ timeline, filter, setFilter, selectedKey, setSelectedKey, layerVisibility, setLayerVisibility }) {
+function BankChart({ timeline, filter, setFilter, selectedKey, setSelectedKey, onOpenDetail, layerVisibility, setLayerVisibility }) {
   const maxVisible = Math.max(1, ...timeline.rows.map(row => visibleBankTotal(row, filter)))
   return (
     <section className="rounded-3xl border border-[var(--line)] bg-[var(--bg-elev)] overflow-hidden shadow-sm">
@@ -93,7 +99,7 @@ function BankChart({ timeline, filter, setFilter, selectedKey, setSelectedKey, l
           <div>
             <div className="text-[9px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Bancos y compromisos</div>
             <h2 className="text-[18px] sm:text-[20px] font-bold mt-1">3 meses reales + próximos 6 meses</h2>
-            <p className="text-[10.5px] text-[var(--muted)] mt-1 max-w-2xl">Filtra un banco para seguir su comportamiento a través del tiempo. Las líneas bajo cada barra resaltan recurrentes, cuotas y simulaciones sin sumarlos dos veces.</p>
+            <p className="text-[10.5px] text-[var(--muted)] mt-1 max-w-2xl">Filtra un banco para seguir su comportamiento a través del tiempo. Las líneas bajo cada barra resaltan recurrentes, cuotas y simulaciones sin sumarlos dos veces. <strong>Doble click en un mes</strong> para auditar qué valores se consideraron.</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {[['all', 'Todos'], ...BANK_ORDER.map(id => [id, PROJECTION_BANKS[id].label])].map(([id, label]) => (
@@ -115,7 +121,7 @@ function BankChart({ timeline, filter, setFilter, selectedKey, setSelectedKey, l
         <div className="min-w-[760px] flex items-end gap-2">
           {timeline.rows.map((row, index) => (
             <div key={row.key} className={index === 3 ? 'ml-5 pl-5 border-l border-dashed border-[var(--line)]' : ''}>
-              <BankBar row={row} filter={filter} maxVisible={maxVisible} selected={selectedKey === row.key} onSelect={setSelectedKey} layers={layerVisibility}/>
+              <BankBar row={row} filter={filter} maxVisible={maxVisible} selected={selectedKey === row.key} onSelect={setSelectedKey} onOpenDetail={onOpenDetail} layers={layerVisibility}/>
             </div>
           ))}
         </div>
@@ -134,7 +140,7 @@ function categoryMeta(id) {
   return CATEGORIES.find(item => item.id === id) || CATEGORIES.find(item => item.id === 'otros') || { id: 'otros', label: 'Otros', color: '#888880', icon: '•' }
 }
 
-function CategoryBar({ row, filter, series, maxVisible, selected, onSelect }) {
+function CategoryBar({ row, filter, series, maxVisible, selected, onSelect, onOpenDetail }) {
   const visibleTotal = categoryTotal(row, filter)
   const height = visibleTotal > 0 ? Math.max(10, Math.round(178 * visibleTotal / Math.max(1, maxVisible))) : 4
   const shownTotal = filter === 'all' ? Math.max(1, row.total) : Math.max(1, visibleTotal)
@@ -143,7 +149,13 @@ function CategoryBar({ row, filter, series, maxVisible, selected, onSelect }) {
     : visibleTotal
   const remainder = filter === 'all' ? Math.max(0, shownTotal - represented) : 0
   return (
-    <button type="button" onClick={() => onSelect(row.key)} className="w-[76px] sm:w-[86px] shrink-0 text-center group">
+    <button
+      type="button"
+      onClick={() => onSelect(row.key)}
+      onDoubleClick={() => onOpenDetail(row.key)}
+      title="Click: seleccionar · doble click: ver qué se consideró"
+      className="w-[76px] sm:w-[86px] shrink-0 text-center group"
+    >
       <div className={`font-mono text-[8.5px] sm:text-[9.5px] font-bold mb-2 whitespace-nowrap ${selected ? 'text-[var(--ink)]' : 'text-[var(--muted)]'}`}>{fmtCLP(visibleTotal)}</div>
       <div className="h-[184px] flex items-end justify-center">
         <div className={`w-[46px] sm:w-[52px] rounded-t-[10px] overflow-hidden flex flex-col-reverse shadow-sm ${selected ? 'ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-[var(--bg-elev)]' : 'group-hover:ring-1 group-hover:ring-[var(--line)]'}`} style={{ height, backgroundColor: 'var(--soft)' }}>
@@ -165,7 +177,7 @@ function CategoryBar({ row, filter, series, maxVisible, selected, onSelect }) {
   )
 }
 
-function CategoryChart({ timeline, filter, setFilter, selectedKey, setSelectedKey }) {
+function CategoryChart({ timeline, filter, setFilter, selectedKey, setSelectedKey, onOpenDetail }) {
   const series = useMemo(() => topCategoryIds(timeline.rows), [timeline.rows])
   const maxVisible = Math.max(1, ...timeline.rows.map(row => categoryTotal(row, filter)))
   return (
@@ -173,7 +185,7 @@ function CategoryChart({ timeline, filter, setFilter, selectedKey, setSelectedKe
       <div className="p-4 sm:p-5 border-b border-[var(--line)]">
         <div className="text-[9px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Categorías</div>
         <h2 className="text-[18px] sm:text-[20px] font-bold mt-1">¿En qué se va el dinero?</h2>
-        <p className="text-[10.5px] text-[var(--muted)] mt-1 max-w-2xl">Selecciona Supermercado, Bencina, Farmacia u otra categoría para comparar cuánto gastaste y cuánto se estima hacia adelante.</p>
+        <p className="text-[10.5px] text-[var(--muted)] mt-1 max-w-2xl">Selecciona Supermercado, Bencina, Farmacia u otra categoría para comparar cuánto gastaste y cuánto se estima hacia adelante. También puedes hacer doble click en una barra para ver el detalle que explica el total.</p>
         <div className="flex gap-1.5 mt-4 overflow-x-auto pb-1">
           <button type="button" onClick={() => setFilter('all')} className={`h-8 px-3 rounded-full border text-[10px] font-semibold whitespace-nowrap ${filter === 'all' ? 'bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]' : 'bg-[var(--bg)] border-[var(--line)]'}`}>Todas</button>
           {series.map(id => {
@@ -190,12 +202,238 @@ function CategoryChart({ timeline, filter, setFilter, selectedKey, setSelectedKe
         <div className="min-w-[760px] flex items-end gap-2">
           {timeline.rows.map((row, index) => (
             <div key={row.key} className={index === 3 ? 'ml-5 pl-5 border-l border-dashed border-[var(--line)]' : ''}>
-              <CategoryBar row={row} filter={filter} series={series} maxVisible={maxVisible} selected={selectedKey === row.key} onSelect={setSelectedKey}/>
+              <CategoryBar row={row} filter={filter} series={series} maxVisible={maxVisible} selected={selectedKey === row.key} onSelect={setSelectedKey} onOpenDetail={onOpenDetail}/>
             </div>
           ))}
         </div>
       </div>
     </section>
+  )
+}
+
+function validHistoricalExpense(expense) {
+  if (!expense || Number(expense.amount || 0) <= 0) return false
+  const status = String(expense.status || '').toLowerCase()
+  if (['pendiente', 'revisar'].includes(status)) return false
+  if (['payment', 'credit'].includes(expense.movementType)) return false
+  return true
+}
+
+function bankName(value) {
+  const text = String(value || '').toLowerCase()
+  if (text === 'bchile' || text.includes('chile')) return 'Banco Chile'
+  if (text === 'falabella' || text.includes('falabella') || text.includes('cmr')) return 'Banco Falabella'
+  return value || 'Otros'
+}
+
+function addDetailGroup(groups, id, label, items, source) {
+  const cleanItems = (items || []).filter(item => Number(item.amount || 0) !== 0)
+  if (!cleanItems.length) return
+  groups.push({
+    id,
+    label,
+    source,
+    items: cleanItems,
+    subtotal: cleanItems.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+  })
+}
+
+function buildMonthDetail({ key, timeline, plan, expenses, cycles, creditCards }) {
+  if (!key) return null
+  const row = timeline.rows.find(item => item.key === key)
+  if (!row) return null
+
+  const groups = []
+  if (row.kind === 'actual') {
+    const items = (expenses || [])
+      .filter(validHistoricalExpense)
+      .filter(expense => monthKey(expense.date) === key)
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .map(expense => {
+        const category = categoryMeta(typeof expense.category === 'string' ? expense.category : expense.category?.id)
+        return {
+          id: expense.id,
+          label: expense.description || 'Gasto',
+          amount: Number(expense.amount || 0),
+          meta: [String(expense.date || '').slice(0, 10), bankName(expense.bank || expense.bankId || expense.cardName), `${category.icon} ${category.label}`].filter(Boolean).join(' · '),
+        }
+      })
+    addDetailGroup(groups, 'real', 'Movimientos reales conciliados', items, 'Real')
+    return {
+      key,
+      label: row.label,
+      kind: row.kind,
+      total: Number(row.total || 0),
+      groups,
+      bankSegments: row.bankSegments,
+      layers: row.layers,
+      note: 'Este mes usa movimientos reales por fecha de compra. Pagos y abonos de tarjeta no se vuelven a contar como gasto.',
+    }
+  }
+
+  const month = (plan.months || []).find(item => item.key === key)
+  if (!month) return {
+    key,
+    label: row.label,
+    kind: row.kind,
+    total: Number(row.total || 0),
+    groups: [],
+    bankSegments: row.bankSegments,
+    layers: row.layers,
+    note: 'No existe un mes equivalente en el motor de proyección.',
+  }
+
+  const cards = new Map((creditCards || []).map(card => [card.id, card]))
+  const cycleMap = new Map((cycles || []).map(cycle => [cycle.id, cycle]))
+  const hasKnownBill = (month.knownCycles || []).length > 0
+
+  addDetailGroup(groups, 'billing', 'Facturación / ciclos conocidos', (month.knownCycles || []).map(item => {
+    const card = cards.get(item.cardId)
+    const cycle = cycleMap.get(item.id)
+    return {
+      id: item.id,
+      label: card?.name || bankName(card?.bank) || 'Tarjeta de crédito',
+      amount: Number(item.amount || 0),
+      meta: [item.dueDate ? `Vence ${item.dueDate}` : null, item.final ? 'Monto final' : 'Ciclo en curso', cycle?.cycleKey ? `Ciclo ${cycle.cycleKey}` : null].filter(Boolean).join(' · '),
+    }
+  }), 'Conocido')
+
+  addDetailGroup(groups, 'installments', 'Cuotas todavía no cubiertas por una factura', (month.uncoveredInstallmentDetail || []).map(item => ({
+    id: item.id,
+    label: item.description || 'Cuota',
+    amount: Number(item.amount || 0),
+    meta: [item.installmentCurrent && item.installmentTotal ? `Cuota ${item.installmentCurrent}/${item.installmentTotal}` : null, item.dueDate ? `Vence ${item.dueDate}` : null, item.bankLabel || null].filter(Boolean).join(' · '),
+  })), 'Cuota')
+
+  addDetailGroup(groups, 'direct-recurring', 'Recurrentes de pago directo', (month.directRecurringDetail || []).map(item => ({
+    id: item.id,
+    label: item.name || item.description || 'Recurrente',
+    amount: Number(item.amount || 0),
+    meta: [item.dayOfMonth ? `Día ${item.dayOfMonth}` : null, bankName(item.bank), categoryMeta(item.category).label].filter(Boolean).join(' · '),
+  })), 'Recurrente')
+
+  if (!hasKnownBill) {
+    addDetailGroup(groups, 'credit-recurring', 'Recurrentes asociados a tarjeta', (month.creditRecurringDetail || []).map(item => ({
+      id: item.id,
+      label: item.name || item.description || 'Recurrente de tarjeta',
+      amount: Number(item.amount || 0),
+      meta: [item.dayOfMonth ? `Día ${item.dayOfMonth}` : null, bankName(item.bank), categoryMeta(item.category).label].filter(Boolean).join(' · '),
+    })), 'Recurrente')
+  }
+
+  if (Number(month.estimatedCreditVariableRemaining || 0) > 0) {
+    addDetailGroup(groups, 'estimated-card', 'Gasto variable estimado en tarjeta', [{
+      id: 'estimated-card',
+      label: 'Estimación basada en el gasto variable histórico',
+      amount: Number(month.estimatedCreditVariableRemaining || 0),
+      meta: 'Todavía no corresponde a una compra o banco confirmado',
+    }], 'Estimado')
+  }
+
+  if (Number(month.estimatedDirectVariable || 0) > 0) {
+    addDetailGroup(groups, 'estimated-direct', 'Gasto variable estimado directo', [{
+      id: 'estimated-direct',
+      label: 'Estimación de débito / transferencia / efectivo',
+      amount: Number(month.estimatedDirectVariable || 0),
+      meta: 'Calculado desde el promedio de meses anteriores',
+    }], 'Estimado')
+  }
+
+  addDetailGroup(groups, 'payables', 'Cuentas por pagar', (month.payableDetail || []).map(item => ({
+    id: item.id,
+    label: item.name || item.description || item.personName || 'Cuenta por pagar',
+    amount: Number(item.amount || 0),
+    meta: item.dueDate ? `Vence ${item.dueDate}` : 'Sin fecha específica',
+  })), 'Compromiso')
+
+  addDetailGroup(groups, 'simulations', 'Compras simuladas', (month.simulationDetail || []).map(item => ({
+    id: item.id,
+    label: item.name || 'Simulación',
+    amount: Number(item.amountThisMonth || 0),
+    meta: [item.installmentCurrent && item.installmentTotal ? `Cuota ${item.installmentCurrent}/${item.installmentTotal}` : null, bankName(item.bank), categoryMeta(item.category).label].filter(Boolean).join(' · '),
+  })), 'Simulación')
+
+  const listedTotal = groups.reduce((sum, group) => sum + group.subtotal, 0)
+  const gap = Math.round(Number(month.outflow || 0) - listedTotal)
+  if (gap !== 0) {
+    addDetailGroup(groups, 'technical-adjustment', 'Ajuste del motor', [{
+      id: 'technical-adjustment',
+      label: gap > 0 ? 'Componente incluido en el total que no tiene detalle individual' : 'Corrección de solapamiento / redondeo',
+      amount: gap,
+      meta: 'Se muestra para que la suma del listado coincida exactamente con el total proyectado.',
+    }], 'Ajuste')
+  }
+
+  return {
+    key,
+    label: row.label,
+    kind: row.kind,
+    total: Number(month.outflow || row.total || 0),
+    groups,
+    bankSegments: row.bankSegments,
+    layers: row.layers,
+    note: 'Este listado separa lo conocido de lo estimado. Las cuotas ya contenidas dentro de una factura conocida no se vuelven a sumar. El reparto visual por banco puede incluir una distribución estimada del gasto variable; aquí puedes ver qué parte todavía es estimación.',
+  }
+}
+
+function MonthDetailModal({ detail, onClose }) {
+  if (!detail) return null
+  const listedTotal = detail.groups.reduce((sum, group) => sum + Number(group.subtotal || 0), 0)
+  return (
+    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={onClose}/>
+      <div className="relative w-full sm:max-w-[760px] max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-[var(--bg-elev)] border border-[var(--line)] shadow-2xl">
+        <div className="sticky top-0 z-10 bg-[var(--bg-elev)] border-b border-[var(--line)] p-4 sm:p-5 flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`rounded-full px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.1em] ${detail.kind === 'actual' ? 'bg-slate-100 text-slate-700' : 'bg-violet-100 text-violet-700'}`}>{detail.kind === 'actual' ? 'Dato real' : 'Proyección'}</span>
+              <span className="text-[9px] text-[var(--muted)]">Auditoría del mes</span>
+            </div>
+            <h3 className="text-[19px] sm:text-[22px] font-bold mt-2">Qué consideré en {detail.label}</h3>
+            <div className="font-mono text-[25px] font-bold mt-2">{fmtCLP(detail.total)}</div>
+          </div>
+          <button type="button" onClick={onClose} className="w-10 h-10 shrink-0 rounded-full border border-[var(--line)] grid place-items-center"><Icon name="x" size={13}/></button>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {BANK_ORDER.map(bank => (
+              <div key={bank} className="rounded-xl border border-[var(--line)] bg-[var(--bg)] p-2.5">
+                <div className="flex items-center gap-1.5 text-[8px] text-[var(--muted)]"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: PROJECTION_BANKS[bank].color }}/>{PROJECTION_BANKS[bank].label}</div>
+                <div className="font-mono text-[11px] font-bold mt-1">{fmtCLP(detail.bankSegments?.[bank] || 0)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-[10px] leading-relaxed text-amber-900 mb-4">{detail.note}</div>
+
+          <div className="flex flex-col gap-3">
+            {detail.groups.map(group => (
+              <section key={group.id} className="rounded-2xl border border-[var(--line)] overflow-hidden">
+                <div className="px-3 py-2.5 bg-[var(--soft)] flex items-center justify-between gap-3">
+                  <div className="min-w-0"><div className="text-[10.5px] font-bold truncate">{group.label}</div><div className="text-[8.5px] text-[var(--muted)] mt-0.5">{group.source}</div></div>
+                  <div className="font-mono text-[11px] font-bold shrink-0">{fmtCLP(group.subtotal)}</div>
+                </div>
+                <div className="divide-y divide-[var(--line)]">
+                  {group.items.map((item, index) => (
+                    <div key={`${group.id}-${item.id || index}`} className="px-3 py-2.5 flex items-start justify-between gap-3 bg-[var(--bg-elev)]">
+                      <div className="min-w-0"><div className="text-[10.5px] font-medium break-words">{item.label}</div>{item.meta && <div className="text-[8.5px] text-[var(--muted)] mt-1 leading-relaxed">{item.meta}</div>}</div>
+                      <div className={`font-mono text-[10.5px] font-bold shrink-0 ${Number(item.amount || 0) < 0 ? 'text-red-700' : ''}`}>{fmtCLP(item.amount)}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+            {!detail.groups.length && <div className="rounded-2xl border border-dashed border-[var(--line)] p-6 text-center text-[10px] text-[var(--muted)]">No hay movimientos individuales para mostrar en este mes.</div>}
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-[var(--ink)] text-[var(--bg)] px-4 py-3 flex items-center justify-between gap-3">
+            <div><div className="text-[8px] uppercase tracking-[0.1em] opacity-60">Suma del listado</div><div className="text-[9px] opacity-65 mt-0.5">Debe coincidir con el total considerado.</div></div>
+            <div className="font-mono text-[16px] font-bold">{fmtCLP(listedTotal)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -241,6 +479,7 @@ export default function NewProjection({
   const [forecasts, setForecasts] = useState([])
   const [simulations, setSimulations] = useState([])
   const [showSimulation, setShowSimulation] = useState(false)
+  const [detailKey, setDetailKey] = useState(null)
   const [bankFilter, setBankFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [selectedKey, setSelectedKey] = useState(addMonthsKey(currentMonthKey(), 1))
@@ -300,6 +539,18 @@ export default function NewProjection({
   const lowest = plan.lowestMonth
   const nextMonth = plan.months[1] || plan.months[0]
   const nextCapacity = nextMonth ? safeSpendingCapacity(plan.months, nextMonth.key) : 0
+  const detail = useMemo(() => buildMonthDetail({
+    key: detailKey,
+    timeline,
+    plan,
+    expenses,
+    cycles,
+    creditCards,
+  }), [detailKey, timeline, plan, expenses, cycles, creditCards])
+  const openDetail = key => {
+    setSelectedKey(key)
+    setDetailKey(key)
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 md:py-7 flex flex-col gap-5">
@@ -318,16 +569,19 @@ export default function NewProjection({
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4"><div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">Simulaciones activas</div><div className="font-mono text-[23px] font-bold mt-3">{simulations.length}</div><div className="text-[10px] text-[var(--muted)] mt-1">Solo viven en esta vista y no cambian Supabase.</div></div>
       </section>
 
-      <BankChart timeline={timeline} filter={bankFilter} setFilter={setBankFilter} selectedKey={selectedKey} setSelectedKey={setSelectedKey} layerVisibility={layers} setLayerVisibility={setLayers}/>
+      <BankChart timeline={timeline} filter={bankFilter} setFilter={setBankFilter} selectedKey={selectedKey} setSelectedKey={setSelectedKey} onOpenDetail={openDetail} layerVisibility={layers} setLayerVisibility={setLayers}/>
 
       {selectedRow && (
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div><div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">Mes seleccionado</div><div className="text-[15px] font-bold mt-1">{selectedRow.label} · {selectedRow.kind === 'actual' ? 'gasto real' : 'salida proyectada'}</div></div>
-          <div className="grid grid-cols-3 gap-3 sm:text-right">{BANK_ORDER.map(bank => <div key={bank}><div className="text-[8px] text-[var(--muted)]">{PROJECTION_BANKS[bank].label}</div><div className="font-mono text-[11px] font-bold mt-0.5">{fmtCLP(selectedRow.bankSegments?.[bank] || 0)}</div></div>)}</div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="grid grid-cols-3 gap-3 sm:text-right">{BANK_ORDER.map(bank => <div key={bank}><div className="text-[8px] text-[var(--muted)]">{PROJECTION_BANKS[bank].label}</div><div className="font-mono text-[11px] font-bold mt-0.5">{fmtCLP(selectedRow.bankSegments?.[bank] || 0)}</div></div>)}</div>
+            <button type="button" onClick={() => openDetail(selectedRow.key)} className="h-9 px-3 rounded-xl border border-[var(--line)] bg-[var(--bg)] text-[10px] font-semibold whitespace-nowrap">Ver qué consideré</button>
+          </div>
         </section>
       )}
 
-      <CategoryChart timeline={timeline} filter={categoryFilter} setFilter={setCategoryFilter} selectedKey={selectedKey} setSelectedKey={setSelectedKey}/>
+      <CategoryChart timeline={timeline} filter={categoryFilter} setFilter={setCategoryFilter} selectedKey={selectedKey} setSelectedKey={setSelectedKey} onOpenDetail={openDetail}/>
 
       <section className="rounded-3xl border border-[var(--line)] bg-[var(--bg-elev)] p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -347,6 +601,7 @@ export default function NewProjection({
         </section>
       )}
 
+      {detail && <MonthDetailModal detail={detail} onClose={() => setDetailKey(null)}/>} 
       {showSimulation && <SimulationModal onClose={() => setShowSimulation(false)} onSave={item => { setSimulations(current => [...current, item]); setShowSimulation(false); setDecisionKey(monthKey(item.date)) }}/>} 
     </div>
   )
