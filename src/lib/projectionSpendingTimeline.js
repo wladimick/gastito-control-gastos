@@ -29,11 +29,11 @@ export function currentMonthKey(now = new Date()) {
 export function monthLabel(key, short = false) {
   const [year, month] = String(key || '').split('-').map(Number)
   if (!year || !month) return key || 'Sin mes'
-  const text = new Intl.DateTimeFormat('es-CL', {
-    month: short ? 'short' : 'long',
-    year: short ? undefined : 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(year, month - 1, 1)))
+  const options = short
+    ? { month: 'short', timeZone: 'UTC' }
+    : { month: 'long', year: 'numeric', timeZone: 'UTC' }
+  const text = new Intl.DateTimeFormat('es-CL', options)
+    .format(new Date(Date.UTC(year, month - 1, 1)))
   return text.charAt(0).toUpperCase() + text.slice(1).replace('.', '')
 }
 
@@ -104,13 +104,13 @@ function historicalRows(expenses, currentKey) {
 
   return keys.map(key => {
     const row = rows.get(key)
-    const total = Math.max(0, totalSegments(row.segments))
+    const segments = Object.fromEntries(
+      Object.entries(row.segments).map(([bank, amount]) => [bank, Math.max(0, amount)])
+    )
     return {
       ...row,
-      total,
-      segments: Object.fromEntries(
-        Object.entries(row.segments).map(([bank, amount]) => [bank, Math.max(0, amount)])
-      ),
+      segments,
+      total: totalSegments(segments),
     }
   })
 }
@@ -121,12 +121,10 @@ function cardBankMap(creditCards = []) {
 
 function futureBankSegments(month, cards) {
   const segments = emptySegments()
-  const knownCardIds = new Set()
 
   ;(month.knownCycles || []).forEach(cycle => {
     const bank = cards.get(cycle.cardId) || 'otros'
     segments[bank] += Math.max(0, safeAmount(cycle.amount))
-    if (cycle.cardId) knownCardIds.add(cycle.cardId)
   })
 
   // Cuotas o pisos futuros no cubiertos por una factura ya conocida.
@@ -174,6 +172,17 @@ function futureRows(planMonths, currentKey, creditCards) {
   })
 }
 
+function decorateRows(rows, maxTotal) {
+  return rows.map(row => ({
+    ...row,
+    heightRatio: row.total / maxTotal,
+    percentages: Object.fromEntries(BANK_ORDER.map(bank => [
+      bank,
+      row.total > 0 ? Math.round((row.segments[bank] || 0) * 100 / row.total) : 0,
+    ])),
+  }))
+}
+
 export function buildSpendingTimeline({
   expenses = [],
   projectionMonths = [],
@@ -181,23 +190,17 @@ export function buildSpendingTimeline({
   now = new Date(),
 } = {}) {
   const currentKey = currentMonthKey(now)
-  const history = historicalRows(expenses, currentKey)
-  const future = futureRows(projectionMonths, currentKey, creditCards)
-  const rows = [...history, ...future]
-  const maxTotal = Math.max(1, ...rows.map(row => row.total))
+  const rawHistory = historicalRows(expenses, currentKey)
+  const rawFuture = futureRows(projectionMonths, currentKey, creditCards)
+  const rawRows = [...rawHistory, ...rawFuture]
+  const maxTotal = Math.max(1, ...rawRows.map(row => row.total))
+  const rows = decorateRows(rawRows, maxTotal)
 
   return {
     currentKey,
-    history,
-    future,
-    rows: rows.map(row => ({
-      ...row,
-      heightRatio: row.total / maxTotal,
-      percentages: Object.fromEntries(BANK_ORDER.map(bank => [
-        bank,
-        row.total > 0 ? Math.round((row.segments[bank] || 0) * 100 / row.total) : 0,
-      ])),
-    })),
+    history: rows.slice(0, 3),
+    future: rows.slice(3),
+    rows,
     maxTotal,
   }
 }
