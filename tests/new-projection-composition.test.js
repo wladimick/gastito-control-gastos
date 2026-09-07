@@ -72,6 +72,49 @@ test('separa el vencimiento informado por Falabella de recurrentes y cuotas adic
   assert.equal(visibleBankTotal(november, 'falabella'), 120000)
 })
 
+test('si Gastito conoce más que Próximos vencimientos, mantiene el valor del banco y separa la diferencia', () => {
+  const cardId = 'fal'
+  const cycleId = 'cmr-oct'
+  const timeline = buildNewProjectionTimeline({
+    now,
+    creditCards: [{ id: cardId, bank: 'falabella', name: 'CMR Falabella' }],
+    billingForecasts: [{
+      id: 'forecast-oct',
+      cardId,
+      cashMonth: '2026-10',
+      amount: 692460,
+      active: true,
+    }],
+    billingCycles: [{ id: cycleId, transactions: [] }],
+    planMonths: [{
+      key: '2026-10',
+      outflow: 693364,
+      cardAmount: 693364,
+      knownCardAmount: 693364,
+      uncoveredInstallmentAmount: 0,
+      estimatedCreditVariableRemaining: 0,
+      knownCycles: [{ id: cycleId, cardId, amount: 693364, dueDate: '2026-10-05', final: false }],
+      uncoveredInstallmentDetail: [],
+      directRecurringDetail: [],
+      creditRecurringDetail: [],
+      simulationDetail: [],
+      directRecurring: 0,
+      creditRecurring: 0,
+      simulationAmount: 0,
+      closingBalance: 1000000,
+      income: 1200000,
+      receivableAmount: 0,
+    }],
+  })
+
+  const october = timeline.future.find(row => row.key === '2026-10')
+  assert.ok(october)
+  assert.equal(october.sourceByBank.falabella.billing, 692460)
+  assert.equal(october.sourceByBank.falabella.other, 904)
+  assert.equal(october.bankSegments.falabella, 693364)
+  assert.equal(october.total, 693364)
+})
+
 test('los checkboxes ocultan la capa sin alterar la base informada por el banco', () => {
   const row = {
     kind: 'projected',
