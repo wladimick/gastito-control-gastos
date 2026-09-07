@@ -129,6 +129,20 @@ function cycleAmount(cycle) {
   return Math.max(reported, estimated, calculated)
 }
 
+function cycleDetail(cycle) {
+  return {
+    id: cycle.id,
+    cardId: cycle.cardId,
+    dueDate: cycle.dueDate,
+    status: cycle.status,
+    reconciliationStatus: cycle.reconciliationStatus,
+    amount: cycleAmount(cycle),
+    final: Boolean(cycle.reportedAmountIsFinal),
+    cycleKey: cycle.cycleKey,
+    variablePurchases: cycleVariablePurchases(cycle),
+  }
+}
+
 function cyclesByDueMonth(cycles, todayDate) {
   const map = new Map()
   ;(cycles || []).forEach(cycle => {
@@ -137,19 +151,27 @@ function cyclesByDueMonth(cycles, todayDate) {
     if (dueDate && dueDate < todayDate) return
     const key = dueDate.slice(0, 7) || cycle.cycleKey
     if (!key) return
-    const detail = {
-      id: cycle.id,
-      cardId: cycle.cardId,
-      dueDate: cycle.dueDate,
-      status: cycle.status,
-      reconciliationStatus: cycle.reconciliationStatus,
-      amount: cycleAmount(cycle),
-      final: Boolean(cycle.reportedAmountIsFinal),
-      cycleKey: cycle.cycleKey,
-      variablePurchases: cycleVariablePurchases(cycle),
-    }
     const current = map.get(key) || []
-    current.push(detail)
+    current.push(cycleDetail(cycle))
+    map.set(key, current)
+  })
+  return map
+}
+
+function displayCyclesByDueMonth(cycles, firstKey, horizonKeys) {
+  const map = new Map()
+  ;(cycles || []).forEach(cycle => {
+    const dueDate = dateOnly(cycle.dueDate)
+    const key = dueDate.slice(0, 7) || cycle.cycleKey
+    if (!key || !horizonKeys.includes(key)) return
+
+    // En Nueva Proyección el mes actual debe explicar todo el mes:
+    // incluye facturas ya pagadas y todavía pendientes. En meses futuros
+    // solo se mantienen compromisos aún no pagados.
+    if (cycle.status === 'paid' && key !== firstKey) return
+
+    const current = map.get(key) || []
+    current.push(cycleDetail(cycle))
     map.set(key, current)
   })
   return map
@@ -241,6 +263,7 @@ export function buildProjectionPlan({
   const firstKey = currentMonthKey(now)
   const monthKeys = Array.from({ length: horizonMonths }, (_, index) => addMonthsKey(firstKey, index))
   const today = chileParts(now)
+  const committedSimulation = scenario === 'simulated'
   const activeAccounts = (accounts || []).filter(account => account.active)
   const operatingBalance = activeAccounts
     .filter(account => account.type !== 'ahorro')
@@ -257,11 +280,16 @@ export function buildProjectionPlan({
   const variableCredit = Math.round(variableTotal * autoRatio)
   const variableDirect = variableTotal - variableCredit
 
+  // Flujo desde hoy: excluye facturas ya pagadas o vencidas.
   const cycleMap = cyclesByDueMonth(billingCycles, today.date)
+  // Vista mensual de Nueva Proyección: el mes actual incluye lo ya pagado.
+  const displayCycleMap = committedSimulation
+    ? displayCyclesByDueMonth(billingCycles, firstKey, monthKeys)
+    : cycleMap
   const occurrenceMap = installmentOccurrencesByMonth(installmentDebts)
   const receivablesToInclude = (receivables || []).filter(item => item.reimbursement || includeReceivables)
   const receivableMap = scheduleOneOff(receivablesToInclude, firstKey, monthKeys, true)
-  const payableMap = scheduleOneOff(payables, firstKey, monthKeys, includePayables)
+  const payableMap = scheduleOneOff(payables, firstKey, monthKeys, includePayables && !committedSimulation)
 
   let balance = startBalance
   const months = monthKeys.map((key, index) => {
@@ -276,62 +304,108 @@ export function buildProjectionPlan({
     })
     const income = incomeDetail.reduce((sum, item) => sum + Number(item.amount || 0), 0)
 
-    const directRecurringDetail = (recurringList || []).filter(item => {
+    // Lo que todavía falta pagar desde hoy.
+    const forwardDirectRecurringDetail = (recurringList || []).filter(item => {
       if (item.kind !== 'expense' || !isActiveInMonth(item, key)) return false
       if (item.comisionBancaria || item.type === 'credito') return false
       if (!isCurrent) return true
       return Number(item.dayOfMonth || 1) >= today.day
     })
-    const directRecurring = directRecurringDetail.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+    const forwardDirectRecurring = forwardDirectRecurringDetail.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+
+    const fullDirectRecurringDetail = (recurringList || []).filter(item => {
+      if (item.kind !== 'expense' || !isActiveInMonth(item, key)) return false
+      if (item.comisionBancaria || item.type === 'credito') return false
+      return true
+    })
+    const displayDirectRecurringDetail = committedSimulation && isCurrent
+      ? fullDirectRecurringDetail
+      : forwardDirectRecurringDetail
+    const displayDirectRecurring = displayDirectRecurringDetail.reduce((sum, item) => sum + Number(item.amount || 0), 0)
 
     const creditRecurringDetail = (recurringList || []).filter(item =>
       item.kind === 'expense' && isActiveInMonth(item, key) && (item.type === 'credito' || item.comisionBancaria)
     )
     const creditRecurring = creditRecurringDetail.reduce((sum, item) => sum + Number(item.amount || 0), 0)
 
-    const knownCycles = cycleMap.get(key) || []
-    const knownCardAmount = knownCycles.reduce((sum, item) => sum + item.amount, 0)
-    const knownCardIds = new Set(knownCycles.map(item => item.cardId).filter(Boolean))
-    const knownVariablePurchases = knownCycles.reduce((sum, item) => sum + Number(item.variablePurchases || 0), 0)
+    const forwardKnownCycles = cycleMap.get(key) || []
+    const displayKnownCycles = displayCycleMap.get(key) || []
+    const forwardKnownCardAmount = forwardKnownCycles.reduce((sum, item) => sum + item.amount, 0)
+    const displayKnownCardAmount = displayKnownCycles.reduce((sum, item) => sum + item.amount, 0)
+    const forwardKnownCardIds = new Set(forwardKnownCycles.map(item => item.cardId).filter(Boolean))
+    const displayKnownCardIds = new Set(displayKnownCycles.map(item => item.cardId).filter(Boolean))
+    const displayKnownVariablePurchases = displayKnownCycles.reduce((sum, item) => sum + Number(item.variablePurchases || 0), 0)
 
     const rawInstallmentDetail = occurrenceMap.get(key) || []
-    const installmentDetail = rawInstallmentDetail.filter(item =>
+    const forwardInstallmentDetail = rawInstallmentDetail.filter(item =>
       !(isCurrent && !item.projected && item.dueDate && dateOnly(item.dueDate) < today.date)
     )
-    const installmentAmount = installmentDetail.reduce((sum, item) => sum + item.amount, 0)
-    const uncoveredInstallmentDetail = installmentDetail.filter(item => !item.cardId || !knownCardIds.has(item.cardId))
-    const uncoveredInstallmentAmount = uncoveredInstallmentDetail.reduce((sum, item) => sum + item.amount, 0)
+    const displayInstallmentDetail = committedSimulation && isCurrent
+      ? rawInstallmentDetail
+      : forwardInstallmentDetail
 
-    const hasKnownBill = knownCycles.length > 0
-    const allKnownFinal = hasKnownBill && knownCycles.every(item => item.final)
-    const useVariable = scenario !== 'committed'
+    const displayInstallmentAmount = displayInstallmentDetail.reduce((sum, item) => sum + item.amount, 0)
+
+    const forwardUncoveredInstallmentDetail = forwardInstallmentDetail.filter(item =>
+      !item.cardId || !forwardKnownCardIds.has(item.cardId)
+    )
+    const displayUncoveredInstallmentDetail = displayInstallmentDetail.filter(item =>
+      !item.cardId || !displayKnownCardIds.has(item.cardId)
+    )
+    const forwardUncoveredInstallmentAmount = forwardUncoveredInstallmentDetail.reduce((sum, item) => sum + item.amount, 0)
+    const displayUncoveredInstallmentAmount = displayUncoveredInstallmentDetail.reduce((sum, item) => sum + item.amount, 0)
+
+    const forwardHasKnownBill = forwardKnownCycles.length > 0
+    const displayHasKnownBill = displayKnownCycles.length > 0
+    const forwardAllKnownFinal = forwardHasKnownBill && forwardKnownCycles.every(item => item.final)
+
+    // Nueva Proyección no inventa gasto variable. Solo usa facturación,
+    // recurrentes, cuotas comprometidas y simulaciones explícitas.
+    const useVariable = scenario !== 'committed' && !committedSimulation
     const estimatedCreditVariable = useVariable && !isCurrent ? Math.round(variableCredit) : 0
-    const estimatedCreditVariableRemaining = !useVariable || allKnownFinal
+    const forwardKnownVariablePurchases = forwardKnownCycles.reduce((sum, item) => sum + Number(item.variablePurchases || 0), 0)
+    const estimatedCreditVariableRemaining = !useVariable || forwardAllKnownFinal
       ? 0
-      : hasKnownBill
-        ? Math.max(0, estimatedCreditVariable - knownVariablePurchases)
+      : forwardHasKnownBill
+        ? Math.max(0, estimatedCreditVariable - forwardKnownVariablePurchases)
         : estimatedCreditVariable
 
-    const cardAmount = knownCardAmount
-      + uncoveredInstallmentAmount
+    const forwardCardAmount = forwardKnownCardAmount
+      + forwardUncoveredInstallmentAmount
       + estimatedCreditVariableRemaining
-      + (hasKnownBill ? 0 : creditRecurring)
+      + (forwardHasKnownBill ? 0 : creditRecurring)
+
+    const displayCardAmount = committedSimulation
+      ? displayKnownCardAmount
+        + displayUncoveredInstallmentAmount
+        + (displayHasKnownBill ? 0 : creditRecurring)
+      : forwardCardAmount
 
     const estimatedDirectVariable = useVariable ? Math.round(variableDirect * remainingRatio) : 0
     const receivableDetail = receivableMap.get(key) || []
     const receivableAmount = receivableDetail.reduce((sum, item) => sum + Number(item.amount || 0), 0)
-    const payableDetail = payableMap.get(key) || []
+    const payableDetail = committedSimulation ? [] : (payableMap.get(key) || [])
     const payableAmount = payableDetail.reduce((sum, item) => sum + Number(item.amount || 0), 0)
     const simulationDetail = scenario === 'simulated' ? simulationRowsForMonth(simulations, key) : []
     const simulationAmount = simulationDetail.reduce((sum, item) => sum + item.amountThisMonth, 0)
 
-    const outflow = directRecurring + cardAmount + estimatedDirectVariable + payableAmount + simulationAmount
-    const net = income + receivableAmount - outflow
+    // forwardOutflow mueve el saldo desde el estado actual: jamás vuelve a
+    // descontar lo ya pagado. outflow es el total explicativo del mes.
+    const forwardOutflow = forwardDirectRecurring
+      + forwardCardAmount
+      + estimatedDirectVariable
+      + payableAmount
+      + simulationAmount
+    const outflow = committedSimulation
+      ? displayDirectRecurring + displayCardAmount + simulationAmount
+      : forwardOutflow
+
+    const net = income + receivableAmount - forwardOutflow
     const openingBalance = balance
     balance += net
 
-    const cardConfidence = hasKnownBill
-      ? allKnownFinal ? 'confirmed' : 'in_progress'
+    const cardConfidence = displayHasKnownBill
+      ? displayKnownCycles.every(item => item.final) ? 'confirmed' : 'in_progress'
       : 'projected'
 
     return {
@@ -342,18 +416,18 @@ export function buildProjectionPlan({
       incomeDetail,
       receivableAmount,
       receivableDetail,
-      directRecurring,
-      directRecurringDetail,
+      directRecurring: displayDirectRecurring,
+      directRecurringDetail: displayDirectRecurringDetail,
       creditRecurring,
       creditRecurringDetail,
-      cardAmount,
-      knownCardAmount,
-      knownCycles,
-      installmentAmount,
-      installmentDetail,
-      uncoveredInstallmentAmount,
-      uncoveredInstallmentDetail,
-      knownVariablePurchases,
+      cardAmount: displayCardAmount,
+      knownCardAmount: displayKnownCardAmount,
+      knownCycles: displayKnownCycles,
+      installmentAmount: displayInstallmentAmount,
+      installmentDetail: displayInstallmentDetail,
+      uncoveredInstallmentAmount: displayUncoveredInstallmentAmount,
+      uncoveredInstallmentDetail: displayUncoveredInstallmentDetail,
+      knownVariablePurchases: displayKnownVariablePurchases,
       estimatedCreditVariable,
       estimatedCreditVariableRemaining,
       estimatedDirectVariable,
@@ -362,6 +436,7 @@ export function buildProjectionPlan({
       simulationAmount,
       simulationDetail,
       outflow,
+      forwardOutflow,
       net,
       closingBalance: balance,
       cardConfidence,
