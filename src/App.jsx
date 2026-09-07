@@ -47,6 +47,7 @@ const UserProfile = lazy(() => import('./components/UserProfile'))
 const Savings = lazy(() => import('./components/Savings'))
 const Accounts = lazy(() => import('./components/Accounts'))
 const Projection = lazy(() => import('./components/Projection'))
+const NewProjection = lazy(() => import('./components/NewProjection'))
 const Reimbursements = lazy(() => import('./components/Reimbursements'))
 const Billing = lazy(() => import('./components/Billing'))
 
@@ -815,6 +816,18 @@ export default function App() {
             payables={payablesList}
             installmentDebts={installmentDebts}
             expenses={expenses}
+          />
+        )}
+        {view === 'projection-beta' && (
+          <NewProjection
+            accounts={accounts}
+            recurringList={recurringList}
+            incomeList={incomeList}
+            receivables={combinedReceivables}
+            payables={payablesList}
+            installmentDebts={installmentDebts}
+            expenses={expenses}
+            creditCards={creditCards}
           />
         )}
         {view === 'billing' && (
