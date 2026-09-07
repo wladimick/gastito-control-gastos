@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import ProjectionV2 from './ProjectionV2'
+import ProjectionSpendingTimeline from './ProjectionSpendingTimeline'
 import { Badge, Card, InfoTip } from './ui'
 import { Icon, fmtCLP } from '../lib/helpers'
 
@@ -144,6 +145,8 @@ export default function ProjectionWithBalanceStatus(props) {
           </div>
         )}
       </Card>
+
+      <ProjectionSpendingTimeline {...props} accounts={projectedAccounts}/>
 
       <ProjectionV2 {...props} accounts={projectedAccounts}/>
     </div>
