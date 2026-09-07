@@ -1,4 +1,4 @@
-import { CATEGORIES } from '../data'
+import { CATEGORIES } from '../data.js'
 
 export const PROJECTION_BANKS = {
   bchile: { id: 'bchile', label: 'Banco Chile', color: '#1E5EFF' },
