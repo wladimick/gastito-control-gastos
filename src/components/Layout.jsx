@@ -39,6 +39,7 @@ const BASE_NAV_GROUPS = [
       { id: 'receivables', label: 'Me deben', brand: 'receivables', short: 'Cobros', href: '?me-deben=1' },
       { id: 'reimbursements', label: 'Rendiciones', icon: 'cash', short: 'Rend.', badge: 0 },
       { id: 'projection', label: 'Proyección', icon: 'trend', short: 'Proyec.' },
+      { id: 'projection-beta', label: 'Nueva Proyección · Beta', icon: 'trend', short: 'Nueva' },
       { id: 'nicol', label: 'Compartido con Nicol', icon: 'users', short: 'Nicol', href: '?nicol-admin=recurrentes' },
       { id: 'reports', label: 'Reportes financieros', icon: 'chart', short: 'Reportes' },
     ],
@@ -54,7 +55,7 @@ const BASE_NAV_GROUPS = [
 
 const FINANCIAL_VIEWS = new Set([
   'dashboard', 'accounts', 'previsional', 'employment', 'salary', 'expenses',
-  'spending', 'billing', 'installments', 'budgets', 'recurring', 'projection',
+  'spending', 'billing', 'installments', 'budgets', 'recurring', 'projection', 'projection-beta',
   'reports',
 ])
 
