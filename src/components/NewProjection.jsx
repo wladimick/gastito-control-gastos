@@ -22,6 +22,7 @@ import {
   currentMonthKey,
   monthKey,
   monthLabel,
+  projectionSegments,
   safeSpendingCapacity,
   visibleBankTotal,
 } from '../lib/newProjectionModel'
@@ -43,25 +44,9 @@ function PercentSegment({ amount, total, color, label }) {
   )
 }
 
-function LayerMarks({ row, visible }) {
-  return (
-    <div className="mt-2 h-[18px] flex flex-col gap-[2px]">
-      {LAYER_ORDER.map(layer => {
-        if (!visible[layer]) return <div key={layer} className="h-1"/>
-        const amount = Number(row.layers?.[layer] || 0)
-        const width = row.total > 0 ? Math.min(100, amount * 100 / row.total) : 0
-        return (
-          <div key={layer} className="h-1 rounded-full bg-[var(--soft)] overflow-hidden" title={`${PROJECTION_LAYERS[layer].label}: ${fmtCLP(amount)}`}>
-            <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: PROJECTION_LAYERS[layer].color }}/>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function BankBar({ row, filter, maxVisible, selected, onSelect, onOpenDetail, layers }) {
-  const visibleTotal = visibleBankTotal(row, filter)
+  const segments = projectionSegments(row, filter, layers)
+  const visibleTotal = segments.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   const height = visibleTotal > 0 ? Math.max(10, Math.round(178 * visibleTotal / Math.max(1, maxVisible))) : 4
   return (
     <button
@@ -77,13 +62,17 @@ function BankBar({ row, filter, maxVisible, selected, onSelect, onOpenDetail, la
           className={`w-[46px] sm:w-[52px] rounded-t-[10px] overflow-hidden flex flex-col-reverse shadow-sm transition ${selected ? 'ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-[var(--bg-elev)]' : 'group-hover:ring-1 group-hover:ring-[var(--line)]'}`}
           style={{ height, backgroundColor: 'var(--soft)' }}
         >
-          {filter === 'all'
-            ? BANK_ORDER.map(bank => <PercentSegment key={bank} amount={Number(row.bankSegments?.[bank] || 0)} total={Math.max(1, row.total)} color={PROJECTION_BANKS[bank].color} label={PROJECTION_BANKS[bank].label}/>)
-            : <div className="w-full h-full" style={{ backgroundColor: PROJECTION_BANKS[filter].color }}/>
-          }
+          {segments.map(segment => (
+            <PercentSegment
+              key={segment.id}
+              amount={segment.amount}
+              total={Math.max(1, visibleTotal)}
+              color={segment.color}
+              label={segment.label}
+            />
+          ))}
         </div>
       </div>
-      <LayerMarks row={row} visible={layers}/>
       <div className="mt-2 text-[10px] font-bold">{row.shortLabel}</div>
       <div className={`mt-1 text-[8px] font-bold ${row.kind === 'actual' ? 'text-slate-500' : 'text-violet-600'}`}>{row.kind === 'actual' ? 'REAL' : 'PROY.'}</div>
     </button>
@@ -91,7 +80,7 @@ function BankBar({ row, filter, maxVisible, selected, onSelect, onOpenDetail, la
 }
 
 function BankChart({ timeline, filter, setFilter, selectedKey, setSelectedKey, onOpenDetail, layerVisibility, setLayerVisibility }) {
-  const maxVisible = Math.max(1, ...timeline.rows.map(row => visibleBankTotal(row, filter)))
+  const maxVisible = Math.max(1, ...timeline.rows.map(row => visibleBankTotal(row, filter, layerVisibility)))
   return (
     <section className="rounded-3xl border border-[var(--line)] bg-[var(--bg-elev)] overflow-hidden shadow-sm">
       <div className="p-4 sm:p-5 border-b border-[var(--line)]">
@@ -99,7 +88,7 @@ function BankChart({ timeline, filter, setFilter, selectedKey, setSelectedKey, o
           <div>
             <div className="text-[9px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Bancos y compromisos</div>
             <h2 className="text-[18px] sm:text-[20px] font-bold mt-1">3 meses reales + próximos 6 meses</h2>
-            <p className="text-[10.5px] text-[var(--muted)] mt-1 max-w-2xl">Filtra un banco para seguir su comportamiento a través del tiempo. Las líneas bajo cada barra resaltan recurrentes, cuotas y simulaciones sin sumarlos dos veces. <strong>Doble click en un mes</strong> para auditar qué valores se consideraron.</p>
+            <p className="text-[10.5px] text-[var(--muted)] mt-1 max-w-2xl">En los meses futuros, azul y verde muestran únicamente lo informado por cada banco. Recurrentes, cuotas adicionales y simulaciones se apilan con su propio color. <strong>Doble click en un mes</strong> para auditar los valores.</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {[['all', 'Todos'], ...BANK_ORDER.map(id => [id, PROJECTION_BANKS[id].label])].map(([id, label]) => (
@@ -107,7 +96,14 @@ function BankChart({ timeline, filter, setFilter, selectedKey, setSelectedKey, o
             ))}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 mt-4">
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-4 text-[9px] text-[var(--muted)]">
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PROJECTION_BANKS.bchile.color }}/>Banco Chile informado</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PROJECTION_BANKS.falabella.color }}/>Falabella informado</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PROJECTION_BANKS.otros.color }}/>Otros compromisos</span>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mt-3">
           {LAYER_ORDER.map(layer => (
             <label key={layer} className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--bg)] px-3 h-8 text-[10px] font-semibold cursor-pointer">
               <input type="checkbox" checked={layerVisibility[layer]} onChange={event => setLayerVisibility(current => ({ ...current, [layer]: event.target.checked }))}/>
@@ -238,7 +234,7 @@ function addDetailGroup(groups, id, label, items, source) {
   })
 }
 
-function buildMonthDetail({ key, timeline, plan, expenses, cycles, creditCards }) {
+function buildMonthDetail({ key, timeline, expenses }) {
   if (!key) return null
   const row = timeline.rows.find(item => item.key === key)
   if (!row) return null
@@ -271,108 +267,33 @@ function buildMonthDetail({ key, timeline, plan, expenses, cycles, creditCards }
     }
   }
 
-  const month = (plan.months || []).find(item => item.key === key)
-  if (!month) return {
-    key,
-    label: row.label,
-    kind: row.kind,
-    total: Number(row.total || 0),
-    groups: [],
-    bankSegments: row.bankSegments,
-    layers: row.layers,
-    note: 'No existe un mes equivalente en el motor de proyección.',
-  }
+  const definitions = [
+    ['billing', 'Facturación / vencimientos informados', 'Banco informado'],
+    ['recurring', 'Recurrentes', 'Recurrente'],
+    ['installments', 'Cuotas adicionales', 'Cuota'],
+    ['simulations', 'Compras simuladas', 'Simulación'],
+    ['other', 'Otros compromisos', 'Otro'],
+  ]
 
-  const cards = new Map((creditCards || []).map(card => [card.id, card]))
-  const cycleMap = new Map((cycles || []).map(cycle => [cycle.id, cycle]))
-  const hasKnownBill = (month.knownCycles || []).length > 0
-
-  addDetailGroup(groups, 'billing', 'Facturación / ciclos conocidos', (month.knownCycles || []).map(item => {
-    const card = cards.get(item.cardId)
-    const cycle = cycleMap.get(item.id)
-    return {
+  definitions.forEach(([id, label, source]) => {
+    const items = (row.sourceDetails?.[id] || []).map(item => ({
       id: item.id,
-      label: card?.name || bankName(card?.bank) || 'Tarjeta de crédito',
+      label: item.label,
       amount: Number(item.amount || 0),
-      meta: [item.dueDate ? `Vence ${item.dueDate}` : null, item.final ? 'Monto final' : 'Ciclo en curso', cycle?.cycleKey ? `Ciclo ${cycle.cycleKey}` : null].filter(Boolean).join(' · '),
-    }
-  }), 'Conocido')
-
-  addDetailGroup(groups, 'installments', 'Cuotas todavía no cubiertas por una factura', (month.uncoveredInstallmentDetail || []).map(item => ({
-    id: item.id,
-    label: item.description || 'Cuota',
-    amount: Number(item.amount || 0),
-    meta: [item.installmentCurrent && item.installmentTotal ? `Cuota ${item.installmentCurrent}/${item.installmentTotal}` : null, item.dueDate ? `Vence ${item.dueDate}` : null, item.bankLabel || null].filter(Boolean).join(' · '),
-  })), 'Cuota')
-
-  addDetailGroup(groups, 'direct-recurring', 'Recurrentes de pago directo', (month.directRecurringDetail || []).map(item => ({
-    id: item.id,
-    label: item.name || item.description || 'Recurrente',
-    amount: Number(item.amount || 0),
-    meta: [item.dayOfMonth ? `Día ${item.dayOfMonth}` : null, bankName(item.bank), categoryMeta(item.category).label].filter(Boolean).join(' · '),
-  })), 'Recurrente')
-
-  if (!hasKnownBill) {
-    addDetailGroup(groups, 'credit-recurring', 'Recurrentes asociados a tarjeta', (month.creditRecurringDetail || []).map(item => ({
-      id: item.id,
-      label: item.name || item.description || 'Recurrente de tarjeta',
-      amount: Number(item.amount || 0),
-      meta: [item.dayOfMonth ? `Día ${item.dayOfMonth}` : null, bankName(item.bank), categoryMeta(item.category).label].filter(Boolean).join(' · '),
-    })), 'Recurrente')
-  }
-
-  if (Number(month.estimatedCreditVariableRemaining || 0) > 0) {
-    addDetailGroup(groups, 'estimated-card', 'Gasto variable estimado en tarjeta', [{
-      id: 'estimated-card',
-      label: 'Estimación basada en el gasto variable histórico',
-      amount: Number(month.estimatedCreditVariableRemaining || 0),
-      meta: 'Todavía no corresponde a una compra o banco confirmado',
-    }], 'Estimado')
-  }
-
-  if (Number(month.estimatedDirectVariable || 0) > 0) {
-    addDetailGroup(groups, 'estimated-direct', 'Gasto variable estimado directo', [{
-      id: 'estimated-direct',
-      label: 'Estimación de débito / transferencia / efectivo',
-      amount: Number(month.estimatedDirectVariable || 0),
-      meta: 'Calculado desde el promedio de meses anteriores',
-    }], 'Estimado')
-  }
-
-  addDetailGroup(groups, 'payables', 'Cuentas por pagar', (month.payableDetail || []).map(item => ({
-    id: item.id,
-    label: item.name || item.description || item.personName || 'Cuenta por pagar',
-    amount: Number(item.amount || 0),
-    meta: item.dueDate ? `Vence ${item.dueDate}` : 'Sin fecha específica',
-  })), 'Compromiso')
-
-  addDetailGroup(groups, 'simulations', 'Compras simuladas', (month.simulationDetail || []).map(item => ({
-    id: item.id,
-    label: item.name || 'Simulación',
-    amount: Number(item.amountThisMonth || 0),
-    meta: [item.installmentCurrent && item.installmentTotal ? `Cuota ${item.installmentCurrent}/${item.installmentTotal}` : null, bankName(item.bank), categoryMeta(item.category).label].filter(Boolean).join(' · '),
-  })), 'Simulación')
-
-  const listedTotal = groups.reduce((sum, group) => sum + group.subtotal, 0)
-  const gap = Math.round(Number(month.outflow || 0) - listedTotal)
-  if (gap !== 0) {
-    addDetailGroup(groups, 'technical-adjustment', 'Ajuste del motor', [{
-      id: 'technical-adjustment',
-      label: gap > 0 ? 'Componente incluido en el total que no tiene detalle individual' : 'Corrección de solapamiento / redondeo',
-      amount: gap,
-      meta: 'Se muestra para que la suma del listado coincida exactamente con el total proyectado.',
-    }], 'Ajuste')
-  }
+      meta: [bankName(item.bank), item.meta].filter(Boolean).join(' · '),
+    }))
+    addDetailGroup(groups, id, label, items, source)
+  })
 
   return {
     key,
     label: row.label,
     kind: row.kind,
-    total: Number(month.outflow || row.total || 0),
+    total: Number(row.total || 0),
     groups,
     bankSegments: row.bankSegments,
     layers: row.layers,
-    note: 'Este listado separa lo conocido de lo estimado. Las cuotas ya contenidas dentro de una factura conocida no se vuelven a sumar. El reparto visual por banco puede incluir una distribución estimada del gasto variable; aquí puedes ver qué parte todavía es estimación.',
+    note: 'Cada grupo corresponde a un color de la barra. Azul/verde es lo informado por el banco; recurrentes, cuotas adicionales y simulaciones se muestran aparte y la suma coincide con el total del mes.',
   }
 }
 
@@ -525,9 +446,10 @@ export default function NewProjection({
     planMonths: plan.months,
     creditCards,
     billingCycles: cycles,
+    billingForecasts: forecasts,
     installmentDebts: modelInstallments,
     simulations,
-  }), [expenses, plan.months, creditCards, cycles, modelInstallments, simulations])
+  }), [expenses, plan.months, creditCards, cycles, forecasts, modelInstallments, simulations])
 
   useEffect(() => {
     if (!timeline.rows.some(row => row.key === selectedKey)) setSelectedKey(timeline.currentKey)
@@ -542,11 +464,8 @@ export default function NewProjection({
   const detail = useMemo(() => buildMonthDetail({
     key: detailKey,
     timeline,
-    plan,
     expenses,
-    cycles,
-    creditCards,
-  }), [detailKey, timeline, plan, expenses, cycles, creditCards])
+  }), [detailKey, timeline, expenses])
   const openDetail = key => {
     setSelectedKey(key)
     setDetailKey(key)
@@ -565,7 +484,7 @@ export default function NewProjection({
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="rounded-2xl bg-[var(--ink)] text-[var(--bg)] p-4"><div className="text-[9px] uppercase tracking-[0.1em] opacity-60">Margen próximo mes</div><div className="font-mono text-[23px] font-bold mt-3">{fmtCLP(nextCapacity)}</div><div className="text-[10px] opacity-65 mt-1">Margen conservador sin bajar del colchón de seguridad.</div></div>
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4"><div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">Mes más exigente</div><div className="text-[17px] font-bold mt-3">{lowest?.label || '—'}</div><div className={`font-mono text-[13px] mt-1 ${Number(lowest?.closingBalance || 0) < 0 ? 'text-red-700' : 'text-[var(--muted)]'}`}>Saldo {fmtCLP(lowest?.closingBalance || 0)}</div></div>
-        <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4"><div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">Saldo a 6 meses</div><div className="font-mono text-[23px] font-bold mt-3">{fmtCLP(plan.finalBalance)}</div><div className="text-[10px] text-[var(--muted)] mt-1">Después de compromisos y estimación variable.</div></div>
+        <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4"><div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">Saldo a 6 meses</div><div className="font-mono text-[23px] font-bold mt-3">{fmtCLP(plan.finalBalance)}</div><div className="text-[10px] text-[var(--muted)] mt-1">Después de facturación, cuotas y recurrentes conocidos.</div></div>
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4"><div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">Simulaciones activas</div><div className="font-mono text-[23px] font-bold mt-3">{simulations.length}</div><div className="text-[10px] text-[var(--muted)] mt-1">Solo viven en esta vista y no cambian Supabase.</div></div>
       </section>
 
@@ -573,7 +492,7 @@ export default function NewProjection({
 
       {selectedRow && (
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div><div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">Mes seleccionado</div><div className="text-[15px] font-bold mt-1">{selectedRow.label} · {selectedRow.kind === 'actual' ? 'gasto real' : 'salida proyectada'}</div></div>
+          <div><div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">Mes seleccionado</div><div className="text-[15px] font-bold mt-1">{selectedRow.label} · {selectedRow.kind === 'actual' ? 'gasto real' : 'salida comprometida'}</div></div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="grid grid-cols-3 gap-3 sm:text-right">{BANK_ORDER.map(bank => <div key={bank}><div className="text-[8px] text-[var(--muted)]">{PROJECTION_BANKS[bank].label}</div><div className="font-mono text-[11px] font-bold mt-0.5">{fmtCLP(selectedRow.bankSegments?.[bank] || 0)}</div></div>)}</div>
             <button type="button" onClick={() => openDetail(selectedRow.key)} className="h-9 px-3 rounded-xl border border-[var(--line)] bg-[var(--bg)] text-[10px] font-semibold whitespace-nowrap">Ver qué consideré</button>

@@ -8,11 +8,20 @@ export const PROJECTION_BANKS = {
 
 export const PROJECTION_LAYERS = {
   recurring: { id: 'recurring', label: 'Recurrentes', color: '#F59E0B' },
-  installments: { id: 'installments', label: 'Cuotas', color: '#7C3AED' },
+  installments: { id: 'installments', label: 'Cuotas adicionales', color: '#7C3AED' },
   simulations: { id: 'simulations', label: 'Simulaciones', color: '#E11D8A' },
 }
 
+export const PROJECTION_SOURCES = {
+  billing: { id: 'billing', label: 'Informado por banco' },
+  recurring: PROJECTION_LAYERS.recurring,
+  installments: PROJECTION_LAYERS.installments,
+  simulations: PROJECTION_LAYERS.simulations,
+  other: { id: 'other', label: 'Otros compromisos', color: '#8B8F97' },
+}
+
 const BANK_ORDER = ['bchile', 'falabella', 'otros']
+const SOURCE_ORDER = ['billing', 'recurring', 'installments', 'simulations', 'other']
 
 export function monthKey(value) {
   return value ? String(value).slice(0, 7) : ''
@@ -65,6 +74,20 @@ function emptyCategories() {
   return Object.fromEntries(CATEGORIES.map(category => [category.id, 0]))
 }
 
+function emptySources() {
+  return Object.fromEntries(BANK_ORDER.map(bank => [bank, {
+    billing: 0,
+    recurring: 0,
+    installments: 0,
+    simulations: 0,
+    other: 0,
+  }]))
+}
+
+function emptySourceDetails() {
+  return { billing: [], recurring: [], installments: [], simulations: [], other: [] }
+}
+
 function validExpense(expense) {
   if (!expense || Number(expense.amount || 0) <= 0) return false
   const status = String(expense.status || '').toLowerCase()
@@ -78,26 +101,6 @@ function categoryId(value) {
   return CATEGORIES.some(category => category.id === id) ? id : 'otros'
 }
 
-function shares(values) {
-  const total = Object.values(values).reduce((sum, value) => sum + Number(value || 0), 0)
-  if (total <= 0) return null
-  return Object.fromEntries(Object.entries(values).map(([key, value]) => [key, Number(value || 0) / total]))
-}
-
-function allocate(total, distribution, fallbackKey = 'otros') {
-  const result = {}
-  if (total <= 0) return result
-  if (!distribution) return { [fallbackKey]: total }
-  let assigned = 0
-  const entries = Object.entries(distribution)
-  entries.forEach(([key, ratio], index) => {
-    const amount = index === entries.length - 1 ? total - assigned : Math.round(total * ratio)
-    result[key] = amount
-    assigned += amount
-  })
-  return result
-}
-
 function addMap(target, source) {
   Object.entries(source || {}).forEach(([key, value]) => {
     target[key] = Number(target[key] || 0) + Number(value || 0)
@@ -106,6 +109,10 @@ function addMap(target, source) {
 
 function cardMap(creditCards = []) {
   return new Map((creditCards || []).map(card => [card.id, normalizeBank(card.bank || card.name)]))
+}
+
+function cardInfoMap(creditCards = []) {
+  return new Map((creditCards || []).map(card => [card.id, card]))
 }
 
 function historicalRows(expenses, currentKey) {
@@ -117,6 +124,8 @@ function historicalRows(expenses, currentKey) {
     kind: 'actual',
     bankSegments: emptyBanks(),
     categorySegments: emptyCategories(),
+    sourceByBank: emptySources(),
+    sourceDetails: emptySourceDetails(),
     layers: { recurring: 0, installments: 0, simulations: 0 },
     sourceCount: 0,
   }]))
@@ -125,7 +134,8 @@ function historicalRows(expenses, currentKey) {
     const row = byKey.get(monthKey(expense.date))
     if (!row) return
     const amount = Number(expense.amount || 0)
-    row.bankSegments[normalizeBank(expense.bank || expense.bankId || expense.cardName)] += amount
+    const bank = normalizeBank(expense.bank || expense.bankId || expense.cardName)
+    row.bankSegments[bank] += amount
     row.categorySegments[categoryId(expense.category)] += amount
     if (Number(expense.installmentTotal || expense.installments || 1) > 1 || expense.movementType === 'installment') {
       row.layers.installments += amount
@@ -140,16 +150,6 @@ function historicalRows(expenses, currentKey) {
       total: Object.values(row.bankSegments).reduce((sum, value) => sum + value, 0),
     }
   })
-}
-
-function historicalDistributions(history) {
-  const banks = emptyBanks()
-  const categories = emptyCategories()
-  history.forEach(row => {
-    addMap(banks, row.bankSegments)
-    addMap(categories, row.categorySegments)
-  })
-  return { bankShares: shares(banks), categoryShares: shares(categories) }
 }
 
 function cycleCategoryTotals(cycle) {
@@ -174,83 +174,278 @@ function occurrenceCategoryMap(installmentDebts = []) {
   return map
 }
 
-function futureRows({ planMonths, currentKey, creditCards, billingCycles, installmentDebts, simulations }) {
+function addSource(row, bankValue, source, amountValue, detail = null) {
+  const amount = Number(amountValue || 0)
+  if (amount <= 0) return
+  const bank = BANK_ORDER.includes(bankValue) ? bankValue : normalizeBank(bankValue)
+  row.sourceByBank[bank][source] += amount
+  if (detail) row.sourceDetails[source].push({ ...detail, amount, bank })
+}
+
+function sumSourceByBank(sourceByBank) {
+  const banks = emptyBanks()
+  BANK_ORDER.forEach(bank => {
+    banks[bank] = SOURCE_ORDER.reduce((sum, source) => sum + Number(sourceByBank?.[bank]?.[source] || 0), 0)
+  })
+  return banks
+}
+
+function sumSource(row, source, bankFilter = 'all') {
+  const banks = bankFilter === 'all' ? BANK_ORDER : [bankFilter]
+  return banks.reduce((sum, bank) => sum + Number(row.sourceByBank?.[bank]?.[source] || 0), 0)
+}
+
+function recurringDetailsIncluded(month) {
+  const known = Number(month.knownCardAmount || 0)
+  const installments = Number(month.uncoveredInstallmentAmount || 0)
+  const estimated = Number(month.estimatedCreditVariableRemaining || 0)
+  return Math.max(0, Number(month.cardAmount || 0) - known - installments - estimated)
+}
+
+function takeRecurringItems(items, amountToTake) {
+  let remaining = Math.max(0, Number(amountToTake || 0))
+  const result = []
+  for (const item of (items || [])) {
+    if (remaining <= 0) break
+    const original = Number(item.amount || 0)
+    if (original <= 0) continue
+    const amount = Math.min(original, remaining)
+    result.push({ item, amount })
+    remaining -= amount
+  }
+  return result
+}
+
+function forecastMapForMonth(billingForecasts = []) {
+  const map = new Map()
+  ;(billingForecasts || []).filter(item => item?.active !== false).forEach(item => {
+    if (!item.cardId || !item.cashMonth || Number(item.amount || 0) <= 0) return
+    map.set(`${item.cashMonth}|${item.cardId}`, item)
+  })
+  return map
+}
+
+function futureRows({ planMonths, currentKey, creditCards, billingCycles, billingForecasts, installmentDebts, simulations }) {
   const cards = cardMap(creditCards)
+  const cardInfo = cardInfoMap(creditCards)
   const cycles = new Map((billingCycles || []).map(cycle => [cycle.id, cycle]))
   const occurrenceCategories = occurrenceCategoryMap(installmentDebts)
+  const forecasts = forecastMapForMonth(billingForecasts)
   const planMap = new Map((planMonths || []).map(month => [month.key, month]))
 
   return Array.from({ length: 6 }, (_, index) => {
     const key = addMonthsKey(currentKey, index)
     const month = planMap.get(key)
-    const banks = emptyBanks()
-    const categories = emptyCategories()
-    const layers = { recurring: 0, installments: 0, simulations: 0 }
-    if (!month) return {
-      key, label: monthLabel(key), shortLabel: monthLabel(key, true), kind: 'projected',
-      bankSegments: banks, categorySegments: categories, layers, total: 0, sourceCount: 0,
-    }
-
-    ;(month.knownCycles || []).forEach(item => {
-      banks[cards.get(item.cardId) || 'otros'] += Number(item.amount || 0)
-      const sourceCycle = cycles.get(item.id)
-      addMap(categories, cycleCategoryTotals(sourceCycle))
-    })
-
-    ;(month.uncoveredInstallmentDetail || []).forEach(item => {
-      banks[cards.get(item.cardId) || normalizeBank(item.bankId || item.bankLabel)] += Number(item.amount || 0)
-      categories[occurrenceCategories.get(item.id) || 'otros'] += Number(item.amount || 0)
-    })
-
-    const hasKnownBill = (month.knownCycles || []).length > 0
-    ;(month.directRecurringDetail || []).forEach(item => {
-      const amount = Number(item.amount || 0)
-      banks[normalizeBank(item.bank)] += amount
-      categories[categoryId(item.category)] += amount
-    })
-    if (!hasKnownBill) {
-      ;(month.creditRecurringDetail || []).forEach(item => {
-        const amount = Number(item.amount || 0)
-        banks[normalizeBank(item.bank)] += amount
-        categories[categoryId(item.category)] += amount
-      })
-    }
-
-    ;(month.simulationDetail || []).forEach(item => {
-      const amount = Number(item.amountThisMonth || 0)
-      banks[normalizeBank(item.bank)] += amount
-      categories[categoryId(item.category)] += amount
-    })
-
-    layers.recurring = Number(month.directRecurring || 0) + Number(month.creditRecurring || 0)
-    layers.installments = Number(month.installmentAmount || 0)
-    layers.simulations = Number(month.simulationAmount || 0)
-
-    const total = Math.max(0, Number(month.outflow || 0))
-
-    // Nunca inventar una distribución futura según el historial.
-    // Si un monto comprometido no tiene banco/categoría identificable,
-    // queda explícitamente en "Otros".
-    const bankKnown = Object.values(banks).reduce((sum, value) => sum + value, 0)
-    addMap(banks, allocate(Math.max(0, total - bankKnown), null, 'otros'))
-
-    const categoryKnown = Object.values(categories).reduce((sum, value) => sum + value, 0)
-    addMap(categories, allocate(Math.max(0, total - categoryKnown), null, 'otros'))
-
-    return {
+    const row = {
       key,
       label: monthLabel(key),
       shortLabel: monthLabel(key, true),
       kind: 'projected',
-      bankSegments: banks,
-      categorySegments: categories,
-      layers,
-      total,
-      closingBalance: Number(month.closingBalance || 0),
-      income: Number(month.income || 0) + Number(month.receivableAmount || 0),
-      sourceCount: (month.knownCycles || []).length + (month.installmentDetail || []).length + (month.directRecurringDetail || []).length,
+      bankSegments: emptyBanks(),
+      categorySegments: emptyCategories(),
+      sourceByBank: emptySources(),
+      sourceDetails: emptySourceDetails(),
+      layers: { recurring: 0, installments: 0, simulations: 0 },
+      total: 0,
+      sourceCount: 0,
     }
+    if (!month) return row
+
+    const knownCardIds = new Set()
+    ;(month.knownCycles || []).forEach(item => {
+      const bank = cards.get(item.cardId) || 'otros'
+      const amount = Number(item.amount || 0)
+      const forecast = forecasts.get(`${key}|${item.cardId}`)
+      const bankReported = forecast ? Math.min(amount, Number(forecast.amount || 0)) : amount
+      const extraKnown = Math.max(0, amount - bankReported)
+      knownCardIds.add(item.cardId)
+
+      addSource(row, bank, 'billing', bankReported, {
+        id: item.id,
+        label: cardInfo.get(item.cardId)?.name || PROJECTION_BANKS[bank]?.label || 'Tarjeta de crédito',
+        meta: forecast
+          ? `Vencimiento informado por el banco · ${monthLabel(key)}`
+          : [item.dueDate ? `Vence ${item.dueDate}` : null, item.final ? 'Monto final' : 'Ciclo en curso'].filter(Boolean).join(' · '),
+        source: forecast ? 'billing_forecast' : 'billing_cycle',
+      })
+
+      addSource(row, bank, 'other', extraKnown, {
+        id: `cycle-extra:${item.id}`,
+        label: 'Movimientos adicionales al vencimiento informado',
+        meta: 'Monto ya conocido por Gastito que excede el valor importado desde Próximos vencimientos',
+        source: 'billing_extra',
+      })
+
+      addMap(row.categorySegments, cycleCategoryTotals(cycles.get(item.id)))
+    })
+
+    const installmentsByCard = new Map()
+    const installmentsWithoutCard = []
+    ;(month.uncoveredInstallmentDetail || []).forEach(item => {
+      if (item.cardId) {
+        const current = installmentsByCard.get(item.cardId) || []
+        current.push(item)
+        installmentsByCard.set(item.cardId, current)
+      } else {
+        installmentsWithoutCard.push(item)
+      }
+      row.categorySegments[occurrenceCategories.get(item.id) || 'otros'] += Number(item.amount || 0)
+    })
+
+    for (const [cardId, items] of installmentsByCard.entries()) {
+      const bank = cards.get(cardId) || normalizeBank(items[0]?.bankId || items[0]?.bankLabel)
+      const totalInstallments = items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+      const forecast = forecasts.get(`${key}|${cardId}`)
+
+      if (!knownCardIds.has(cardId) && forecast) {
+        const bankReported = Math.min(totalInstallments, Number(forecast.amount || 0))
+        addSource(row, bank, 'billing', bankReported, {
+          id: `forecast:${forecast.id || `${cardId}:${key}`}`,
+          label: cardInfo.get(cardId)?.name || PROJECTION_BANKS[bank]?.label || 'Tarjeta de crédito',
+          meta: `Vencimiento informado por el banco · ${monthLabel(key)}`,
+          source: 'billing_forecast',
+        })
+        const extra = Math.max(0, totalInstallments - bankReported)
+        addSource(row, bank, 'installments', extra, {
+          id: `extra-installments:${cardId}:${key}`,
+          label: 'Cuotas adicionales sobre lo informado por el banco',
+          meta: 'Compromisos registrados en Gastito que exceden el vencimiento informado',
+          source: 'installment_extra',
+        })
+      } else if (!knownCardIds.has(cardId)) {
+        addSource(row, bank, 'installments', totalInstallments, {
+          id: `installments:${cardId}:${key}`,
+          label: cardInfo.get(cardId)?.name ? `Cuotas · ${cardInfo.get(cardId).name}` : 'Cuotas comprometidas',
+          meta: 'Cuotas conocidas sin un vencimiento bancario importado para este mes',
+          source: 'installments',
+        })
+      }
+    }
+
+    installmentsWithoutCard.forEach(item => {
+      const bank = normalizeBank(item.bankId || item.bankLabel)
+      addSource(row, bank, 'installments', item.amount, {
+        id: item.id,
+        label: item.description || 'Cuota comprometida',
+        meta: [item.installmentCurrent && item.installmentTotal ? `Cuota ${item.installmentCurrent}/${item.installmentTotal}` : null, item.dueDate ? `Vence ${item.dueDate}` : null].filter(Boolean).join(' · '),
+        source: 'installment',
+      })
+    })
+
+    ;(month.directRecurringDetail || []).forEach(item => {
+      const amount = Number(item.amount || 0)
+      const bank = normalizeBank(item.bank)
+      addSource(row, bank, 'recurring', amount, {
+        id: item.id,
+        label: item.name || item.description || 'Recurrente',
+        meta: [item.dayOfMonth ? `Día ${item.dayOfMonth}` : null, PROJECTION_BANKS[bank]?.label || null].filter(Boolean).join(' · '),
+        source: 'recurring',
+      })
+      row.categorySegments[categoryId(item.category)] += amount
+    })
+
+    const creditRecurringIncluded = recurringDetailsIncluded(month)
+    takeRecurringItems(month.creditRecurringDetail, creditRecurringIncluded).forEach(({ item, amount }) => {
+      const bank = normalizeBank(item.bank)
+      addSource(row, bank, 'recurring', amount, {
+        id: item.id,
+        label: item.name || item.description || 'Recurrente de tarjeta',
+        meta: [item.dayOfMonth ? `Día ${item.dayOfMonth}` : null, PROJECTION_BANKS[bank]?.label || null].filter(Boolean).join(' · '),
+        source: 'credit_recurring',
+      })
+      row.categorySegments[categoryId(item.category)] += amount
+    })
+
+    ;(month.simulationDetail || []).forEach(item => {
+      const amount = Number(item.amountThisMonth || 0)
+      const bank = normalizeBank(item.bank)
+      addSource(row, bank, 'simulations', amount, {
+        id: item.id,
+        label: item.name || 'Simulación',
+        meta: item.installmentCurrent && item.installmentTotal ? `Cuota ${item.installmentCurrent}/${item.installmentTotal}` : 'Compra simulada',
+        source: 'simulation',
+      })
+      row.categorySegments[categoryId(item.category)] += amount
+    })
+
+    const targetTotal = Math.max(0, Number(month.outflow || 0))
+    const classified = BANK_ORDER.reduce((sum, bank) => sum + SOURCE_ORDER.reduce((inner, source) => inner + Number(row.sourceByBank[bank][source] || 0), 0), 0)
+    const residual = Math.max(0, Math.round(targetTotal - classified))
+    addSource(row, 'otros', 'other', residual, {
+      id: `other:${key}`,
+      label: 'Otro compromiso identificado por el motor',
+      meta: 'No tiene una fuente más específica para mostrar',
+      source: 'other',
+    })
+
+    row.bankSegments = sumSourceByBank(row.sourceByBank)
+    row.layers.recurring = sumSource(row, 'recurring')
+    row.layers.installments = sumSource(row, 'installments')
+    row.layers.simulations = sumSource(row, 'simulations')
+    row.total = Object.values(row.bankSegments).reduce((sum, value) => sum + value, 0)
+    row.closingBalance = Number(month.closingBalance || 0)
+    row.income = Number(month.income || 0) + Number(month.receivableAmount || 0)
+    row.sourceCount = Object.values(row.sourceDetails).reduce((sum, items) => sum + items.length, 0)
+
+    const categoryKnown = Object.values(row.categorySegments).reduce((sum, value) => sum + Number(value || 0), 0)
+    if (categoryKnown < row.total) row.categorySegments.otros += row.total - categoryKnown
+
+    return row
   })
+}
+
+function layerEnabled(layers, source) {
+  if (source === 'recurring') return layers?.recurring !== false
+  if (source === 'installments') return layers?.installments !== false
+  if (source === 'simulations') return layers?.simulations !== false
+  return true
+}
+
+export function projectionSegments(row, bankFilter = 'all', layers = null) {
+  if (!row) return []
+  const banks = bankFilter === 'all' ? BANK_ORDER : [bankFilter]
+
+  if (row.kind === 'actual' || !row.sourceByBank) {
+    return banks
+      .map(bank => ({
+        id: `actual:${bank}`,
+        source: 'actual',
+        bank,
+        label: PROJECTION_BANKS[bank]?.label || bank,
+        color: PROJECTION_BANKS[bank]?.color || PROJECTION_BANKS.otros.color,
+        amount: Number(row.bankSegments?.[bank] || 0),
+      }))
+      .filter(item => item.amount > 0)
+  }
+
+  const result = []
+  banks.forEach(bank => {
+    const amount = Number(row.sourceByBank?.[bank]?.billing || 0)
+    if (amount > 0) result.push({
+      id: `billing:${bank}`,
+      source: 'billing',
+      bank,
+      label: `${PROJECTION_BANKS[bank]?.label || 'Banco'} · informado`,
+      color: PROJECTION_BANKS[bank]?.color || PROJECTION_BANKS.otros.color,
+      amount,
+    })
+  })
+
+  ;['recurring', 'installments', 'simulations', 'other'].forEach(source => {
+    if (!layerEnabled(layers, source)) return
+    const amount = banks.reduce((sum, bank) => sum + Number(row.sourceByBank?.[bank]?.[source] || 0), 0)
+    if (amount <= 0) return
+    result.push({
+      id: source,
+      source,
+      bank: bankFilter,
+      label: PROJECTION_SOURCES[source].label,
+      color: PROJECTION_SOURCES[source].color,
+      amount,
+    })
+  })
+
+  return result
 }
 
 export function safeSpendingCapacity(planMonths = [], monthKeyValue) {
@@ -270,30 +465,29 @@ export function buildNewProjectionTimeline({
   planMonths = [],
   creditCards = [],
   billingCycles = [],
+  billingForecasts = [],
   installmentDebts = [],
   simulations = [],
   now = new Date(),
 } = {}) {
   const currentKey = currentMonthKey(now)
   const history = historicalRows(expenses, currentKey)
-  const distributions = historicalDistributions(history)
   const future = futureRows({
     planMonths,
     currentKey,
     creditCards,
     billingCycles,
+    billingForecasts,
     installmentDebts,
     simulations,
   })
   const rows = [...history, ...future]
   const maxTotal = Math.max(1, ...rows.map(row => Number(row.total || 0)))
-  return { currentKey, history, future, rows, maxTotal, distributions }
+  return { currentKey, history, future, rows, maxTotal }
 }
 
-export function visibleBankTotal(row, filter = 'all') {
-  if (!row) return 0
-  if (filter === 'all') return Number(row.total || 0)
-  return Number(row.bankSegments?.[filter] || 0)
+export function visibleBankTotal(row, filter = 'all', layers = null) {
+  return projectionSegments(row, filter, layers).reduce((sum, item) => sum + Number(item.amount || 0), 0)
 }
 
 export function categoryTotal(row, filter = 'all') {
