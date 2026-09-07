@@ -174,7 +174,7 @@ function occurrenceCategoryMap(installmentDebts = []) {
   return map
 }
 
-function futureRows({ planMonths, currentKey, creditCards, billingCycles, installmentDebts, simulations, distributions }) {
+function futureRows({ planMonths, currentKey, creditCards, billingCycles, installmentDebts, simulations }) {
   const cards = cardMap(creditCards)
   const cycles = new Map((billingCycles || []).map(cycle => [cycle.id, cycle]))
   const occurrenceCategories = occurrenceCategoryMap(installmentDebts)
@@ -227,11 +227,15 @@ function futureRows({ planMonths, currentKey, creditCards, billingCycles, instal
     layers.simulations = Number(month.simulationAmount || 0)
 
     const total = Math.max(0, Number(month.outflow || 0))
+
+    // Nunca inventar una distribución futura según el historial.
+    // Si un monto comprometido no tiene banco/categoría identificable,
+    // queda explícitamente en "Otros".
     const bankKnown = Object.values(banks).reduce((sum, value) => sum + value, 0)
-    addMap(banks, allocate(Math.max(0, total - bankKnown), distributions.bankShares, 'otros'))
+    addMap(banks, allocate(Math.max(0, total - bankKnown), null, 'otros'))
 
     const categoryKnown = Object.values(categories).reduce((sum, value) => sum + value, 0)
-    addMap(categories, allocate(Math.max(0, total - categoryKnown), distributions.categoryShares, 'otros'))
+    addMap(categories, allocate(Math.max(0, total - categoryKnown), null, 'otros'))
 
     return {
       key,
@@ -280,7 +284,6 @@ export function buildNewProjectionTimeline({
     billingCycles,
     installmentDebts,
     simulations,
-    distributions,
   })
   const rows = [...history, ...future]
   const maxTotal = Math.max(1, ...rows.map(row => Number(row.total || 0)))
