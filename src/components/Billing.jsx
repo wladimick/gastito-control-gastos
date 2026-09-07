@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import BillingBase from './BillingBase'
+import BillingHistoryChart from './BillingHistoryChart'
 import BillingJsonImport from './BillingJsonImport'
 import { fmtCLP } from '../lib/helpers'
 
@@ -32,6 +33,10 @@ export default function Billing({ creditCards = [] }) {
         >
           Importar JSON
         </button>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 lg:px-6 mt-3">
+        <BillingHistoryChart creditCards={creditCards} refreshToken={refreshKey}/>
       </div>
 
       <div className="-mt-1">
