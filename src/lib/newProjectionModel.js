@@ -391,7 +391,7 @@ export function projectionSegments(row, bankFilter = 'all', layers = null) {
   if (!row) return []
   const banks = bankFilter === 'all' ? BANK_ORDER : [bankFilter]
 
-  if (row.kind === 'actual') {
+  if (row.kind === 'actual' || !row.sourceByBank) {
     return banks
       .map(bank => ({
         id: `actual:${bank}`,
