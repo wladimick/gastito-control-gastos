@@ -20,6 +20,7 @@ import {
   buildNewProjectionTimeline,
   categoryTotal,
   currentMonthKey,
+  monthKey,
   monthLabel,
   safeSpendingCapacity,
   visibleBankTotal,
@@ -137,16 +138,23 @@ function CategoryBar({ row, filter, series, maxVisible, selected, onSelect }) {
   const visibleTotal = categoryTotal(row, filter)
   const height = visibleTotal > 0 ? Math.max(10, Math.round(178 * visibleTotal / Math.max(1, maxVisible))) : 4
   const shownTotal = filter === 'all' ? Math.max(1, row.total) : Math.max(1, visibleTotal)
+  const represented = filter === 'all'
+    ? series.reduce((sum, id) => sum + Number(row.categorySegments?.[id] || 0), 0)
+    : visibleTotal
+  const remainder = filter === 'all' ? Math.max(0, shownTotal - represented) : 0
   return (
     <button type="button" onClick={() => onSelect(row.key)} className="w-[76px] sm:w-[86px] shrink-0 text-center group">
       <div className={`font-mono text-[8.5px] sm:text-[9.5px] font-bold mb-2 whitespace-nowrap ${selected ? 'text-[var(--ink)]' : 'text-[var(--muted)]'}`}>{fmtCLP(visibleTotal)}</div>
       <div className="h-[184px] flex items-end justify-center">
         <div className={`w-[46px] sm:w-[52px] rounded-t-[10px] overflow-hidden flex flex-col-reverse shadow-sm ${selected ? 'ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-[var(--bg-elev)]' : 'group-hover:ring-1 group-hover:ring-[var(--line)]'}`} style={{ height, backgroundColor: 'var(--soft)' }}>
           {filter === 'all'
-            ? series.map(id => {
-                const cat = categoryMeta(id)
-                return <PercentSegment key={id} amount={Number(row.categorySegments?.[id] || 0)} total={shownTotal} color={cat.color} label={cat.label}/>
-              })
+            ? <>
+                {series.map(id => {
+                  const cat = categoryMeta(id)
+                  return <PercentSegment key={id} amount={Number(row.categorySegments?.[id] || 0)} total={shownTotal} color={cat.color} label={cat.label}/>
+                })}
+                <PercentSegment amount={remainder} total={shownTotal} color="#B8BBC2" label="Resto de categorías"/>
+              </>
             : <div className="w-full h-full" style={{ backgroundColor: categoryMeta(filter).color }}/>
           }
         </div>
@@ -294,7 +302,7 @@ export default function NewProjection({
   const nextCapacity = nextMonth ? safeSpendingCapacity(plan.months, nextMonth.key) : 0
 
   return (
-    <main className="max-w-7xl mx-auto px-4 md:px-6 py-5 md:py-7 flex flex-col gap-5">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 md:py-7 flex flex-col gap-5">
       <section className="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 p-5 md:p-6 overflow-hidden relative">
         <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-violet-200/30 blur-3xl"/>
         <div className="relative flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -340,6 +348,6 @@ export default function NewProjection({
       )}
 
       {showSimulation && <SimulationModal onClose={() => setShowSimulation(false)} onSave={item => { setSimulations(current => [...current, item]); setShowSimulation(false); setDecisionKey(monthKey(item.date)) }}/>} 
-    </main>
+    </div>
   )
 }
