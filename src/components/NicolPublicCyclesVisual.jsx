@@ -73,12 +73,12 @@ function Header() {
   return (
     <header className="relative overflow-hidden border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
       <div className="pointer-events-none absolute -left-8 -top-12 h-32 w-32 rounded-full bg-violet-300/30 blur-2xl" aria-hidden="true" />
-      <div className="relative max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+      <div className="relative max-w-4xl mx-auto px-3.5 sm:px-4 py-3.5 sm:py-4 flex items-center justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
-          <div className="text-[18px] font-bold tracking-tight">Gastito</div>
-          <div className="text-[11px] text-slate-600 mt-0.5">Gastos compartidos con Nicol</div>
+          <div className="text-[17px] sm:text-[18px] font-bold tracking-tight">Gastito</div>
+          <div className="text-[10.5px] sm:text-[11px] text-slate-600 mt-0.5">Gastos compartidos con Nicol</div>
         </div>
-        <div className="shrink-0 text-[10px] uppercase tracking-[0.12em] font-bold text-violet-800 border border-white/80 bg-white/70 rounded-full px-2.5 py-1">
+        <div className="shrink-0 text-[9px] sm:text-[10px] uppercase tracking-[0.12em] font-bold text-violet-800 border border-white/80 bg-white/70 rounded-full px-2 sm:px-2.5 py-0.5 sm:py-1">
           Solo lectura
         </div>
       </div>
@@ -102,15 +102,15 @@ function Message({ title, text, loading = false }) {
 function CycleSelector({ cycles, selectedKey, onSelect }) {
   return (
     <section>
-      <div className="flex items-center justify-between gap-3 mb-2">
+      <div className="flex items-center justify-between gap-3 mb-1.5 sm:mb-2">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Ciclo mensual</div>
-          <div className="text-[12px] text-[var(--muted)] mt-0.5">Selecciona el mes que quieres revisar</div>
+          <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Ciclo mensual</div>
+          <div className="text-[11px] sm:text-[12px] text-[var(--muted)] mt-0.5">Selecciona el mes que quieres revisar</div>
         </div>
-        <div className="text-[10.5px] text-[var(--muted)] whitespace-nowrap">{cycles.length} meses</div>
+        <div className="text-[9.5px] sm:text-[10.5px] text-[var(--muted)] whitespace-nowrap">{cycles.length} meses</div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
+      <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 sm:pb-2 -mx-3 px-3 sm:-mx-4 sm:px-4 snap-x">
         {cycles.map(cycle => {
           const selected = cycle.cycleKey === selectedKey
           return (
@@ -118,13 +118,13 @@ function CycleSelector({ cycles, selectedKey, onSelect }) {
               key={cycle.cycleKey}
               type="button"
               onClick={() => onSelect(cycle.cycleKey)}
-              className={`snap-start shrink-0 min-w-[150px] rounded-2xl border px-3.5 py-3 text-left transition-colors ${selected
+              className={`snap-start shrink-0 min-w-[132px] sm:min-w-[150px] rounded-xl sm:rounded-2xl border px-3 sm:px-3.5 py-2.5 sm:py-3 text-left transition-colors ${selected
                 ? 'bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]'
                 : 'bg-[var(--bg-elev)] text-[var(--ink)] border-[var(--line)] hover:bg-[var(--hover)]'}`}
             >
-              <div className="text-[11.5px] font-semibold">{formatCycleLabel(cycle.cycleKey)}</div>
-              <div className="font-mono text-[15px] font-bold mt-1">{fmtCLP(cycle.nicolAmount || 0)}</div>
-              <div className={`text-[9.5px] mt-1 ${selected ? 'opacity-60' : 'text-[var(--muted)]'}`}>
+              <div className="text-[10.5px] sm:text-[11.5px] font-semibold">{formatCycleLabel(cycle.cycleKey)}</div>
+              <div className="font-mono text-[14px] sm:text-[15px] font-bold mt-0.5 sm:mt-1">{fmtCLP(cycle.nicolAmount || 0)}</div>
+              <div className={`text-[8.5px] sm:text-[9.5px] mt-0.5 sm:mt-1 ${selected ? 'opacity-60' : 'text-[var(--muted)]'}`}>
                 {cycle.isCurrent ? 'Mes actual' : cycle.isUpcoming ? 'Próximo mes' : 'Mes anterior'}
               </div>
             </button>
@@ -137,37 +137,37 @@ function CycleSelector({ cycles, selectedKey, onSelect }) {
 
 function CycleSummary({ cycle, percentage, index, total, onMove }) {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-violet-950 to-fuchsia-900 text-[var(--bg)] rounded-2xl p-4 sm:p-5 shadow-sm shadow-violet-950/25">
+    <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-violet-950 to-fuchsia-900 text-[var(--bg)] rounded-2xl p-3.5 sm:p-5 shadow-sm shadow-violet-950/25">
       <div className="pointer-events-none absolute -right-10 -top-14 h-40 w-40 rounded-full bg-fuchsia-400/20 blur-3xl" aria-hidden="true" />
       <div className="relative flex items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] opacity-60 font-bold">
+          <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.14em] opacity-60 font-bold">
             {cycle.isUpcoming ? 'Monto estimado del ciclo' : 'Total compartido del ciclo'}
           </div>
-          <div className="text-[17px] font-semibold mt-1">{formatCycleLabel(cycle.cycleKey)}</div>
+          <div className="text-[16px] sm:text-[17px] font-semibold mt-0.5 sm:mt-1">{formatCycleLabel(cycle.cycleKey)}</div>
         </div>
         <div className="flex gap-1.5">
           <button type="button" disabled={index <= 0} onClick={() => onMove(-1)} aria-label="Ciclo anterior"
-            className="w-9 h-9 rounded-full border border-white/15 grid place-items-center disabled:opacity-25 hover:bg-white/10">
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-white/15 grid place-items-center disabled:opacity-25 hover:bg-white/10">
             <span aria-hidden="true">‹</span>
           </button>
           <button type="button" disabled={index >= total - 1} onClick={() => onMove(1)} aria-label="Ciclo siguiente"
-            className="w-9 h-9 rounded-full border border-white/15 grid place-items-center disabled:opacity-25 hover:bg-white/10">
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-white/15 grid place-items-center disabled:opacity-25 hover:bg-white/10">
             <span aria-hidden="true">›</span>
           </button>
         </div>
       </div>
 
-      <div className="relative font-mono text-[30px] font-bold mt-4">{fmtCLP(cycle.sharedTotal || 0)}</div>
-      <div className="relative mt-4 pt-4 border-t border-white/15 flex items-end justify-between gap-4">
+      <div className="relative font-mono text-[27px] sm:text-[30px] font-bold mt-3 sm:mt-4">{fmtCLP(cycle.sharedTotal || 0)}</div>
+      <div className="relative mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/15 flex items-end justify-between gap-4">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] opacity-60 font-bold">Aporte de Nicol</div>
-          <div className="font-mono text-[23px] font-bold mt-1">{fmtCLP(cycle.nicolAmount || 0)}</div>
+          <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.14em] opacity-60 font-bold">Aporte de Nicol</div>
+          <div className="font-mono text-[21px] sm:text-[23px] font-bold mt-0.5 sm:mt-1">{fmtCLP(cycle.nicolAmount || 0)}</div>
         </div>
-        <div className="text-[13px] font-semibold bg-white/10 rounded-full px-3 py-1.5">{percentage}%</div>
+        <div className="text-[11px] sm:text-[13px] font-semibold bg-white/10 rounded-full px-2.5 sm:px-3 py-1 sm:py-1.5">{percentage}%</div>
       </div>
 
-      <div className="relative mt-4 rounded-xl bg-white/10 px-3.5 py-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
+      <div className="relative mt-3 sm:mt-4 rounded-xl bg-white/10 px-3 sm:px-3.5 py-2.5 sm:py-3 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px]">
         <span className="font-mono font-semibold">{fmtCLP(cycle.sharedTotal || 0)}</span>
         <span className="opacity-55">×</span>
         <span className="font-semibold">{percentage}%</span>
@@ -175,8 +175,8 @@ function CycleSummary({ cycle, percentage, index, total, onMove }) {
         <span className="font-mono font-bold">{fmtCLP(cycle.nicolAmount || 0)}</span>
       </div>
 
-      <div className="relative flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] opacity-65 mt-4">
-        {cycle.dueDate && <span>Vencimiento desde {formatDate(cycle.dueDate)}</span>}
+      <div className="relative flex flex-wrap gap-x-2.5 sm:gap-x-3 gap-y-0.5 sm:gap-y-1 text-[9.5px] sm:text-[10.5px] opacity-65 mt-3 sm:mt-4">
+        {cycle.dueDate && <span>Vence desde {formatDate(cycle.dueDate)}</span>}
         {cycle.projectedCount > 0 && <span>{cycle.projectedCount} cuotas proyectadas</span>}
         {cycle.recurringCount > 0 && <span>{cycle.recurringCount} recurrentes</span>}
       </div>
@@ -189,23 +189,23 @@ function CategorySummary({ rows }) {
 
   return (
     <section>
-      <div className="mb-2">
-        <div className="text-[10px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Resumen por categoría</div>
-        <div className="text-[12px] text-[var(--muted)] mt-0.5">Así se distribuyen los gastos de este ciclo</div>
+      <div className="mb-1.5 sm:mb-2">
+        <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.13em] text-[var(--muted)] font-bold">Resumen por categoría</div>
+        <div className="text-[11px] sm:text-[12px] text-[var(--muted)] mt-0.5">Así se distribuyen los gastos de este ciclo</div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-2.5">
         {rows.map(row => (
           <div
             key={row.category.id || row.category.label}
-            className="rounded-2xl border p-3.5"
+            className="rounded-xl sm:rounded-2xl border p-2.5 sm:p-3.5"
             style={{
               borderColor: translucent(row.category.color, '55'),
               backgroundColor: translucent(row.category.color, '12'),
             }}
           >
-            <div className="flex items-start gap-2.5">
+            <div className="flex items-start gap-2 sm:gap-2.5">
               <div
-                className="w-9 h-9 rounded-xl grid place-items-center text-[18px] shrink-0 border"
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[16px] sm:text-[18px] shrink-0 border"
                 style={{
                   borderColor: translucent(row.category.color, '55'),
                   backgroundColor: translucent(row.category.color, '24'),
@@ -215,9 +215,9 @@ function CategorySummary({ rows }) {
                 {row.category.icon || '•'}
               </div>
               <div className="min-w-0">
-                <div className="text-[11.5px] font-bold truncate">{row.category.label}</div>
-                <div className="font-mono text-[14px] font-bold mt-0.5">{fmtCLP(row.total)}</div>
-                <div className="text-[9.5px] text-[var(--muted)] mt-0.5">
+                <div className="text-[10.5px] sm:text-[11.5px] font-bold truncate">{row.category.label}</div>
+                <div className="font-mono text-[13px] sm:text-[14px] font-bold mt-0.5">{fmtCLP(row.total)}</div>
+                <div className="text-[8.5px] sm:text-[9.5px] text-[var(--muted)] mt-0.5">
                   Nicol {fmtCLP(row.nicolAmount)} · {row.count} {row.count === 1 ? 'gasto' : 'gastos'}
                 </div>
               </div>
@@ -231,23 +231,23 @@ function CategorySummary({ rows }) {
 
 function TransactionFilters({ categories, categoryFilter, onCategoryChange, sortBy, onSortChange }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 mt-3 border-t border-[var(--line)]">
-      <label>
-        <span className="block text-[10px] uppercase tracking-[0.1em] font-bold text-[var(--muted)] mb-1">Categoría</span>
+    <div className="grid grid-cols-2 gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-[var(--line)]">
+      <label className="min-w-0">
+        <span className="block text-[8.5px] sm:text-[10px] uppercase tracking-[0.09em] font-bold text-[var(--muted)] mb-1">Categoría</span>
         <select value={categoryFilter} onChange={event => onCategoryChange(event.target.value)}
-          className="w-full h-10 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] outline-none focus:border-violet-400">
-          <option value="">Todas las categorías</option>
+          className="w-full h-9 sm:h-10 rounded-lg sm:rounded-xl border border-[var(--line)] bg-[var(--bg)] px-2 sm:px-3 text-[10px] sm:text-[11px] outline-none focus:border-violet-400">
+          <option value="">Todas</option>
           {categories.map(category => <option key={category.id} value={category.id}>{category.icon || '•'} {category.label}</option>)}
         </select>
       </label>
-      <label>
-        <span className="block text-[10px] uppercase tracking-[0.1em] font-bold text-[var(--muted)] mb-1">Ordenar por</span>
+      <label className="min-w-0">
+        <span className="block text-[8.5px] sm:text-[10px] uppercase tracking-[0.09em] font-bold text-[var(--muted)] mb-1">Ordenar</span>
         <select value={sortBy} onChange={event => onSortChange(event.target.value)}
-          className="w-full h-10 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] outline-none focus:border-violet-400">
-          <option value="date-desc">Fecha: más reciente</option>
-          <option value="date-asc">Fecha: más antigua</option>
-          <option value="amount-desc">Monto: mayor a menor</option>
-          <option value="amount-asc">Monto: menor a mayor</option>
+          className="w-full h-9 sm:h-10 rounded-lg sm:rounded-xl border border-[var(--line)] bg-[var(--bg)] px-2 sm:px-3 text-[10px] sm:text-[11px] outline-none focus:border-violet-400">
+          <option value="date-desc">Más reciente</option>
+          <option value="date-asc">Más antigua</option>
+          <option value="amount-desc">Mayor monto</option>
+          <option value="amount-asc">Menor monto</option>
         </select>
       </label>
     </div>
@@ -260,18 +260,18 @@ function InstallmentBadges({ item }) {
   if (item.movementType !== 'installment' || current < 1 || total < 2) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 mt-2">
-      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${item.isProjected
+    <div className="flex flex-wrap items-center gap-1 mt-1.5 sm:gap-1.5 sm:mt-2">
+      <span className={`inline-flex items-center rounded-full px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[8.5px] sm:text-[10px] font-bold ${item.isProjected
         ? 'bg-blue-100 text-blue-800'
         : 'bg-amber-100 text-amber-900'}`}>
-        {item.isProjected ? 'Este ciclo pagará' : 'Este ciclo paga'}
+        {item.isProjected ? 'Pagará' : 'Paga'}
       </span>
-      <span className="inline-flex items-center rounded-full bg-[var(--ink)] text-[var(--bg)] px-2.5 py-1 text-[11px] font-bold font-mono">
-        Cuota {current}/{total}
+      <span className="inline-flex items-center rounded-full bg-[var(--ink)] text-[var(--bg)] px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[11px] font-bold font-mono">
+        {current}/{total}
       </span>
       {current === total && (
-        <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-1 text-[10px] font-bold">
-          Última cuota
+        <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[8.5px] sm:text-[10px] font-bold">
+          Última
         </span>
       )}
     </div>
@@ -288,13 +288,13 @@ function TransactionRow({ item, percentage }) {
   const nicolAmount = Math.round(amount * Number(percentage || 0) / 100)
 
   const stateLabel = item.isRecurring
-    ? item.isProjected ? 'Recurrente estimado' : 'Recurrente mensual'
-    : item.isProjected ? 'Próximo ciclo' : 'Confirmado'
+    ? item.isProjected ? 'Recurrente' : 'Mensual'
+    : item.isProjected ? 'Próximo' : 'Confirmado'
 
   return (
-    <div className="px-4 py-3 flex items-start gap-3">
+    <div className="px-3 sm:px-4 py-2.5 sm:py-3 flex items-start gap-2.5 sm:gap-3">
       <div
-        className="w-10 h-10 rounded-xl grid place-items-center text-[19px] shrink-0 border"
+        className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl grid place-items-center text-[17px] sm:text-[19px] shrink-0 border"
         style={{
           borderColor: translucent(category.color, '55'),
           backgroundColor: translucent(category.color, '20'),
@@ -305,10 +305,10 @@ function TransactionRow({ item, percentage }) {
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold break-words leading-snug">{item.description}</div>
-        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+        <div className="text-[12px] sm:text-[13px] font-semibold break-words leading-[1.2] sm:leading-snug">{item.description}</div>
+        <div className="flex flex-wrap items-center gap-1 mt-1 sm:gap-1.5 sm:mt-1.5">
           <span
-            className="inline-flex max-w-[9.5rem] items-center rounded-full border px-2 py-0.5 text-[9.5px] font-bold truncate"
+            className="inline-flex max-w-[7.5rem] sm:max-w-[9.5rem] items-center rounded-full border px-1.5 sm:px-2 py-0.5 text-[8.5px] sm:text-[9.5px] font-bold truncate"
             title={category.label}
             style={{
               borderColor: translucent(category.color, '66'),
@@ -317,7 +317,7 @@ function TransactionRow({ item, percentage }) {
           >
             {category.label}
           </span>
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9.5px] font-semibold ${item.isProjected
+          <span className={`inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[8.5px] sm:text-[9.5px] font-semibold ${item.isProjected
             ? 'bg-blue-50 text-blue-700'
             : item.isRecurring
               ? 'bg-violet-50 text-violet-700'
@@ -327,19 +327,19 @@ function TransactionRow({ item, percentage }) {
         </div>
         <InstallmentBadges item={item} />
 
-        <div className="text-[10.5px] text-[var(--muted)] mt-1.5 leading-relaxed">
+        <div className="text-[9.5px] sm:text-[10.5px] text-[var(--muted)] mt-1 sm:mt-1.5 leading-snug sm:leading-relaxed">
           {item.isRecurring ? 'Gasto mensual' : item.isProjected ? 'Monto proyectado' : formatDate(item.date) || TYPE_LABELS[item.movementType] || 'Movimiento'}
           {!item.isRecurring && !isInstallment && <> · {TYPE_LABELS[item.movementType] || 'Movimiento'}</>}
-          {isInstallment && originalAmount > amount && <> · Compra total {fmtCLP(originalAmount)}</>}
+          {isInstallment && originalAmount > amount && <> · Total {fmtCLP(originalAmount)}</>}
         </div>
       </div>
 
-      <div className="text-right shrink-0">
-        <div className="font-mono text-[13px] font-bold">{fmtCLP(amount)}</div>
-        <div className="text-[9.5px] text-[var(--muted)] mt-1">
-          {isInstallment ? 'valor de esta cuota' : item.isRecurring ? 'monto mensual' : 'monto compartido'}
+      <div className="text-right shrink-0 min-w-[82px] sm:min-w-0">
+        <div className="font-mono text-[12.5px] sm:text-[13px] font-bold">{fmtCLP(amount)}</div>
+        <div className="text-[8.5px] sm:text-[9.5px] text-[var(--muted)] mt-0.5 sm:mt-1">
+          {isInstallment ? 'esta cuota' : item.isRecurring ? 'mensual' : 'compartido'}
         </div>
-        <div className="text-[10px] font-semibold mt-2">Nicol {fmtCLP(nicolAmount)}</div>
+        <div className="text-[9.5px] sm:text-[10px] font-semibold mt-1.5 sm:mt-2">Nicol {fmtCLP(nicolAmount)}</div>
       </div>
     </div>
   )
@@ -424,7 +424,7 @@ export default function NicolPublicCyclesVisual({ token }) {
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
       <Header />
-      <main className="max-w-4xl mx-auto px-4 py-6 space-y-5 pb-16">
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-5 pb-12 sm:pb-16">
         {cycles.length > 0 ? (
           <>
             <CycleSelector cycles={cycles} selectedKey={selectedKey} onSelect={setSelectedKey} />
@@ -440,16 +440,16 @@ export default function NicolPublicCyclesVisual({ token }) {
 
                 <CategorySummary rows={categorySummary} />
 
-                <section className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl overflow-hidden">
-                  <div className="px-4 py-3 border-b border-[var(--line)] flex items-center justify-between gap-3">
+                <section className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-xl sm:rounded-2xl overflow-hidden">
+                  <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-[var(--line)] flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Detalle del ciclo</div>
-                      <div className="text-[12px] text-[var(--muted)] mt-0.5">
+                      <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.12em] text-[var(--muted)] font-bold">Detalle del ciclo</div>
+                      <div className="text-[11px] sm:text-[12px] text-[var(--muted)] mt-0.5">
                         {filteredTransactions.length} de {(cycle.transactions || []).length} conceptos compartidos
                       </div>
                     </div>
                     {cycle.isUpcoming && (
-                      <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-blue-50 text-blue-700">Estimado</span>
+                      <span className="text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-blue-50 text-blue-700">Estimado</span>
                     )}
                   </div>
 
@@ -476,8 +476,8 @@ export default function NicolPublicCyclesVisual({ token }) {
                 </section>
 
                 {cycle.isUpcoming && (
-                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[11px] text-blue-800 leading-relaxed">
-                    Las cuotas indicadas con “Este ciclo pagará” y los recurrentes estimados son una proyección. El monto puede cambiar cuando cierre el estado de cuenta.
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-[11px] text-blue-800 leading-relaxed">
+                    Cuotas y recurrentes marcados como estimados son una proyección. El monto puede cambiar al cierre.
                   </div>
                 )}
               </>
@@ -490,7 +490,7 @@ export default function NicolPublicCyclesVisual({ token }) {
           </section>
         )}
 
-        <p className="text-[10.5px] text-[var(--muted)] text-center leading-relaxed px-4">
+        <p className="text-[9.5px] sm:text-[10.5px] text-[var(--muted)] text-center leading-relaxed px-3 sm:px-4">
           Esta página es informativa y de solo lectura. No muestra tarjetas, bancos, identificadores personales ni datos de acceso.
         </p>
       </main>
