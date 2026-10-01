@@ -22,30 +22,28 @@ const TYPE_LABELS = {
   other: 'Otro cargo',
 }
 
-const FALLBACK_CATEGORY = {
-  label: 'Otros',
-  icon: '•',
-  color: '#888880',
-}
+const FALLBACK_CATEGORY = { label: 'Otros', icon: '•', color: '#888880' }
 
 function formatDate(value) {
   if (!value) return '—'
   return new Intl.DateTimeFormat('es-CL', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
+    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC',
   }).format(new Date(`${String(value).slice(0, 10)}T12:00:00Z`))
 }
 
-function formatCycleLabel(key) {
+function formatShortDate(value) {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('es-CL', {
+    day: 'numeric', month: 'short', timeZone: 'UTC',
+  }).format(new Date(`${String(value).slice(0, 10)}T12:00:00Z`)).replace('.', '')
+}
+
+function formatCycleLabel(key, short = false) {
   if (!key || !/^\d{4}-\d{2}$/.test(key)) return key || 'Ciclo'
   const [year, month] = key.split('-').map(Number)
   const label = new Intl.DateTimeFormat('es-CL', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(year, month - 1, 1)))
+    month: short ? 'short' : 'long', year: 'numeric', timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, 1))).replace('.', '')
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
@@ -65,7 +63,7 @@ function SimpleMessage({ title, text, loading = false }) {
   )
 }
 
-function LinkPanel({ link, percentage, setPercentage, generatedUrl, onGenerate, onSavePercentage, onRevoke, busy }) {
+function LinkPanel({ link, percentage, setPercentage, generatedUrl, onGenerate, onSavePercentage, onRevoke, onViewShared, busy }) {
   const [copied, setCopied] = useState(false)
 
   const copy = async () => {
@@ -75,77 +73,75 @@ function LinkPanel({ link, percentage, setPercentage, generatedUrl, onGenerate, 
   }
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-100 via-fuchsia-50 to-rose-50 p-4 sm:p-5 space-y-4 shadow-sm shadow-violet-950/5">
+    <section className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-100 via-fuchsia-50 to-rose-50 p-3.5 sm:p-5 space-y-3 sm:space-y-4 shadow-sm shadow-violet-950/5">
       <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-fuchsia-300/25 blur-2xl" aria-hidden="true" />
-      <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] text-violet-700 font-bold">Enlace compartido</div>
-          <h2 className="text-[18px] font-bold mt-1 text-slate-900">Portal de Nicol</h2>
-          <p className="text-[11.5px] text-slate-600 mt-1 leading-relaxed max-w-xl">
-            Comparte solo los movimientos y recurrentes que marques. Nicol puede verlos, pero no modificar nada.
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.12em] text-violet-700 font-bold">Enlace compartido</div>
+          <h2 className="text-[16px] sm:text-[18px] font-bold mt-0.5 text-slate-900">Portal de Nicol</h2>
+          <p className="text-[10.5px] sm:text-[11.5px] text-slate-600 mt-1 leading-relaxed max-w-xl">
+            Nicol ve solo los gastos que marques y su porcentaje correspondiente.
           </p>
         </div>
-        <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${link ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-          {link ? '● Enlace activo' : '● Aún no creado'}
+        <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-bold ${link ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+          {link ? '● Activo' : '● Sin enlace'}
         </span>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-        <label className="flex-1">
-          <span className="block text-[11px] text-[var(--muted)] mb-1">Porcentaje de Nicol</span>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-end">
+        <label>
+          <span className="block text-[10px] sm:text-[11px] text-[var(--muted)] mb-1">Porcentaje de Nicol</span>
           <input
-            type="number"
-            min="0"
-            max="100"
-            step="0.1"
-            value={percentage}
+            type="number" min="0" max="100" step="0.1" value={percentage}
             onChange={event => setPercentage(event.target.value)}
-            className="w-full h-10 rounded-xl border border-violet-200 bg-white/85 px-3 font-mono text-[13px] outline-none focus:ring-2 focus:ring-violet-300"
+            className="w-full h-9 sm:h-10 rounded-xl border border-violet-200 bg-white/85 px-3 font-mono text-[12px] sm:text-[13px] outline-none focus:ring-2 focus:ring-violet-300"
           />
         </label>
         {link && (
           <button disabled={busy} onClick={onSavePercentage}
-            className="h-10 px-4 rounded-xl border border-violet-200 bg-white/70 text-[12px] font-semibold text-violet-900 hover:bg-white disabled:opacity-50">
-            Guardar porcentaje
+            className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl border border-violet-200 bg-white/75 text-[10px] sm:text-[12px] font-semibold text-violet-900 disabled:opacity-50">
+            Guardar
           </button>
         )}
       </div>
 
-      {generatedUrl ? (
-        <div className="relative overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-white/95 via-violet-50 to-fuchsia-100/85 p-3.5 shadow-sm shadow-violet-950/10">
-          <div className="pointer-events-none absolute -right-8 -bottom-10 h-28 w-28 rounded-full bg-fuchsia-300/30 blur-2xl" aria-hidden="true" />
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div className="text-[10px] uppercase tracking-[0.1em] text-violet-700 font-bold">Enlace listo para enviar</div>
-            <span className="rounded-full bg-emerald-100/90 px-2 py-1 text-[10px] font-semibold text-emerald-800">Solo lectura</span>
+      {generatedUrl && (
+        <div className="rounded-xl border border-violet-200 bg-white/75 p-2.5">
+          <div className="text-[9px] uppercase tracking-[0.1em] text-violet-700 font-bold mb-1.5">Enlace nuevo</div>
+          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-[9.5px] sm:text-[10.5px] break-all font-mono text-slate-700">{generatedUrl}</div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={copy} className="h-8 px-3 rounded-lg bg-violet-700 text-white text-[10px] font-semibold">
+              {copied ? 'Copiado' : 'Copiar'}
+            </button>
+            <a href={generatedUrl} target="_blank" rel="noreferrer" className="h-8 px-3 rounded-lg border border-violet-200 bg-white text-violet-800 text-[10px] font-semibold inline-flex items-center">
+              Abrir portal
+            </a>
           </div>
-          <div className="relative rounded-xl border border-violet-200/80 bg-white/75 px-3 py-2.5 text-[11px] break-all font-mono text-slate-700">{generatedUrl}</div>
-          <button onClick={copy} className="relative mt-2 h-9 px-3 rounded-lg bg-gradient-to-r from-violet-700 to-fuchsia-700 text-white text-[11px] font-semibold shadow-sm shadow-violet-700/25 hover:from-violet-800 hover:to-fuchsia-800">
-            {copied ? 'Enlace copiado' : 'Copiar enlace'}
-          </button>
-        </div>
-      ) : link ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-[11px] text-emerald-900 leading-relaxed">
-          <span className="font-bold">El enlace de Nicol está activo.</span> Por seguridad, Gastito no conserva el token original: si necesitas volver a verlo o copiarlo, usa “Renovar enlace” y envía el nuevo.
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5 text-[11px] text-amber-900 leading-relaxed">
-          Aún no hay un enlace para Nicol. Créalo cuando quieras compartir el detalle seleccionado.
         </div>
       )}
 
       <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={onViewShared}
+          className="h-9 px-3.5 rounded-xl bg-slate-950 text-white text-[10.5px] sm:text-[11px] font-semibold shadow-sm">
+          Ver gastos de Nicol
+        </button>
         <button disabled={busy} onClick={onGenerate}
-          className="h-10 px-4 rounded-xl bg-violet-700 text-white text-[12px] font-semibold shadow-sm shadow-violet-700/25 hover:bg-violet-800 disabled:opacity-50">
-          {link ? 'Renovar enlace' : 'Crear enlace para Nicol'}
+          className="h-9 px-3.5 rounded-xl bg-violet-700 text-white text-[10.5px] sm:text-[11px] font-semibold disabled:opacity-50">
+          {link ? 'Renovar enlace' : 'Crear enlace'}
         </button>
         {link && (
           <button disabled={busy} onClick={onRevoke}
-            className="h-10 px-4 rounded-xl border border-red-200 bg-white/60 text-red-700 text-[12px] font-semibold hover:bg-red-50 disabled:opacity-50">
-            Desactivar enlace
+            className="h-9 px-3.5 rounded-xl border border-red-200 bg-white/60 text-red-700 text-[10.5px] sm:text-[11px] font-semibold disabled:opacity-50">
+            Desactivar
           </button>
         )}
       </div>
 
+      {link && !generatedUrl && (
+        <p className="text-[9.5px] sm:text-[10.5px] text-slate-500 leading-relaxed">
+          El enlace está activo. Gastito no guarda el token original; para copiarlo nuevamente debes renovarlo.
+        </p>
+      )}
     </section>
   )
 }
@@ -156,18 +152,10 @@ function InstallmentBadges({ item }) {
   if (item.movement_type !== 'installment' || current < 1 || total < 2) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 mt-2">
-      <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-1 text-[10px] font-bold">
-        Este ciclo paga
-      </span>
-      <span className="inline-flex items-center rounded-full bg-[var(--ink)] text-[var(--bg)] px-2.5 py-1 text-[11px] font-bold font-mono">
-        Cuota {current}/{total}
-      </span>
-      {current === total && (
-        <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-1 text-[10px] font-bold">
-          Última cuota
-        </span>
-      )}
+    <div className="flex flex-wrap items-center gap-1 mt-1.5">
+      <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2 py-0.5 text-[8.5px] sm:text-[9.5px] font-bold">Paga</span>
+      <span className="inline-flex items-center rounded-full bg-[var(--ink)] text-[var(--bg)] px-2 py-0.5 text-[9px] sm:text-[10px] font-bold font-mono">{current}/{total}</span>
+      {current === total && <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[8.5px] sm:text-[9.5px] font-bold">Última</span>}
     </div>
   )
 }
@@ -181,63 +169,64 @@ function TransactionRow({ item, categories, categoriesById, busy, categoryBusy, 
   const category = categoriesById.get(item.category_id) || FALLBACK_CATEGORY
 
   return (
-    <div className="px-4 py-4 flex items-start gap-3 hover:bg-[var(--hover)]">
+    <div className={`px-3 py-3 sm:px-4 sm:py-4 flex items-start gap-2.5 sm:gap-3 hover:bg-[var(--hover)] ${item.shared_with_nicol ? 'bg-violet-50/35' : ''}`}>
       <input
-        type="checkbox"
-        checked={Boolean(item.shared_with_nicol)}
-        disabled={busy}
-        onChange={() => onToggle(item)}
-        aria-label={`Compartir ${item.description} con Nicol`}
-        className="mt-1 w-4 h-4 accent-[var(--ink)] shrink-0"
+        type="checkbox" checked={Boolean(item.shared_with_nicol)} disabled={busy}
+        onChange={() => onToggle(item)} aria-label={`Compartir ${item.description} con Nicol`}
+        className="mt-1 w-4 h-4 accent-violet-700 shrink-0"
       />
 
       <div
-        className="w-9 h-9 rounded-xl grid place-items-center text-[17px] shrink-0 border"
-        style={{
-          borderColor: translucent(category.color, '55'),
-          backgroundColor: translucent(category.color, '20'),
-        }}
+        className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[15px] sm:text-[17px] shrink-0 border"
+        style={{ borderColor: translucent(category.color, '55'), backgroundColor: translucent(category.color, '20') }}
         aria-hidden="true"
       >
         {category.icon || '•'}
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold break-words leading-snug">{item.description}</div>
+        <div className="text-[11.5px] sm:text-[13px] font-semibold break-words leading-tight sm:leading-snug">{item.description}</div>
         <InstallmentBadges item={item} />
 
-        <div className="mt-2 grid sm:grid-cols-[minmax(0,230px)_1fr] gap-2 sm:items-end">
+        <div className="mt-1.5 sm:mt-2 grid sm:grid-cols-[minmax(0,230px)_1fr] gap-1.5 sm:gap-2 sm:items-end">
           <label>
-            <span className="block text-[9.5px] uppercase tracking-[0.08em] text-[var(--muted)] font-bold mb-1"><Icon name="tag" size={13} className="sm:hidden"/><span className="hidden sm:inline">Categoría</span></span>
+            <span className="sr-only">Categoría</span>
             <select
-              value={item.category_id || ''}
-              disabled={categoryBusy}
+              value={item.category_id || ''} disabled={categoryBusy}
               onChange={event => onCategoryChange(item, event.target.value)}
-              className="w-full h-9 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 text-[11px] outline-none disabled:opacity-50"
+              className="w-full h-8 sm:h-9 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2 text-[9.5px] sm:text-[11px] outline-none disabled:opacity-50"
             >
-              <option value="">✨ Detectar automáticamente</option>
-              {categories.map(option => (
-                <option key={option.id} value={option.id}>
-                  {option.icon || '•'} {option.label}
-                </option>
-              ))}
+              <option value="">✨ Automática</option>
+              {categories.map(option => <option key={option.id} value={option.id}>{option.icon || '•'} {option.label}</option>)}
             </select>
           </label>
 
-          <div className="text-[10.5px] text-[var(--muted)] leading-relaxed sm:pb-1">
+          <div className="text-[9px] sm:text-[10.5px] text-[var(--muted)] leading-relaxed sm:pb-1">
             {formatDate(item.transaction_date)} · {TYPE_LABELS[item.movement_type] || item.movement_type}
-            {isInstallment && originalAmount > amount && <> · Compra total {fmtCLP(originalAmount)}</>}
+            {isInstallment && originalAmount > amount && <> · Total {fmtCLP(originalAmount)}</>}
           </div>
         </div>
       </div>
 
-      <div className="text-right shrink-0">
-        <div className="font-mono text-[13px] font-bold">{fmtCLP(amount)}</div>
-        <div className="text-[9.5px] text-[var(--muted)] mt-1">
-          {isInstallment ? 'valor de esta cuota' : 'monto del gasto'}
+      <div className="text-right shrink-0 max-w-[88px] sm:max-w-none">
+        <div className="font-mono text-[11.5px] sm:text-[13px] font-bold">{fmtCLP(amount)}</div>
+        <div className="text-[8.5px] sm:text-[9.5px] text-[var(--muted)] mt-0.5 sm:mt-1 leading-tight">
+          {isInstallment ? 'esta cuota' : 'gasto'}
         </div>
+        {item.shared_with_nicol && <div className="mt-1 text-[8.5px] sm:text-[9.5px] font-semibold text-violet-700">Con Nicol</div>}
       </div>
     </div>
+  )
+}
+
+function FilterButton({ active, children, onClick }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`h-8 rounded-lg px-2.5 text-[9.5px] sm:text-[10.5px] font-semibold border transition-colors ${active
+        ? 'bg-slate-950 border-slate-950 text-white'
+        : 'bg-[var(--bg)] border-[var(--line)] text-[var(--muted)]'}`}>
+      {children}
+    </button>
   )
 }
 
@@ -252,6 +241,7 @@ export default function NicolCardAdmin() {
   const [selectedCycle, setSelectedCycle] = useState('')
   const [percentage, setPercentage] = useState('33')
   const [generatedUrl, setGeneratedUrl] = useState('')
+  const [shareFilter, setShareFilter] = useState('all')
 
   useEffect(() => {
     if (!supabase) { setAuthReady(true); return undefined }
@@ -288,14 +278,27 @@ export default function NicolCardAdmin() {
     () => cycle ? data.transactions.filter(item => item.billing_cycle_id === cycle.id) : [],
     [cycle, data.transactions],
   )
+  const displayedTransactions = useMemo(() => {
+    if (shareFilter === 'shared') return visibleTransactions.filter(item => item.shared_with_nicol)
+    if (shareFilter === 'unshared') return visibleTransactions.filter(item => !item.shared_with_nicol)
+    return visibleTransactions
+  }, [shareFilter, visibleTransactions])
   const categoriesById = useMemo(
     () => new Map((data.categories || []).map(category => [category.id, category])),
     [data.categories],
   )
+
+  const sharedCount = visibleTransactions.filter(item => item.shared_with_nicol).length
+  const unsharedCount = visibleTransactions.length - sharedCount
   const sharedTotal = visibleTransactions
     .filter(item => item.shared_with_nicol)
     .reduce((sum, item) => sum + Number(item.amount || 0), 0)
   const nicolTotal = Math.round(sharedTotal * (Number(percentage || 0) / 100))
+
+  const viewShared = () => {
+    setShareFilter('shared')
+    window.requestAnimationFrame(() => document.getElementById('nicol-expenses')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
 
   const toggleOne = async item => {
     setBusy(true)
@@ -304,9 +307,7 @@ export default function NicolCardAdmin() {
       const updated = await setNicolTransactionShared(item.id, !item.shared_with_nicol)
       setData(previous => ({
         ...previous,
-        transactions: previous.transactions.map(transaction => transaction.id === item.id
-          ? { ...transaction, ...updated }
-          : transaction),
+        transactions: previous.transactions.map(transaction => transaction.id === item.id ? { ...transaction, ...updated } : transaction),
       }))
     } catch (err) {
       setError(err.message)
@@ -322,9 +323,7 @@ export default function NicolCardAdmin() {
       const updated = await setNicolTransactionCategory(item.id, categoryId)
       setData(previous => ({
         ...previous,
-        transactions: previous.transactions.map(transaction => transaction.id === item.id
-          ? { ...transaction, ...updated }
-          : transaction),
+        transactions: previous.transactions.map(transaction => transaction.id === item.id ? { ...transaction, ...updated } : transaction),
       }))
     } catch (err) {
       setError(err.message)
@@ -406,108 +405,114 @@ export default function NicolCardAdmin() {
     <div className="min-h-screen bg-[#fcfbff] text-[var(--ink)]">
       <header className="relative overflow-visible border-b border-violet-100 bg-gradient-to-r from-violet-100 via-fuchsia-50 to-rose-50">
         <div className="absolute -left-8 -top-10 h-32 w-32 rounded-full bg-violet-300/25 blur-2xl" aria-hidden="true" />
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+        <div className="max-w-5xl mx-auto px-4 py-3.5 sm:py-4 flex items-center justify-between gap-4">
           <div className="relative">
-            <div className="text-[18px] font-bold text-slate-900">Gastito · Nicol</div>
-            <div className="text-[11px] text-slate-600 mt-0.5">Gastos, cuotas y el portal compartido</div>
+            <div className="text-[17px] sm:text-[18px] font-bold text-slate-900">Gastito · Nicol</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-600 mt-0.5">Gastos, cuotas y portal compartido</div>
           </div>
-          <ExternalMenu/>
+          <ExternalMenu />
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-5 pb-16">
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-[12px]">{error}</div>}
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-5 pb-16">
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-[11px] sm:text-[12px]">{error}</div>}
 
         <LinkPanel
-          link={data.link}
-          percentage={percentage}
-          setPercentage={setPercentage}
-          generatedUrl={generatedUrl}
-          onGenerate={generate}
-          onSavePercentage={savePercentage}
-          onRevoke={revoke}
-          busy={busy}
+          link={data.link} percentage={percentage} setPercentage={setPercentage}
+          generatedUrl={generatedUrl} onGenerate={generate} onSavePercentage={savePercentage}
+          onRevoke={revoke} onViewShared={viewShared} busy={busy}
         />
 
-        <section className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/60 px-4 py-3.5">
-          <div className="text-[10px] uppercase tracking-[0.12em] text-fuchsia-800 font-bold">Categorías automáticas</div>
-          <p className="text-[11.5px] text-slate-600 mt-1 leading-relaxed">
-            Gastito reconoce comercios como Lider, Shell, veterinarias, Sodimac y servicios básicos. Cuando el nombre no sea suficiente, cambia la categoría manualmente en la fila del gasto.
-          </p>
+        <section className="rounded-xl sm:rounded-2xl border border-fuchsia-100 bg-fuchsia-50/60 px-3 py-2.5 sm:px-4 sm:py-3.5">
+          <div className="flex items-start gap-2">
+            <Icon name="tag" size={14} className="mt-0.5 text-fuchsia-800 shrink-0" />
+            <div>
+              <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.12em] text-fuchsia-800 font-bold">Categorías automáticas</div>
+              <p className="text-[10px] sm:text-[11.5px] text-slate-600 mt-0.5 leading-relaxed">
+                Gastito reconoce comercios conocidos. Puedes corregir la categoría desde cada gasto.
+              </p>
+            </div>
+          </div>
         </section>
 
-        <section className="bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl overflow-hidden">
-          <div className="p-4 border-b border-[var(--line)] space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-              <label className="flex-1">
-                <span className="block text-[11px] text-[var(--muted)] mb-1">Tarjeta y ciclo de facturación</span>
+        <section id="nicol-expenses" className="scroll-mt-4 bg-[var(--bg-elev)] border border-[var(--line)] rounded-2xl overflow-hidden">
+          <div className="p-3 sm:p-4 border-b border-[var(--line)] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5 sm:gap-3">
+              <label className="flex-1 min-w-0">
+                <span className="block text-[10px] sm:text-[11px] text-[var(--muted)] mb-1">Tarjeta y ciclo</span>
                 <select
                   value={cycle?.id || ''}
-                  onChange={event => setSelectedCycle(event.target.value)}
-                  className="w-full min-h-12 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-[12px] outline-none"
+                  onChange={event => { setSelectedCycle(event.target.value); setShareFilter('all') }}
+                  className="w-full h-10 sm:min-h-12 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[11px] sm:text-[12px] outline-none"
                 >
                   {data.cycles.map(item => (
                     <option key={item.id} value={item.id}>
-                      {item.card_name}{item.card_last_four ? ` •••• ${item.card_last_four}` : ''} · {formatCycleLabel(item.cycle_key)} · {formatDate(item.period_start)} – {formatDate(item.period_end)}
+                      {item.card_name}{item.card_last_four ? ` •••• ${item.card_last_four}` : ''} · {formatCycleLabel(item.cycle_key, true)} · {formatShortDate(item.period_start)}–{formatShortDate(item.period_end)}
                     </option>
                   ))}
                 </select>
-                <span className="block text-[10.5px] text-[var(--muted)] mt-1.5">
-                  Un mismo mes puede aparecer dos veces porque CMR y Banco de Chile tienen períodos distintos.
-                </span>
               </label>
 
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex">
                 <button disabled={busy || !visibleTransactions.length} onClick={() => toggleAll(true)}
-                  className="h-9 px-3 rounded-lg border border-[var(--line)] text-[11px] font-semibold disabled:opacity-40">
+                  className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-lg border border-[var(--line)] text-[9.5px] sm:text-[11px] font-semibold disabled:opacity-40">
                   Marcar todos
                 </button>
                 <button disabled={busy || !visibleTransactions.length} onClick={() => toggleAll(false)}
-                  className="h-9 px-3 rounded-lg border border-[var(--line)] text-[11px] font-semibold disabled:opacity-40">
+                  className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-lg border border-[var(--line)] text-[9.5px] sm:text-[11px] font-semibold disabled:opacity-40">
                   Quitar todos
                 </button>
               </div>
             </div>
 
             {cycle && (
-              <div className="rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3">
-                <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-[var(--muted)]">Ciclo seleccionado</div>
-                <div className="text-[14px] font-bold mt-1">
-                  {cycle.card_name}{cycle.card_last_four ? ` •••• ${cycle.card_last_four}` : ''} · {formatCycleLabel(cycle.cycle_key)}
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="text-[9px] uppercase tracking-[0.1em] font-bold text-[var(--muted)]">Ciclo seleccionado</div>
+                  <div className="text-[11.5px] sm:text-[13px] font-bold mt-0.5 truncate">
+                    {cycle.card_name}{cycle.card_last_four ? ` •••• ${cycle.card_last_four}` : ''} · {formatCycleLabel(cycle.cycle_key)}
+                  </div>
+                  <div className="text-[9.5px] sm:text-[10.5px] text-[var(--muted)] mt-0.5">{formatShortDate(cycle.period_start)} – {formatShortDate(cycle.period_end)}</div>
                 </div>
-                <div className="text-[11px] text-[var(--muted)] mt-1">
-                  {formatDate(cycle.period_start)} – {formatDate(cycle.period_end)}
-                </div>
+                <span className="shrink-0 rounded-full bg-violet-50 text-violet-700 px-2 py-1 text-[9px] font-semibold">{visibleTransactions.length} gastos</span>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-violet-50 border border-violet-100 rounded-xl p-3">
-                <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] font-bold">Compartido</div>
-                <div className="font-mono text-[18px] font-bold mt-1">{fmtCLP(sharedTotal)}</div>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <div className="bg-violet-50 border border-violet-100 rounded-xl p-2.5 sm:p-3">
+                <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] font-bold">Compartido</div>
+                <div className="font-mono text-[16px] sm:text-[18px] font-bold mt-0.5 sm:mt-1">{fmtCLP(sharedTotal)}</div>
               </div>
-              <div className="bg-gradient-to-br from-violet-700 to-fuchsia-700 text-white rounded-xl p-3 shadow-sm shadow-violet-700/20">
-                <div className="text-[10px] uppercase tracking-[0.1em] opacity-60 font-bold">Nicol · {percentage || 0}%</div>
-                <div className="font-mono text-[18px] font-bold mt-1">{fmtCLP(nicolTotal)}</div>
+              <div className="bg-gradient-to-br from-violet-700 to-fuchsia-700 text-white rounded-xl p-2.5 sm:p-3 shadow-sm shadow-violet-700/20">
+                <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.1em] opacity-70 font-bold">Nicol · {percentage || 0}%</div>
+                <div className="font-mono text-[16px] sm:text-[18px] font-bold mt-0.5 sm:mt-1">{fmtCLP(nicolTotal)}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)] font-bold mb-1.5">Mostrar</div>
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                <FilterButton active={shareFilter === 'all'} onClick={() => setShareFilter('all')}>Todos · {visibleTransactions.length}</FilterButton>
+                <FilterButton active={shareFilter === 'shared'} onClick={() => setShareFilter('shared')}>Con Nicol · {sharedCount}</FilterButton>
+                <FilterButton active={shareFilter === 'unshared'} onClick={() => setShareFilter('unshared')}>Sin compartir · {unsharedCount}</FilterButton>
               </div>
             </div>
           </div>
 
           {loading ? (
             <div className="p-10 text-center text-[12px] text-[var(--muted)]">Cargando movimientos…</div>
-          ) : visibleTransactions.length === 0 ? (
-            <div className="p-10 text-center text-[12px] text-[var(--muted)]">Este ciclo no tiene movimientos seleccionables.</div>
+          ) : displayedTransactions.length === 0 ? (
+            <div className="p-8 sm:p-10 text-center">
+              <div className="text-[12px] font-semibold">No hay gastos en este filtro</div>
+              <div className="text-[10px] text-[var(--muted)] mt-1">Prueba “Todos” o selecciona otro ciclo.</div>
+            </div>
           ) : (
             <div className="divide-y divide-[var(--line)]">
-              {visibleTransactions.map(item => (
+              {displayedTransactions.map(item => (
                 <TransactionRow
-                  key={item.id}
-                  item={item}
-                  categories={data.categories || []}
-                  categoriesById={categoriesById}
-                  busy={busy}
-                  categoryBusy={categoryBusyId === item.id}
-                  onToggle={toggleOne}
+                  key={item.id} item={item} categories={data.categories || []}
+                  categoriesById={categoriesById} busy={busy}
+                  categoryBusy={categoryBusyId === item.id} onToggle={toggleOne}
                   onCategoryChange={changeCategory}
                 />
               ))}
