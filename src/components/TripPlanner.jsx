@@ -309,7 +309,7 @@ export default function TripPlanner({ token = '' }) {
           </div>
           <div className="space-y-5">
             <section className={card}>
-              <h2 className="text-[16px] font-bold">Aportes al viaje</h2>
+              <h2 className="text-[19px] font-bold">Aportes al viaje</h2>
               <p className="text-[11px] text-[var(--muted)] mt-1">El registro no mueve dinero; confirma aportes que realmente separaron.</p>
               {admin && <form className="mt-4 space-y-3" onSubmit={e => {e.preventDefault();doWork(async () => {await addTripSaving(plan.id,savingForm.name,savingForm.amount,savingForm.note);setSavingForm(old => ({...old,amount:'',note:''}))})}}>
                 <label className="block"><span className="text-[10px] uppercase text-[var(--muted)] font-semibold">Quién ahorró</span>
@@ -317,7 +317,7 @@ export default function TripPlanner({ token = '' }) {
                 </label>
                 <TextField label="Monto aportado CLP" type="number" value={savingForm.amount} onChange={value => setSavingForm(old => ({...old,amount:value}))}/>
                 <TextField label="Nota opcional (privada)" value={savingForm.note} onChange={value => setSavingForm(old => ({...old,note:value}))} placeholder="Ej: Ahorro de noviembre"/>
-                <button type="submit" disabled={busy} className="w-full py-2.5 bg-[#163D3C] text-white rounded-xl text-[12px] font-bold disabled:opacity-50">Registrar aporte</button>
+                <button type="submit" disabled={busy} className="w-full py-2.5 bg-[#7E9998] hover:bg-[#0C6460] text-white rounded-xl text-[12px] font-bold disabled:opacity-50">Registrar aporte</button>
               </form>}
               <div className="divide-y divide-[var(--line)] mt-4">
                 {plan.savings.length === 0 && <p className="text-[12px] text-[var(--muted)] py-2">Aún no hay aportes registrados.</p>}
@@ -329,13 +329,18 @@ export default function TripPlanner({ token = '' }) {
               </div>
             </section>
             <section className={card}>
-              <h2 className="text-[16px] font-bold">Próximas decisiones</h2>
-              <ol className="mt-3 space-y-3 text-[12px] leading-relaxed text-[var(--ink-2)]">
-                <li><strong>1.</strong> Cotizar vuelos directos Santiago ⇄ Antofagasta para 2 personas. Priorizar regreso domingo no demasiado tarde.</li>
-                <li><strong>2.</strong> Confirmar ubicación y hora del matrimonio antes de elegir el alojamiento.</li>
-                <li><strong>3.</strong> Revisar transporte Curicó ⇄ Santiago y transfer oficial en Antofagasta.</li>
-                <li><strong>4.</strong> Decidir monto del regalo y si necesitan 1 maleta de cabina para ropa formal.</li>
-              </ol>
+              <h2 className="text-[19px] font-bold">Próximas decisiones</h2>
+              <div className="mt-5 space-y-4">
+                {TRIP_DECISIONS.map((label,index) => {
+                  const checked = Boolean(plan.decisionChecks?.[index])
+                  return <div key={index} className="flex items-start gap-3">
+                    <button type="button" aria-label={'Marcar decisión: ' + label} aria-pressed={checked} disabled={!admin || busy} onClick={() => updateChecklist(index)} className={'mt-0.5 w-[17px] h-[17px] shrink-0 rounded-[5px] border flex items-center justify-center disabled:cursor-default ' + (checked ? 'bg-[#0D746C] border-[#0D746C] text-white' : 'bg-white border-[#ADC1C0]')}>
+                      {checked && <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6"/></svg>}
+                    </button>
+                    <p className={'text-[12px] leading-relaxed ' + (checked ? 'line-through text-[#9CAFAA]' : 'text-[#345355]')}>{label}</p>
+                  </div>
+                })}
+              </div>
               <div className="flex flex-wrap gap-3 mt-4">
                 <a href="https://www.skyairline.com/flights/es-cl/vuelos-desde-santiago-a-antofagasta" target="_blank" rel="noopener noreferrer" className="text-[11px] underline text-teal-700">Ver vuelos SKY ↗</a>
                 <a href="https://aeropuertoandressabella.cl/transfer/" target="_blank" rel="noopener noreferrer" className="text-[11px] underline text-teal-700">Transfer ANF ↗</a>
@@ -344,7 +349,7 @@ export default function TripPlanner({ token = '' }) {
           </div>
         </div>
         {admin && <section className={card}>
-          <h2 className="text-[16px] font-bold">Enlace para Nicol</h2>
+          <h2 className="text-[19px] font-bold">Enlace para Nicol</h2>
           <p className="text-[12px] text-[var(--muted)] mt-1">Solo muestra este viaje, su presupuesto y aportes. No muestra cuentas, sueldos, facturas ni tarjetas de Gastito. Cualquiera con el enlace podrá leerlo.</p>
           <div className="flex flex-wrap gap-2 mt-4">
             <button type="button" disabled={busy} onClick={handleShare} className="bg-[#163D3C] text-white rounded-xl px-4 py-2.5 text-[12px] font-bold disabled:opacity-50">{plan.shareActive ? 'Renovar enlace' : 'Crear enlace público'}</button>
