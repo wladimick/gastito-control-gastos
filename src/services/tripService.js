@@ -29,7 +29,7 @@ export async function fetchTripAdmin(userId) {
   return {
     id: plan.id, title: plan.title, destination: plan.destination,
     startDate: plan.start_date, weddingDate: plan.wedding_date, endDate: plan.end_date,
-    peopleCount: plan.people_count, description: plan.description, shareActive: plan.share_active,
+    peopleCount: plan.people_count, description: plan.description, shareActive: plan.share_active, decisionChecks: plan.decision_checks || [false,false,false,false],
     items: (itemsResult.data || []).map(normalizeItem),
     savings: (savingsResult.data || []).map(row => ({
       id: row.id, name: row.contributor, amount: row.amount,
@@ -107,5 +107,16 @@ export async function revokeTripShare(tripId) {
   const { error } = await supabase.from('trip_plans').update({
     share_active: false, share_token_hash: null, updated_at: new Date().toISOString(),
   }).eq('id', tripId)
+  if (error) throw error
+}
+
+export async function updateTripDecisions(tripId, checks) {
+  checkClient()
+  if (!Array.isArray(checks) || checks.length !== 4 || checks.some(value => typeof value !== 'boolean')) {
+    throw new Error('La lista de decisiones no es válida')
+  }
+  const { error } = await supabase.from('trip_plans')
+    .update({ decision_checks: checks, updated_at: new Date().toISOString() })
+    .eq('id', tripId)
   if (error) throw error
 }
