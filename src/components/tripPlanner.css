@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+.trip-planner {
+  --trip-ink: #102c2e;
+  --trip-teal: #0b5f63;
+  --trip-soft: #edf2f0;
+  --trip-card: #fff;
+  --trip-muted: #73868a;
+  font-family: 'Figtree', 'Manrope', system-ui, sans-serif;
+  color: var(--trip-ink);
+  background-color: var(--trip-soft);
+}
+.trip-planner h1,
+.trip-planner h2,
+.trip-planner h3,
+.trip-planner .trip-title {
+  font-family: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
+  letter-spacing: -.035em;
+}
+.trip-planner .trip-amount {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace !important;
+  letter-spacing: -.045em;
+}
+.trip-planner .trip-panel {
+  background-color: var(--trip-card);
+  border: 1px solid #e2e9e7;
+  border-radius: 20px;
+  box-shadow: 0 10px 34px rgba(22, 60, 61, .035);
+}
+.trip-planner .trip-hero {
+  background: linear-gradient(160deg,#0C4042 0%,#0A4747 45%,#0B5B58 100%);
+  isolation: isolate;
+}
+.trip-planner .trip-hero-wave {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  left: -12%;
+  right: -12%;
+  width: 124%;
+  height: 170px;
+  border-radius: 50%;
+}
+.trip-planner .trip-hero-wave-one {
+  bottom: -115px;
+  background: rgba(64, 155, 144, .18);
+  transform: rotate(-3deg);
+}
+.trip-planner .trip-hero-wave-two {
+  bottom: -130px;
+  background: rgba(31, 119, 114, .32);
+  transform: rotate(4deg);
+}
+.trip-planner button:not(:disabled), .trip-planner a { transition: background-color 150ms, color 150ms, opacity 150ms, border-color 150ms; }
+.trip-planner button:focus-visible, .trip-planner a:focus-visible, .trip-planner input:focus-visible, .trip-planner select:focus-visible { outline: 2px solid #0B8A81; outline-offset: 2px; }
+@media (max-width:640px) {
+ .trip-planner .trip-hero-wave { height: 110px; bottom:-80px; }
+}
