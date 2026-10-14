@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Login from './Login'
+import TripWeddingDetails from './TripWeddingDetails'
 import './tripPlanner.css'
 import { supabase, isConfigured } from '../lib/supabase'
 import { monthlySavingSuggestion, tripSummary } from '../lib/tripMath'
@@ -255,6 +256,7 @@ export default function TripPlanner({ token = '' }) {
       {error && <div role="alert" className="border border-red-200 bg-red-50 text-red-800 rounded-xl px-4 py-3 text-[12px]">{error}</div>}
       {plan ? <>
         <Hero plan={plan} admin={admin}/>
+        <TripWeddingDetails plan={plan}/>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className={card}><div className="text-[10px] text-[#768B8D] uppercase tracking-[0.12em] font-bold">Presupuesto</div><div className="trip-amount text-[19px] sm:text-[26px] font-bold mt-2">{money(summary.budget)}</div><p className="text-[11px] text-[#819193] mt-2">Estimación ajustable</p></div>
           <div className={card}><div className="text-[10px] text-[#768B8D] uppercase tracking-[0.12em] font-bold">Aportes juntos</div><div className="trip-amount text-[19px] sm:text-[26px] font-bold mt-2 text-[#0B796F]">{money(summary.saved)}</div><p className="text-[11px] text-[#819193] mt-2">Ahorro registrado</p></div>
