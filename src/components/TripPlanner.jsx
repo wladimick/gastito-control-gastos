@@ -63,7 +63,7 @@ function Hero({ plan, admin }) {
           <div className="text-[11px] text-[#C7DFDC] mt-1.5">Vuelo con tiempo para volver tranquilos</div>
         </div>
       </div>
-      <p className="mt-5 text-[11px] text-[#C7DFDC]/90 leading-relaxed max-w-[670px]">Ida y vuelta para dos personas. Mochila personal y equipaje de cabina opcional. Horarios y reservas por confirmar.</p>
+      <p className="mt-5 text-[11px] text-[#C7DFDC]/90 leading-relaxed max-w-[670px]">Ida y vuelta para dos personas con bolso de mano, sin maleta de cabina. Horarios y reservas por confirmar.</p>
     </div>
   </section>
 }
@@ -83,7 +83,7 @@ const TRIP_DECISIONS = [
   'Elegir y comprar los vuelos cotizados para dos (cerca de $100.000 por persona), evitando un regreso temprano tras la fiesta.',
   'Reservar el Airbnb para dos noches cerca del Salón Licancabur, Hotel Terrado, por unos $100.000.',
   'Confirmar buses Curicó ⇄ Santiago, Turbus hasta el aeropuerto y traslados entre ANF y el alojamiento.',
-  'Definir el regalo, los desayunos/once y si hace falta agregar una maleta de cabina para la ropa formal.',
+  'Definir el regalo, el presupuesto para desayunos y once, y organizar la ropa formal dentro del bolso de mano.',
 ]
 
 function BudgetBreakdown({ items = [] }) {
@@ -117,7 +117,6 @@ function BudgetRow({ item, admin, draft, onChange, onSave, busy, budgetTotal }) 
       <div className="flex-1 min-w-[170px]">
         <div className="flex items-center gap-2 text-[10px] uppercase text-[#789092] font-bold tracking-[0.11em]"><span className="h-2 w-2 rounded-full" style={{ background: TRIP_CATEGORY_META[item.category] || TRIP_CATEGORY_META.Otros }}/>{item.category}</div>
         <div className="font-bold text-[13px] sm:text-[14px] mt-1 text-[#17393A]">{item.name}</div>
-        {item.note && !opened && <p className="text-[11px] text-[var(--muted)] mt-1 leading-relaxed">{item.note}</p>}
       </div>
       <div className="text-right min-w-[116px]">
         <div className="trip-amount font-bold text-[15px] sm:text-[16px] text-[#17393A]">{money(item.estimate)}</div>
@@ -142,7 +141,7 @@ function BudgetRow({ item, admin, draft, onChange, onSave, busy, budgetTotal }) 
       </label>
       <TextField label="Enlace de compra o reserva" value={draft.url || ''} onChange={value => onChange('url',value)} placeholder="https://"/>
       <label className="sm:col-span-2 block">
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1.5">Notas compartidas con Nicol</span>
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1.5">Descripción / notas (solo en edición)</span>
         <textarea rows={2} className={control + ' !h-auto py-2'} value={draft.note || ''} onChange={e => onChange('note',e.target.value)}/>
       </label>
       <button type="button" disabled={busy} onClick={onSave} className="sm:col-span-2 rounded-xl bg-[#163D3C] text-white px-4 py-2.5 font-semibold text-[12px] disabled:opacity-50">{busy ? 'Guardando…' : 'Guardar cambios'}</button>
