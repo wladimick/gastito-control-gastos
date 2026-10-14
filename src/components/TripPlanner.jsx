@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Login from './Login'
+import './tripPlanner.css'
 import { supabase, isConfigured } from '../lib/supabase'
 import { monthlySavingSuggestion, tripSummary } from '../lib/tripMath'
 import {
@@ -30,44 +31,105 @@ function Notice({ children }) {
 }
 
 function Hero({ plan, admin }) {
-  return <div className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#102D31] via-[#176669] to-[#309796] text-white p-5 sm:p-8">
-    <div className="absolute -right-12 -top-16 h-52 w-52 rounded-full bg-white/10 blur-xl" aria-hidden="true"/>
-    <div className="absolute right-7 bottom-[-80px] h-56 w-56 rounded-full bg-teal-200/10 blur-2xl" aria-hidden="true"/>
-    <div className="relative">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[10px] tracking-[0.14em] font-bold uppercase text-teal-100">Gastito · Viaje compartido</span>
-        <span className="text-[10px] rounded-full border border-white/25 bg-white/10 px-2.5 py-1">{admin ? 'Administración' : 'Vista compartida · Solo lectura'}</span>
+  return <section className="trip-hero relative overflow-hidden rounded-[24px] text-white px-5 pt-5 pb-6 sm:px-9 sm:pt-8 sm:pb-8 min-h-[300px]">
+    <div aria-hidden="true" className="absolute rounded-full bg-[#E8B25C] w-[86px] h-[86px] sm:w-[114px] sm:h-[114px] right-[11%] top-[18%] shadow-[0_0_45px_rgba(232,178,92,0.1)]"/>
+    <div aria-hidden="true" className="trip-hero-wave trip-hero-wave-one"/>
+    <div aria-hidden="true" className="trip-hero-wave trip-hero-wave-two"/>
+    <div className="relative z-10">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-[10px] sm:text-[11px] tracking-[0.16em] font-bold uppercase text-[#9AD0CB]">Gastito · Viaje compartido</span>
+        <span className="text-[10px] rounded-full border border-[#85B8B4] bg-white/5 px-3 py-1 text-[#C4E5DF]">{admin ? 'Administración' : 'Vista compartida · Solo lectura'}</span>
       </div>
-      <div className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-7">Antofagasta <span aria-hidden="true">✈️</span></div>
-      <p className="text-teal-100 mt-2 text-[13px] sm:text-sm">Nuestro viaje al matrimonio · Nicol y Wladimick</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-7">
-        <div className="rounded-xl bg-white/10 p-3"><div className="text-[10px] uppercase text-teal-100">Viernes 12 feb.</div><div className="text-[13px] font-semibold mt-1">Viaje de ida y check-in</div></div>
-        <div className="rounded-xl bg-white/20 p-3 border border-white/15"><div className="text-[10px] uppercase text-teal-100">Sábado 13 feb.</div><div className="text-[13px] font-semibold mt-1">Matrimonio 💍</div></div>
-        <div className="rounded-xl bg-white/10 p-3"><div className="text-[10px] uppercase text-teal-100">Domingo 14 feb.</div><div className="text-[13px] font-semibold mt-1">Regreso a Curicó</div></div>
+      <div className="flex items-center gap-3 mt-7 sm:mt-8">
+        <h1 className="trip-title text-4xl sm:text-[64px] font-bold tracking-[-0.04em] leading-none">Antofagasta</h1>
+        <svg aria-hidden="true" className="text-[#E8B25C] w-7 h-7 sm:w-9 sm:h-9 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 9 15"/><path d="m22 2-8 20-4.5-8.5L1 9z"/></svg>
       </div>
-      <p className="mt-5 text-[11px] text-teal-100/90 leading-relaxed">{plan.description}</p>
+      <p className="text-[#C5E1DB] mt-3 text-[13px] sm:text-sm">Nuestro viaje al matrimonio · Nicol y Wladimick</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-7">
+        <div className="rounded-xl bg-white/10 border border-white/10 p-3.5">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#9ACAC5]">Viernes 12 feb.</div>
+          <div className="text-[13px] sm:text-[15px] font-bold mt-1">Viaje de ida y check-in</div>
+          <div className="text-[11px] text-[#C7DFDC] mt-1.5">Curicó → Santiago → Antofagasta</div>
+        </div>
+        <div className="rounded-xl bg-[#B68D48]/20 border border-[#E8B25C]/35 p-3.5">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#F0CE89]">Sábado 13 feb.</div>
+          <div className="text-[13px] sm:text-[15px] font-bold mt-1">Matrimonio ♡</div>
+          <div className="text-[11px] text-[#F4DFB7] mt-1.5">El día del matrimonio</div>
+        </div>
+        <div className="rounded-xl bg-white/10 border border-white/10 p-3.5">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#9ACAC5]">Domingo 14 feb.</div>
+          <div className="text-[13px] sm:text-[15px] font-bold mt-1">Regreso a Curicó</div>
+          <div className="text-[11px] text-[#C7DFDC] mt-1.5">Vuelo con tiempo para volver tranquilos</div>
+        </div>
+      </div>
+      <p className="mt-5 text-[11px] text-[#C7DFDC]/90 leading-relaxed max-w-[670px]">Ida y vuelta para dos personas. Mochila personal y equipaje de cabina opcional. Horarios y reservas por confirmar.</p>
+    </div>
+  </section>
+}
+
+const TRIP_CATEGORY_META = {
+  Vuelos: '#0B5F63',
+  Alojamiento: '#2E9C98',
+  Traslados: '#7CCBC3',
+  Comida: '#E8B25C',
+  Regalo: '#C9794F',
+  Equipaje: '#8FA3AD',
+  Reserva: '#C9D6D9',
+  Otros: '#5B6B73',
+}
+const TRIP_CATEGORY_ORDER = ['Vuelos', 'Alojamiento', 'Traslados', 'Comida', 'Regalo', 'Equipaje', 'Reserva', 'Otros']
+const TRIP_DECISIONS = [
+  'Cotizar vuelos directos Santiago ⇄ Antofagasta para 2 personas. Priorizar regreso domingo no demasiado tarde.',
+  'Confirmar ubicación y hora del matrimonio antes de elegir el alojamiento.',
+  'Revisar transporte Curicó ⇄ Santiago y transfer oficial en Antofagasta.',
+  'Decidir monto del regalo y si necesitan 1 maleta de cabina para ropa formal.',
+]
+
+function BudgetBreakdown({ items = [] }) {
+  const categoryTotals = items.reduce((all, item) => {
+    const key = TRIP_CATEGORY_META[item.category] ? item.category : 'Otros'
+    all[key] = (all[key] || 0) + Number(item.estimate || 0)
+    return all
+  }, {})
+  const budget = Object.values(categoryTotals).reduce((a, b) => a + b, 0)
+  const groups = TRIP_CATEGORY_ORDER.filter(key => categoryTotals[key] > 0).map(key => ({
+    name: key, amount: categoryTotals[key], color: TRIP_CATEGORY_META[key],
+    width: budget ? (categoryTotals[key] / budget * 100) + '%' : '0%',
+  }))
+  return <div className="mt-5 mb-3">
+    <div className="flex w-full h-3 rounded-full overflow-hidden bg-[#E6EDEA]" role="img" aria-label="Distribución porcentual del presupuesto por categorías">
+      {groups.map(part => <div key={part.name} title={part.name + ': ' + money(part.amount)} style={{ width: part.width, background: part.color }} />)}
+    </div>
+    <div className="flex flex-wrap gap-x-4 gap-y-2 mt-3">
+      {groups.map(part => <div key={part.name} className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#607478]">
+        <span className="rounded-full h-2 w-2 shrink-0" style={{ background: part.color }} aria-hidden="true"/>
+        <span>{part.name}</span><span className="trip-amount text-[#3B5658]">{money(part.amount)}</span>
+      </div>)}
     </div>
   </div>
 }
 
-function BudgetRow({ item, admin, draft, onChange, onSave, busy }) {
+function BudgetRow({ item, admin, draft, onChange, onSave, busy, budgetTotal }) {
   const [opened, setOpened] = useState(false)
-  return <div className="py-4 border-b border-[var(--line)] last:border-b-0">
+  return <div className="py-4 sm:py-5 border-b border-[#E2E9E6] last:border-b-0">
     <div className="flex flex-wrap gap-2 justify-between items-start">
       <div className="flex-1 min-w-[170px]">
-        <div className="text-[10px] uppercase text-[var(--muted)] font-semibold tracking-wider">{item.category}</div>
-        <div className="font-semibold text-[13px] mt-1">{item.name}</div>
+        <div className="flex items-center gap-2 text-[10px] uppercase text-[#789092] font-bold tracking-[0.11em]"><span className="h-2 w-2 rounded-full" style={{ background: TRIP_CATEGORY_META[item.category] || TRIP_CATEGORY_META.Otros }}/>{item.category}</div>
+        <div className="font-bold text-[13px] sm:text-[14px] mt-1 text-[#17393A]">{item.name}</div>
         {item.note && !opened && <p className="text-[11px] text-[var(--muted)] mt-1 leading-relaxed">{item.note}</p>}
       </div>
       <div className="text-right min-w-[116px]">
-        <div className="font-bold font-mono text-[14px]">{money(item.estimate)}</div>
+        <div className="trip-amount font-bold text-[15px] sm:text-[16px] text-[#17393A]">{money(item.estimate)}</div>
         {item.actual != null && <div className="text-[11px] text-emerald-700 mt-0.5">Real: {money(item.actual)}</div>}
         <div className="mt-1.5"><Status value={item.status}/></div>
       </div>
     </div>
     <div className="flex flex-wrap items-center gap-3 mt-2">
       {item.url && <a className="text-[11px] text-teal-700 hover:underline font-semibold" href={item.url} target="_blank" rel="noopener noreferrer">Consultar opción ↗</a>}
-      {admin && <button type="button" onClick={() => setOpened(!opened)} className="text-[11px] text-teal-800 font-semibold underline">{opened ? 'Cerrar edición' : 'Editar presupuesto'}</button>}
+      {admin && <button type="button" onClick={() => setOpened(!opened)} className="text-[11px] text-[#086E6A] font-bold hover:underline">{opened ? 'Cerrar edición' : 'Editar presupuesto'}</button>}
+    </div>
+    <div className="h-[3px] rounded-full bg-[#E6EEEB] mt-3 overflow-hidden">
+      <div className="h-full rounded-full" style={{ width: budgetTotal ? (Number(item.estimate || 0) / budgetTotal * 100) + '%' : '0%', background: TRIP_CATEGORY_META[item.category] || TRIP_CATEGORY_META.Otros }}/>
     </div>
     {opened && admin && draft && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 p-3 rounded-xl bg-[var(--soft)]">
       <TextField label="Estimado CLP" type="number" value={draft.estimate} onChange={value => onChange('estimate', value)}/>
