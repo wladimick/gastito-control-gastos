@@ -23,6 +23,7 @@ const BASE_NAV_GROUPS = [
     items: [
       { id: 'previsional', label: 'Previsión', icon: 'savings', short: 'Previsión' },
       { id: 'savings', label: 'Ahorros', icon: 'savings', short: 'Ahorros' },
+      { id: 'trip-antofagasta', label: 'Viaje Antofagasta 2027', icon: 'plane', short: 'Viaje', href: '?viaje-admin=1' },
     ],
   },
   {
