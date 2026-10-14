@@ -10,6 +10,7 @@ import ReceivablesAdmin from './components/ReceivablesAdmin'
 import PayPalIncomeAdmin from './components/PayPalIncomeAdmin'
 import SalarySlipsPage from './components/SalarySlipsPage'
 import AppStatusOverlay from './components/AppStatusOverlay'
+import TripPlanner from './components/TripPlanner'
 import './index.css'
 
 const params = new URLSearchParams(window.location.search)
@@ -20,9 +21,13 @@ const mercadoPagoCredentialsMode = params.get('mercadopago-credentials')
 const receivablesMode = params.get('me-deben')
 const paypalMode = params.get('paypal-admin')
 const salaryMode = params.get('liquidaciones')
+const tripAdminMode = params.get('viaje-admin')
+const tripToken = params.get('viaje')
 
 let content = <App />
-if (salaryMode === '1') content = <SalarySlipsPage />
+if (tripAdminMode === '1') content = <TripPlanner />
+else if (tripToken) content = <TripPlanner token={tripToken} />
+else if (salaryMode === '1') content = <SalarySlipsPage />
 else if (paypalMode === '1') content = <PayPalIncomeAdmin />
 else if (receivablesMode === '1') content = <ReceivablesAdmin />
 else if (mercadoPagoCredentialsMode === '1') content = <MercadoPagoCredentials />
