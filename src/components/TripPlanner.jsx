@@ -5,13 +5,13 @@ import { supabase, isConfigured } from '../lib/supabase'
 import { monthlySavingSuggestion, tripSummary } from '../lib/tripMath'
 import {
   fetchTripAdmin, fetchTripPublic, updateTripItem, addTripItem, addTripSaving,
-  removeTripSaving, createTripShare, revokeTripShare,
+  removeTripSaving, createTripShare, revokeTripShare, updateTripDecisions,
 } from '../services/tripService'
 
 const money = value => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value || 0)
 const dateLabel = value => value ? new Intl.DateTimeFormat('es-CL', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(String(value).slice(0,10) + 'T12:00:00Z')) : ''
 const control = 'w-full h-10 rounded-xl border border-[var(--line)] bg-white px-3 text-[13px] text-[var(--ink)] outline-none focus:border-emerald-500'
-const card = 'rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4 sm:p-5 shadow-sm'
+const card = 'trip-panel p-4 sm:p-6'
 const statusName = { pendiente: 'Pendiente', cotizando: 'Cotizando', reservado: 'Reservado', pagado: 'Pagado' }
 const statusTone = { pendiente: 'bg-slate-100 text-slate-700', cotizando: 'bg-amber-100 text-amber-800', reservado: 'bg-sky-100 text-sky-800', pagado: 'bg-emerald-100 text-emerald-800' }
 
@@ -161,6 +161,7 @@ export default function TripPlanner({ token = '' }) {
   const [shareLink, setShareLink] = useState('')
   const [savingForm, setSavingForm] = useState({ name: 'Wladimick', amount: '', note: '' })
   const [newItem, setNewItem] = useState({ category: 'Otros', name: '', amount: '' })
+  const [monthsOverride, setMonthsOverride] = useState(null)
 
   useEffect(() => {
     if (!admin || !supabase) { setAuthReady(true); return undefined }
@@ -201,7 +202,13 @@ export default function TripPlanner({ token = '' }) {
   }, [admin, token, session?.user?.id, authReady])
 
   const summary = useMemo(() => tripSummary(plan?.items, plan?.savings), [plan])
-  const suggestion = useMemo(() => monthlySavingSuggestion(summary.remaining, plan?.startDate), [summary.remaining, plan?.startDate])
+  const naturalSuggestion = useMemo(() => monthlySavingSuggestion(summary.remaining, plan?.startDate), [summary.remaining, plan?.startDate])
+  const months = monthsOverride ?? naturalSuggestion.months
+  const suggestion = {
+    months,
+    perPerson: Math.ceil(summary.remaining / Math.max(1, months) / 2 / 1000) * 1000,
+    together: Math.ceil(summary.remaining / Math.max(1, months) / 1000) * 1000,
+  }
   const doWork = async task => {
     setBusy(true)
     setError('')
@@ -210,6 +217,12 @@ export default function TripPlanner({ token = '' }) {
     finally { setBusy(false) }
   }
   const handleSaveRow = item => doWork(() => updateTripItem(item.id, edits[item.id]))
+  const updateChecklist = index => {
+    if (!admin || !plan) return
+    const checks = [...(plan.decisionChecks || [false,false,false,false])]
+    checks[index] = !checks[index]
+    doWork(() => updateTripDecisions(plan.id, checks))
+  }
   const editRow = (id, key, value) => setEdits(previous => ({ ...previous, [id]: { ...previous[id], [key]: value } }))
   const handleShare = () => doWork(async () => {
     const value = await createTripShare(plan.id)
@@ -226,39 +239,63 @@ export default function TripPlanner({ token = '' }) {
   if (admin && !session) return <Login/>
   if (loading) return <div className="min-h-screen p-12 text-center text-[var(--muted)]">Cargando nuestro viaje…</div>
 
-  return <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
-    <header className="border-b border-[var(--line)] bg-white">
-      <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
-        <div><strong className="text-[18px] tracking-tight">Gastito</strong><p className="text-[11px] text-[var(--muted)]">Viajes · planificación compartida</p></div>
-        <a className="text-[12px] text-teal-700 font-semibold hover:underline" href={admin ? '/' : undefined}>{admin ? '← Volver a mis finanzas' : 'Nuestro viaje 💛'}</a>
+  return <div className="trip-planner min-h-screen">
+    <header className="border-b border-[#DFE8E4] bg-[#F2F6F3]">
+      <div className="max-w-[1180px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+        <div className="flex gap-3 items-center">
+          <div className="rounded-xl bg-[#0C3F41] text-white w-10 h-10 grid place-items-center shadow-sm" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 15h4v4H5zM15 5h4v4h-4zM10 10h4v4h-4z" fill="currentColor" stroke="none"/><path d="m7 17 5-5 5-5"/></svg>
+          </div>
+          <div><div className="font-extrabold text-[16px] leading-tight">Gastito</div><p className="text-[11px] text-[#758C8B]">Viajes · planificación compartida</p></div>
+        </div>
+        {admin ? <a className="text-[12px] text-[#0A706D] font-semibold hover:underline flex items-center gap-1.5" href="/"><span aria-hidden="true">←</span> Volver a mis finanzas</a> : <div className="text-[12px] text-[#0A706D] font-semibold">Nuestro viaje ♡</div>}
       </div>
     </header>
-    <main className="max-w-5xl mx-auto px-4 py-5 sm:py-8 space-y-5">
+    <main className="max-w-[1180px] mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-5">
       {error && <div role="alert" className="border border-red-200 bg-red-50 text-red-800 rounded-xl px-4 py-3 text-[12px]">{error}</div>}
       {plan ? <>
         <Hero plan={plan} admin={admin}/>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className={card}><div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold">Presupuesto</div><div className="font-mono text-xl sm:text-2xl font-bold mt-1">{money(summary.budget)}</div><p className="text-[10px] text-[var(--muted)] mt-1">Estimación ajustable</p></div>
-          <div className={card}><div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold">Aportes juntos</div><div className="font-mono text-xl sm:text-2xl font-bold mt-1 text-teal-700">{money(summary.saved)}</div><p className="text-[10px] text-[var(--muted)] mt-1">Ahorro registrado</p></div>
-          <div className={card}><div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold">Por reunir</div><div className="font-mono text-xl sm:text-2xl font-bold mt-1">{money(summary.remaining)}</div><p className="text-[10px] text-[var(--muted)] mt-1">Respecto al estimado</p></div>
-          <div className={card}><div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold">Gasto real</div><div className="font-mono text-xl sm:text-2xl font-bold mt-1">{money(summary.spent)}</div><p className="text-[10px] text-[var(--muted)] mt-1">Pagos anotados</p></div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className={card}><div className="text-[10px] text-[#768B8D] uppercase tracking-[0.12em] font-bold">Presupuesto</div><div className="trip-amount text-[19px] sm:text-[26px] font-bold mt-2">{money(summary.budget)}</div><p className="text-[11px] text-[#819193] mt-2">Estimación ajustable</p></div>
+          <div className={card}><div className="text-[10px] text-[#768B8D] uppercase tracking-[0.12em] font-bold">Aportes juntos</div><div className="trip-amount text-[19px] sm:text-[26px] font-bold mt-2 text-[#0B796F]">{money(summary.saved)}</div><p className="text-[11px] text-[#819193] mt-2">Ahorro registrado</p></div>
+          <div className="trip-panel bg-[#DDF2EE] border border-[#C9E8E3] p-4 sm:p-6"><div className="text-[10px] text-[#648D8A] uppercase tracking-[0.12em] font-bold">Por reunir</div><div className="trip-amount text-[19px] sm:text-[26px] font-bold mt-2 text-[#0A5F58]">{money(summary.remaining)}</div><p className="text-[11px] text-[#618F89] mt-2">Respecto al estimado</p></div>
+          <div className={card}><div className="text-[10px] text-[#768B8D] uppercase tracking-[0.12em] font-bold">Gasto real</div><div className="trip-amount text-[19px] sm:text-[26px] font-bold mt-2">{money(summary.spent)}</div><p className="text-[11px] text-[#819193] mt-2">Pagos anotados</p></div>
         </div>
-        <section className={card}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div><h2 className="font-bold text-[16px]">Avance de nuestro ahorro</h2><p className="text-[11px] text-[var(--muted)] mt-1">Los aportes son registros manuales, no saldos bancarios automáticos.</p></div>
-            <span className="font-bold font-mono text-lg">{summary.progress}%</span>
-          </div>
-          <div className="h-3 rounded-full bg-[var(--soft)] overflow-hidden mt-4"><div className="h-full rounded-full bg-gradient-to-r from-teal-600 to-emerald-400" style={{ width: summary.progress + '%' }}/></div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
-            <div className="rounded-xl bg-[var(--soft)] px-3 py-3"><div className="text-[11px] text-[var(--muted)]">Wladimick</div><div className="font-mono font-bold">{money(summary.byName.Wladimick)}</div></div>
-            <div className="rounded-xl bg-[var(--soft)] px-3 py-3"><div className="text-[11px] text-[var(--muted)]">Nicol</div><div className="font-mono font-bold">{money(summary.byName.Nicol)}</div></div>
-            <div className="rounded-xl bg-teal-50 px-3 py-3"><div className="text-[11px] text-teal-800">Aporte sugerido c/u por mes</div><div className="font-mono font-bold text-teal-950">{money(suggestion.perPerson)}</div><div className="text-[10px] text-teal-800">Durante {suggestion.months} mes(es), a partes iguales</div></div>
-          </div>
-        </section>
         <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-5 items-start">
+          <div className="space-y-5">
           <section className={card}>
-            <div className="flex items-center justify-between gap-3"><div><h2 className="font-bold text-[17px]">Presupuesto detallado</h2><p className="text-[11px] text-[var(--muted)] mt-1">{plan.items.length} conceptos · precios referenciales hasta cotizar</p></div></div>
-            <div className="mt-2">{plan.items.map((item,index) => <BudgetRow key={item.id || index} item={item} admin={admin} draft={edits[item.id]} onChange={(key,value) => editRow(item.id,key,value)} onSave={() => handleSaveRow(item)} busy={busy}/>)}</div>
+            <div className="flex items-start justify-between gap-3">
+              <div><h2 className="font-bold text-[21px]">Avance de nuestro ahorro</h2><p className="text-[11px] text-[#819193] mt-1">Los aportes son registros manuales, no saldos bancarios automáticos.</p></div>
+              <span className="trip-amount font-bold text-[27px] sm:text-[32px] text-[#0B7770]">{summary.progress}%</span>
+            </div>
+            <div className="h-[9px] rounded-full bg-[#E4EBE9] overflow-hidden mt-4">
+              <div className="h-full rounded-full bg-[#0A817A] transition-all" style={{ width: summary.progress + '%' }}/>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+              {['Wladimick','Nicol'].map(name => <div key={name} className="rounded-xl bg-[#F1F5F3] p-3.5">
+                <div className="text-[11px] text-[#718588]">{name}</div>
+                <div className="trip-amount font-bold text-[16px] mt-1">{money(summary.byName[name])}</div>
+                <div className="h-[4px] rounded-full bg-[#DAE5E2] overflow-hidden mt-3">
+                  <div className="h-full bg-[#198D82]" style={{ width: Math.min(100, summary.budget ? summary.byName[name]/(summary.budget/2)*100 : 0) + '%' }}/>
+                </div>
+              </div>)}
+              <div className="rounded-xl bg-[#DCF3EE] p-3.5">
+                <div className="text-[10px] text-[#3F7976]">Aporte sugerido c/u por mes</div>
+                <div className="trip-amount font-bold text-[16px] sm:text-[19px] mt-1 text-[#0B5D57]">{money(suggestion.perPerson)}</div>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  {admin && <div className="inline-flex items-center gap-1.5">
+                    <button type="button" title="Menos meses" aria-label="Reducir meses" disabled={months <= 1} onClick={() => setMonthsOverride(Math.max(1, months - 1))} className="w-6 h-6 rounded-md bg-[#0B6461] text-white font-bold disabled:opacity-40">−</button>
+                    <button type="button" title="Más meses" aria-label="Aumentar meses" disabled={months >= 24} onClick={() => setMonthsOverride(Math.min(24, months + 1))} className="w-6 h-6 rounded-md bg-[#0B6461] text-white font-bold disabled:opacity-40">+</button>
+                  </div>}
+                  <span className="text-[10px] text-[#547D7B]">Durante {suggestion.months} {suggestion.months === 1 ? 'mes' : 'meses'}, a partes iguales</span>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section className={card}>
+            <div><h2 className="font-bold text-[21px]">Presupuesto detallado</h2><p className="text-[11px] text-[#7B8F90] mt-1">{plan.items.length} conceptos · precios referenciales hasta cotizar</p></div>
+            <BudgetBreakdown items={plan.items}/>
+            <div className="mt-2">{plan.items.map((item,index) => <BudgetRow key={item.id || index} item={item} budgetTotal={summary.budget} admin={admin} draft={edits[item.id]} onChange={(key,value) => editRow(item.id,key,value)} onSave={() => handleSaveRow(item)} busy={busy}/>)}</div>
             {admin && <form className="mt-5 border-t border-[var(--line)] pt-4 space-y-3" onSubmit={e => { e.preventDefault(); doWork(async () => { await addTripItem(plan.id,newItem.name,newItem.category,newItem.amount); setNewItem({category:'Otros',name:'',amount:''}) }) }}>
               <h3 className="text-[12px] font-bold">Agregar otro gasto</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -269,6 +306,7 @@ export default function TripPlanner({ token = '' }) {
               <button type="submit" disabled={busy} className="rounded-xl px-4 py-2 bg-[#163D3C] text-white text-[12px] font-semibold disabled:opacity-50">Agregar al presupuesto</button>
             </form>}
           </section>
+          </div>
           <div className="space-y-5">
             <section className={card}>
               <h2 className="text-[16px] font-bold">Aportes al viaje</h2>
