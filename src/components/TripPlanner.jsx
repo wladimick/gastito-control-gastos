@@ -80,10 +80,10 @@ const TRIP_CATEGORY_META = {
 }
 const TRIP_CATEGORY_ORDER = ['Vuelos', 'Alojamiento', 'Traslados', 'Comida', 'Regalo', 'Equipaje', 'Reserva', 'Otros']
 const TRIP_DECISIONS = [
-  'Cotizar vuelos directos Santiago ⇄ Antofagasta para 2 personas. Priorizar regreso domingo no demasiado tarde.',
-  'Confirmar ubicación y hora del matrimonio antes de elegir el alojamiento.',
-  'Revisar transporte Curicó ⇄ Santiago y transfer oficial en Antofagasta.',
-  'Decidir monto del regalo y si necesitan 1 maleta de cabina para ropa formal.',
+  'Elegir y comprar los vuelos cotizados para dos (cerca de $100.000 por persona), evitando un regreso temprano tras la fiesta.',
+  'Reservar el Airbnb para dos noches cerca del Salón Licancabur, Hotel Terrado, por unos $100.000.',
+  'Confirmar buses Curicó ⇄ Santiago, Turbus hasta el aeropuerto y traslados entre ANF y el alojamiento.',
+  'Definir el regalo, los desayunos/once y si hace falta agregar una maleta de cabina para la ropa formal.',
 ]
 
 function BudgetBreakdown({ items = [] }) {
