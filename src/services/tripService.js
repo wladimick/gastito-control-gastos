@@ -30,6 +30,8 @@ export async function fetchTripAdmin(userId) {
     id: plan.id, title: plan.title, destination: plan.destination,
     startDate: plan.start_date, weddingDate: plan.wedding_date, endDate: plan.end_date,
     peopleCount: plan.people_count, description: plan.description, shareActive: plan.share_active, decisionChecks: plan.decision_checks || [false,false,false,false],
+    weddingVenue: plan.wedding_venue, weddingAddress: plan.wedding_address,
+    weddingProgram: plan.wedding_program || [],
     items: (itemsResult.data || []).map(normalizeItem),
     savings: (savingsResult.data || []).map(row => ({
       id: row.id, name: row.contributor, amount: row.amount,
